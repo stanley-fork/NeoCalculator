@@ -1,0 +1,16 @@
+{
+  "purpose": "Independent challenge fixtures, never read by the planner",
+  "cases": [
+    {"id":"abs-affine-other-side","equation":"abs(3*x+2)=2*x+7","roots":["-9/5","5"]},
+    {"id":"abs-rational-inner","equation":"abs((x-3)/2)=7/3","roots":["-5/3","23/3"]},
+    {"id":"abs-zero-union","equation":"abs(2*x)=x","roots":["0"]},
+    {"id":"abs-quadratic-zero","equation":"abs(x^2-4)=0","roots":["-2","2"]},
+    {"id":"abs-four-algebraic","equation":"abs(x^2-2)=1","roots":["-sqrt(3)","sqrt(3)","-1","1"]},
+    {"id":"root-affine","equation":"sqrt(3*x+10)=x","roots":["5"]},
+    {"id":"root-sign-filter","equation":"sqrt(x+2)=x-4","roots":["7"]},
+    {"id":"root-algebraic-sign","equation":"sqrt(4*x+13)=x+1","roots":["sqrt(13)+1"]},
+    {"id":"root-authored-square","equation":"sqrt((x+2)^2)=5","roots":["-7","3"]},
+    {"id":"root-repeated-candidate","equation":"sqrt(4*x-4)=x","roots":["2"]},
+    {"id":"root-no-valid-candidate","equation":"sqrt(-4*x-4)=x","roots":[]}
+  ]
+}

@@ -78,6 +78,19 @@ baseline artifacts and are not used as regeneration inputs.
 
 ## Change history reconstructed from Git
 
+TUTOR-ENGINE-02A closeout (2026-09-14): in the fractional-power solver's
+auxiliary-variable loop, `ksolve.cc` constructs the generated `c__N` directly
+as an `identificateur` instead of parsing its name. Parsing interned every
+new name in the permanent lexer symbol table; `purgenoassume` removed its
+context assumption but could not release that interned identifier. Repeated
+ordinary radical solves retained 164 PSRAM bytes per call on the WROOM
+candidate (157 requested C++ bytes / four allocations in the host probe).
+The change keeps the same counter, identifier spelling, equations, assumptions
+and cleanup; it changes ownership only. No counter/context reset is used.
+`tests/host/giac_radical_lifetime.cpp` detects the old repeated growth, and the
+closeout report records the physical failure, correction and retest. No
+upstream code or language resources were imported for this correction.
+
 TUTOR-ENGINE-01 (2026-09-10, local candidate): `kgen.cc` now obtains the
 complex display flag through `offsetof(ref_complex,re)` and the actual
 `display` field. Subtracting one `int` from `re` read padding on LLP64,

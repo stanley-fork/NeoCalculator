@@ -49,6 +49,7 @@ struct Algebra {
     giac::context *ctx;
     const Snapshot &input;
     unsigned calls = 0;
+    bool presentationOnly = false;
     int rejectedLine = 0;
     Verdict reject(int line) {
         rejectedLine = line;
@@ -128,7 +129,7 @@ bool sameConditions(const Vector<Condition> &a, const Vector<Condition> &b) {
     if (a.size() != b.size())
         return false;
     for (size_t i = 0; i < a.size(); ++i)
-        if (a[i].nonzero != b[i].nonzero || !samePath(a[i].source, b[i].source))
+        if (!sameCondition(a[i], b[i]))
             return false;
     return true;
 }
@@ -144,7 +145,7 @@ bool sameBranches(const Vector<Branch> &a, const Vector<Branch> &b) {
     if (a.size() != b.size())
         return false;
     for (size_t i = 0; i < a.size(); ++i)
-        if (a[i].id != b[i].id || a[i].status != b[i].status ||
+        if (a[i].id != b[i].id || a[i].status != b[i].status || a[i].origin != b[i].origin || a[i].originalCheck != b[i].originalCheck ||
             !sameEquations(a[i].equations, b[i].equations))
             return false;
     return true;
@@ -171,7 +172,7 @@ unsigned sourceShape(const gen &g, unsigned depth, unsigned &nodes) {
     const auto &f = g._SYMBptr->feuille;
     if (op != giac::at_plus && op != giac::at_prod && op != giac::at_neg &&
         op != giac::at_binary_minus && op != giac::at_division && op != giac::at_inv &&
-        op != giac::at_pow)
+        op != giac::at_pow && op != giac::at_abs && op != giac::at_sqrt)
         throw UnsupportedInput{__LINE__};
     unsigned degree = 0;
     if (op == giac::at_pow) {
@@ -226,7 +227,7 @@ bool domainSafe(Algebra &a, const gen &g, const State &state, unsigned depth, un
             return !giac::is_undef(den);
         gen product(1);
         for (const auto &c : state.conditions)
-            product = product * a.parse(c.nonzero);
+            if(c.kind != ConditionKind::Nonnegative) product = product * a.parse(c.nonzero);
         // If D divides a product known nonzero, D is nonzero. Each original factor
         // is retained, so normalization may safely combine denominator factors.
         const gen quotient = a.normal(product / den);
@@ -244,7 +245,7 @@ bool domainSafe(Algebra &a, const gen &g, const State &state, unsigned depth, un
     const auto &f = g._SYMBptr->feuille;
     if (op != giac::at_plus && op != giac::at_prod && op != giac::at_neg &&
         op != giac::at_binary_minus && op != giac::at_division && op != giac::at_inv &&
-        op != giac::at_pow && op != giac::at_sqrt)
+        op != giac::at_pow && op != giac::at_sqrt && op != giac::at_abs)
         return false;
     if (f.type == giac::_VECT) {
         for (const auto &child : *f._VECTptr)
@@ -257,7 +258,11 @@ bool domainSafe(Algebra &a, const gen &g, const State &state, unsigned depth, un
     if (op == giac::at_division)
         return f.type == giac::_VECT && f._VECTptr->size() == 2 &&
                allowedDenominator(f._VECTptr->back());
+    if (op == giac::at_abs) return a.presentationOnly || !a.input.complex;
     if (op == giac::at_sqrt) {
+        if (a.presentationOnly) return true;
+        for(const auto& c:state.conditions)
+            if(c.kind == ConditionKind::Nonnegative && c.role == ConditionRole::Radicand && a.same(f,a.parse(c.nonzero))) return !a.input.complex;
         int budget = Limits::sourceNodes;
         std::vector<gen> vars;
         for (const auto &v : a.input.variables)
@@ -274,6 +279,8 @@ bool domainSafe(Algebra &a, const gen &g, const State &state, unsigned depth, un
     }
     return true;
 }
+
+#include "GiacTutorNonlinear.inc"
 
 // Capture domain-bearing syntax before normal/eval. Only a bounded rational
 // expression grammar represented by Giac's existing AST is admitted here.
@@ -347,7 +354,14 @@ void scan(Algebra &a, const gen &g, Path path, unsigned depth, unsigned &nodes,
         throw UnsupportedInput{__LINE__};
     const auto op = g._SYMBptr->sommet;
     const auto &leaf = g._SYMBptr->feuille;
-    if (op == giac::at_inv)
+    if (op == giac::at_sqrt) {
+        if(a.input.complex) throw UnsupportedInput{__LINE__};
+        auto value=a.bound(leaf); a.coefficients(value,a.parse(a.input.variables.front()));
+        if(conditions.size()>=Limits::conditions)throw LimitReached{__LINE__};
+        conditions.push_back(realCondition(a,value,path,ConditionRole::Radicand,0));
+    } else if(op == giac::at_abs) {
+        if(a.input.complex) throw UnsupportedInput{__LINE__};
+    } else if (op == giac::at_inv)
         denominator(leaf);
     else if (op == giac::at_pow) {
         if (leaf.type != giac::_VECT || leaf._VECTptr->size() != 2)
@@ -382,6 +396,7 @@ void capture(Algebra &a, Vector<Condition> &conditions, std::vector<gen> &denomi
         sourceShape(a.parse(e.lhs), 0, nodes);
         sourceShape(a.parse(e.rhs), 0, nodes);
     }
+    validateSpecialSource(a);
     nodes = 0;
     for (size_t i = 0; i < a.input.authored.size(); ++i)
         for (int side = 0; side < 2; ++side) {
@@ -403,8 +418,9 @@ bool shortInteger(const gen &value, const std::string &text) {
 void message(Algebra &a, Step &s, const State &after) {
     s.parameters.clear();
     switch (s.rule) {
+    case Rule::RadicandDomain:
     case Rule::Domain:
-        s.explanation = Message::Domain;
+        s.explanation = after.conditions.back().role == ConditionRole::Radicand ? Message::RadicalDomain : Message::Domain;
         break;
     case Rule::SubstituteValues:
         s.explanation = Message::SubstituteValues;
@@ -420,6 +436,12 @@ void message(Algebra &a, Step &s, const State &after) {
         s.parameters = {variable(a.input.variables.front())};
         break;
     case Rule::AddBoth: {
+        auto special=findSpecialEquation(a,after.branches[s.branch].equations[s.row]);
+        if(special.count) {
+            bool neg=a.print(a.normal(a.parse(s.operand))).front()=='-';
+            s.explanation=special.radical ? (neg?Message::RadicalSubtract:Message::RadicalAdd) : (neg?Message::AbsSubtract:Message::AbsAdd);
+            break;
+        }
         const auto v = a.normal(a.parse(s.operand));
         const bool neg = a.print(v).front() == '-';
         const auto magnitude = a.normal(neg ? -v : v);
@@ -454,6 +476,8 @@ void message(Algebra &a, Step &s, const State &after) {
         break;
     }
     case Rule::DivideBoth: {
+        auto special=findSpecialEquation(a,after.branches[s.branch].equations[s.row]);
+        if(special.count) {s.explanation=special.radical?Message::RadicalDivide:Message::AbsDivide;break;}
         const auto v = a.normal(a.parse(s.operand));
         const auto name = a.input.variables.front();
         const auto x = a.parse(name);
@@ -538,6 +562,16 @@ void message(Algebra &a, Step &s, const State &after) {
         }
         break;
     }
+    case Rule::RangeCondition:
+        s.explanation=after.conditions.back().role==ConditionRole::IsolatedRange && s.auxiliaries==Vector<std::string>{"sqrt"} ? Message::RadicalRange : Message::AbsRange; break;
+    case Rule::AbsCases: s.explanation=after.branches.size()==1?Message::AbsZero:Message::AbsCases;break;
+    case Rule::RadicalCandidates: s.explanation=Message::RadicalSquare;break;
+    case Rule::NonnegativeImpossible: s.explanation=s.auxiliaries==Vector<std::string>{"sqrt"}?Message::RadicalImpossible:Message::AbsImpossible;break;
+    case Rule::CheckOriginal: s.explanation=Message::OriginalWorks;break;
+    case Rule::RejectOriginal:
+        s.explanation=s.auxiliaries==Vector<std::string>{"sign"}?Message::SignFails:
+                      s.auxiliaries==Vector<std::string>{"radicand"}?Message::RadicandFails:Message::OriginalFails;break;
+    case Rule::DuplicateCandidate: s.explanation=Message::DuplicateValue;break;
     case Rule::SystemFinish:
         s.explanation = after.conclusion == Conclusion::Empty    ? Message::InconsistentSystem
                         : after.conclusion == Conclusion::Family ? Message::DependentSystem
@@ -565,9 +599,11 @@ bool equationSame(Algebra &a, const Equation &actual, const gen &lhs, const gen 
 // Small checking kernel. Each case replays the declared operation on BOTH
 // sides, or invokes a theorem with explicitly checked hypotheses. In particular
 // equation residual equality is NEVER used to justify balancing or row scaling.
+Verdict verifyLifted(Algebra&,const Derivation&,const Step&);
 Verdict verifyStep(Algebra &a, const Derivation &d, const Step &s) {
     if (s.before >= d.states.size() || s.after >= d.states.size() || s.after != s.before + 1)
         return a.reject(__LINE__);
+    if(s.caseStart != UINT16_MAX) return verifyLifted(a,d,s);
     const State &before = d.states[s.before];
     const State &after = d.states[s.after];
     if (before.conclusion != Conclusion::None || s.branch >= before.branches.size() ||
@@ -593,8 +629,9 @@ Verdict verifyStep(Algebra &a, const Derivation &d, const Step &s) {
                 return a.reject(__LINE__);
         }
     }
-    const bool domain = s.rule == Rule::Domain;
-    if (!domain && (!sameConditions(before.conditions, after.conditions) || !s.introduced.empty()))
+    const bool domain = s.rule == Rule::Domain || s.rule == Rule::RadicandDomain;
+    const bool range = s.rule == Rule::RangeCondition;
+    if (!domain && !range && (!sameConditions(before.conditions, after.conditions) || !s.introduced.empty()))
         return a.reject(__LINE__);
     if (s.prerequisites.size() != before.conditions.size())
         return a.reject(__LINE__);
@@ -603,12 +640,13 @@ Verdict verifyStep(Algebra &a, const Derivation &d, const Step &s) {
             return a.reject(__LINE__);
     Relation relation = Relation::Equivalent;
     if (domain || s.rule == Rule::AlreadySolved || s.rule == Rule::Identity ||
-        s.rule == Rule::Contradiction || s.rule == Rule::Finish || s.rule == Rule::SystemFinish)
+        s.rule == Rule::Contradiction || s.rule == Rule::Finish || s.rule == Rule::SystemFinish || s.rule == Rule::RangeCondition || s.rule == Rule::NonnegativeImpossible || s.rule == Rule::CheckOriginal)
         relation = Relation::Terminal;
     if (s.rule == Rule::SquareRoots || s.rule == Rule::QuadraticFormula ||
-        s.rule == Rule::ZeroProduct)
+        s.rule == Rule::ZeroProduct || s.rule == Rule::AbsCases)
         relation = Relation::ExhaustiveSplit;
-    if (s.rule == Rule::RejectCandidate)
+    if (s.rule == Rule::RadicalCandidates) relation=Relation::Candidates;
+    if (s.rule == Rule::RejectCandidate || s.rule == Rule::RejectOriginal || s.rule == Rule::DuplicateCandidate)
         relation = Relation::Rejection;
     if (s.relation != relation)
         return a.reject(__LINE__);
@@ -636,6 +674,7 @@ Verdict verifyStep(Algebra &a, const Derivation &d, const Step &s) {
         if (!domainSafe(a, a.parse(s.operand), before, 0, nodes))
             return a.reject(__LINE__);
     }
+    if(s.rule != Rule::RangeCondition && s.rule != Rule::NonnegativeImpossible && s.rule != Rule::RejectOriginal)
     for (const auto &operand : s.auxiliaries) {
         unsigned nodes = 0;
         if (!domainSafe(a, a.parse(operand), before, 0, nodes))
@@ -663,16 +702,17 @@ Verdict verifyStep(Algebra &a, const Derivation &d, const Step &s) {
         e = after.branches[s.branch].equations[s.row];
         if (s.rule == Rule::AddBoth || s.rule == Rule::DivideBoth || s.rule == Rule::RowAdd ||
             s.rule == Rule::RowScale || s.rule == Rule::ClearDenominators)
-            return e.lhs == a.print(a.normal(l)) && e.rhs == a.print(a.normal(r));
+            return e.lhs == a.print(preservingNormal(a,l)) && e.rhs == a.print(preservingNormal(a,r));
         return equationSame(a, e, l, r);
     };
     switch (s.rule) {
+    case Rule::RadicandDomain:
     case Rule::Domain: {
         Vector<Condition> all;
         std::vector<gen> den;
         capture(a, all, den);
         const size_t i = before.conditions.size();
-        ok = i < all.size() && s.operand == all[i].nonzero &&
+        ok = i < all.size() && (s.rule==Rule::RadicandDomain)==(all[i].kind==ConditionKind::Nonnegative) && s.operand == all[i].nonzero &&
              s.introduced == Vector<uint8_t>{uint8_t(i)};
         if (ok)
             expected.conditions.push_back(all[i]);
@@ -708,6 +748,12 @@ Verdict verifyStep(Algebra &a, const Derivation &d, const Step &s) {
     case Rule::AddBoth: {
         const gen v = a.parse(s.operand);
         ok = !a.zero(v) && transformed(lhs + v, rhs + v);
+        auto special=findSpecialEquation(a,eq);
+        if(special.count) {
+            auto form=isolatedForm(a,eq);
+            ok=ok && !form.reversed && a.same(v,-form.remainder);
+            break;
+        }
         bool removes = false;
         gen leftConstant = lhs, rightConstant = rhs, afterLeft = lhs + v, afterRight = rhs + v;
         for (const auto &name : a.input.variables) {
@@ -732,6 +778,12 @@ Verdict verifyStep(Algebra &a, const Derivation &d, const Step &s) {
     }
     case Rule::DivideBoth: {
         const gen v = a.normal(a.parse(s.operand));
+        auto special=findSpecialEquation(a,eq);
+        if(special.count) {
+            auto form=isolatedForm(a,eq);
+            ok=!form.reversed && a.zero(form.remainder) && a.rational(v) && !a.zero(v) && !a.same(v,gen(1)) && a.same(v,form.coefficient) && transformed(lhs/v,rhs/v);
+            break;
+        }
         const auto coefficients = a.coefficients(lhs, x);
         const gen leading = a.zero(coefficients[2]) ? coefficients[1] : coefficients[2];
         ok = a.rational(v) && !a.zero(v) && !a.same(v, gen(1)) && a.same(v, leading) &&
@@ -900,7 +952,7 @@ Verdict verifyStep(Algebra &a, const Derivation &d, const Step &s) {
         ok = true;
         unsigned active = 0;
         for (const auto &b : before.branches) {
-            if (b.status == BranchStatus::Rejected)
+            if (b.status != BranchStatus::Active)
                 continue;
             ++active;
             if (b.equations.size() != 1 || !a.same(a.parse(b.equations[0].lhs), x)) {
@@ -908,9 +960,17 @@ Verdict verifyStep(Algebra &a, const Derivation &d, const Step &s) {
                 break;
             }
             const gen v = a.parse(b.equations[0].rhs);
+            if(b.origin && b.originalCheck != Verdict::Verified) ok=false;
+            // WHY: deleting the explicit duplicate-rejection step must not
+            // turn a multiset into two displayed solutions. At most four
+            // branches; legacy polynomial traces keep their existing replay.
+            if(b.origin) for(const auto& previous:before.branches) {
+                if(&previous==&b)break;
+                if(previous.status==BranchStatus::Active && previous.equations.size()==1 &&
+                   a.same(a.parse(previous.equations[0].rhs),v))ok=false;
+            }
             for (const auto &c : before.conditions)
-                if (a.zero(a.sub(a.parse(c.nonzero), x, v)))
-                    ok = false;
+                if (!conditionTrue(a,c,v)) ok=false;
             for (const auto &e : a.input.authored)
                 if (!a.same(a.sub(a.bound(a.parse(e.lhs)), x, v),
                             a.sub(a.bound(a.parse(e.rhs)), x, v)))
@@ -919,6 +979,7 @@ Verdict verifyStep(Algebra &a, const Derivation &d, const Step &s) {
         expected.conclusion = active ? Conclusion::Finite : Conclusion::Empty;
         break;
     }
+    #include "GiacTutorNonlinearChecks.inc"
     case Rule::SystemFinish: {
         ok = before.branches.size() == 1 && a.input.variables.size() > 1 &&
              before.conditions.empty();
@@ -992,17 +1053,18 @@ struct Planner {
         s.group = group;
         for (size_t i = 0; i < d.states.back().conditions.size(); ++i)
             s.prerequisites.push_back(uint8_t(i));
-        if (s.rule == Rule::Domain) {
+        if (s.rule == Rule::Domain || s.rule == Rule::RadicandDomain || s.rule == Rule::RangeCondition) {
             s.relation = Relation::Terminal;
             s.introduced = {uint8_t(next.conditions.size() - 1)};
         }
         if (s.rule == Rule::AlreadySolved || s.rule == Rule::Identity ||
-            s.rule == Rule::Contradiction || s.rule == Rule::Finish || s.rule == Rule::SystemFinish)
+            s.rule == Rule::Contradiction || s.rule == Rule::Finish || s.rule == Rule::SystemFinish || s.rule == Rule::RangeCondition || s.rule == Rule::NonnegativeImpossible || s.rule == Rule::CheckOriginal)
             s.relation = Relation::Terminal;
         if (s.rule == Rule::SquareRoots || s.rule == Rule::QuadraticFormula ||
-            s.rule == Rule::ZeroProduct)
+            s.rule == Rule::ZeroProduct || s.rule == Rule::AbsCases)
             s.relation = Relation::ExhaustiveSplit;
-        if (s.rule == Rule::RejectCandidate)
+        if(s.rule == Rule::RadicalCandidates)s.relation=Relation::Candidates;
+        if (s.rule == Rule::RejectCandidate || s.rule == Rule::RejectOriginal || s.rule == Rule::DuplicateCandidate)
             s.relation = Relation::Rejection;
         Path p;
         p.equation = s.row;
@@ -1018,7 +1080,7 @@ struct Planner {
             const auto &e = d.states.back().branches[s.branch].equations[s.row];
             s.auxiliaries = {e.lhs, e.rhs};
         }
-        message(a, s, next);
+        if(s.caseStart == UINT16_MAX) message(a, s, next);
         struct Rollback {
             Derivation &d;
             size_t states, steps;
@@ -1391,6 +1453,7 @@ struct Planner {
                                      : pivot < n  ? Conclusion::Family
                                                   : Conclusion::Finite);
     }
+    void nonlinear();
     void run() {
         Vector<Condition> conditions;
         std::vector<gen> denominators;
@@ -1403,7 +1466,7 @@ struct Planner {
             State next = current();
             next.conditions.push_back(c);
             Step s;
-            s.rule = Rule::Domain;
+            s.rule = c.role==ConditionRole::Radicand?Rule::RadicandDomain:Rule::Domain;
             s.operand = c.nonzero;
             add(s, std::move(next));
         }
@@ -1418,6 +1481,7 @@ struct Planner {
             add(s, std::move(next));
         }
         if (a.input.variables.size() == 1) {
+            if(findSpecialEquation(a,current().branches[0].equations[0]).count){nonlinear();return;}
             gen multiplier(1);
             for (const auto &den : denominators) {
                 a.tick();
@@ -1450,6 +1514,8 @@ struct Planner {
             system();
     }
 };
+#include "GiacTutorNonlinearPlanner.inc"
+
 void groupPresentation(Derivation &d) {
     for (size_t i = 0; i < d.steps.size(); ++i) {
         auto &first = d.steps[i];
@@ -1569,8 +1635,11 @@ Verdict replay(Algebra &a, const Derivation &d) {
         if (d.steps[i].before != i || verifyStep(a, d, d.steps[i]) != Verdict::Verified)
             return Verdict::Rejected;
     }
-    if (!sameConditions(conditions, d.states.back().conditions))
-        return Verdict::Rejected;
+    const auto& finalConditions=d.states.back().conditions;
+    if(finalConditions.size()<conditions.size())return Verdict::Rejected;
+    for(size_t i=0;i<conditions.size();++i)if(!sameCondition(conditions[i],finalConditions[i]))return Verdict::Rejected;
+    for(size_t i=conditions.size();i<finalConditions.size();++i)
+        if(finalConditions[i].role!=ConditionRole::IsolatedRange)return Verdict::Rejected;
     if (d.status == Status::Complete && d.states.back().conclusion == Conclusion::None)
         return Verdict::Rejected;
     return Verdict::Verified;
@@ -1586,7 +1655,7 @@ Verdict reconcile(Algebra &a, const Derivation &d, const StructuredSolveResult &
         return answer.setKind == SolutionSetKind::AllValues ? Verdict::Verified : Verdict::Rejected;
     std::vector<std::vector<gen>> values;
     for (const auto &b : s.branches) {
-        if (b.status == BranchStatus::Rejected)
+        if (b.status != BranchStatus::Active)
             continue;
         std::vector<gen> tuple;
         for (const auto &name : a.input.variables) {
@@ -1704,7 +1773,7 @@ tutor::Derivation GiacEngine::explainEquations(const tutor::Snapshot &request,
         d.diagnostic = "construction budget exhausted at " + std::to_string(e.line);
     } catch (const UnsupportedInput &e) {
         d.status = Status::Unsupported;
-        d.diagnostic = "outside exact rational polynomial degree 2 / linear system contract at " +
+        d.diagnostic = "outside checked polynomial / real single-function / linear system contract at " +
                        std::to_string(e.line) + ": " + e.detail;
     } catch (const CheckFailure &) {
         d.status = Status::CheckFailed;
@@ -1792,6 +1861,7 @@ StructuredEngineResult GiacEngine::tutorFormula(const tutor::Equation &equation)
         input.complex = true;
         tutorkernel::Scope scope(_state->ctx, input);
         tutorkernel::Algebra a{_state->ctx, input};
+        a.presentationOnly=true;
         tutor::State conditions;
         unsigned nodes = 0;
         // WHY: closed algebraic values (including checked roots) need no extra
@@ -1820,7 +1890,7 @@ StructuredEngineResult GiacEngine::tutorFormula(const tutor::Equation &equation)
         if (!safe)
             return out;
         int budget = kTreeNodeBudget;
-        genToNode(giac::symb_equal(l.eval(1, _state->ctx), r.eval(1, _state->ctx)), _state->ctx,
+        genToNode(giac::symb_equal(tutorkernel::displayEval(a,l), tutorkernel::displayEval(a,r)), _state->ctx,
                   out.tree, 0, budget);
         out.hasTree = out.tree.kind != EngineNodeKind::Unsupported;
         out.base.status = out.hasTree ? MathEngineStatus::Ok : MathEngineStatus::Unsupported;

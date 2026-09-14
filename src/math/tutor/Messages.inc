@@ -188,6 +188,35 @@ constexpr CatalogEntry catalog[] = {
     {"view.solve_first", "Solve the current equations first.", "", nullptr, nullptr},
     {"view.zero_right", "Equivalent form with zero on the right", "",
      "Forma equivalente con cero a la derecha", "Forme equivalente avec zero a droite"},
+    {"abs.range", "An absolute value cannot be negative. The other side must satisfy this condition.", "", "Un valor absoluto no puede ser negativo. El otro lado debe cumplir esta condicion.", "Une valeur absolue ne peut pas etre negative. L autre membre doit respecter cette condition."},
+    {"radical.range", "The principal square root is nonnegative, so the other side must also be nonnegative.", "", nullptr, nullptr},
+    {"radical.domain", "For a real square root, the expression under the root must be nonnegative.", "", nullptr, nullptr},
+    {"abs.cases", "An absolute value equals the other side when its inside expression equals that value or its opposite. Solve both cases under the sign condition.", "", nullptr, nullptr},
+    {"abs.zero", "An absolute value is zero exactly when the expression inside it is zero. Only one case is needed.", "", nullptr, nullptr},
+    {"radical.square", "Square both sides to remove the root. Squaring can introduce extra candidates; check each one in the original equation.", "", "Eleva ambos lados al cuadrado para eliminar la raiz. Comprueba cada candidato en la ecuacion original.", "Elever les deux membres au carre pour eliminer la racine. Verifier chaque candidat dans l equation initiale."},
+    {"abs.impossible", "An absolute value is nonnegative, so it cannot equal this negative value. There is no real solution.", "", nullptr, nullptr},
+    {"radical.impossible", "The principal square root is nonnegative, so it cannot equal this negative value. There is no real solution.", "", nullptr, nullptr},
+    {"candidate.original_valid", "This candidate satisfies every sign and domain condition and the original equation.", "", nullptr, nullptr},
+    {"candidate.original_invalid", "Reject this candidate: substituting it into the original equation gives unequal sides.", "", nullptr, nullptr},
+    {"candidate.sign_invalid", "Reject this candidate: the isolated other side is negative.", "", nullptr, nullptr},
+    {"candidate.radicand_invalid", "Reject this candidate: the original radicand is negative.", "", nullptr, nullptr},
+    {"candidate.duplicate", "This value is already an accepted solution from another case. Count it only once.", "", nullptr, nullptr},
+    {"abs.add", "Add the displayed term to both sides to isolate the absolute-value term.", "", nullptr, nullptr},
+    {"abs.subtract", "Subtract the displayed term from both sides to isolate the absolute-value term.", "", nullptr, nullptr},
+    {"abs.divide", "Divide both sides by the displayed nonzero coefficient to isolate the absolute value.", "", nullptr, nullptr},
+    {"radical.add", "Add the displayed term to both sides to isolate the square-root term.", "", nullptr, nullptr},
+    {"radical.subtract", "Subtract the displayed term from both sides to isolate the square-root term.", "", nullptr, nullptr},
+    {"radical.divide", "Divide both sides by the displayed nonzero coefficient to isolate the square root.", "", nullptr, nullptr},
+    {"view.sign", "Preserve the sign condition", "", nullptr, nullptr},
+    {"view.abs_cases", "Split into cases", "", nullptr, nullptr},
+    {"view.square_both", "Square both sides", "", nullptr, nullptr},
+    {"view.original_check", "Check the original equation", "", nullptr, nullptr},
+    {"view.empty_case", "This case has no real solution", "", nullptr, nullptr},
+    {"view.subcase", "Case {0}.{1}", "ii", "Caso {0}.{1}", "Cas {0}.{1}"},
+    {"view.active_subcase", "Case {0}.{1}: current step", "ii", nullptr, nullptr},
+    {"view.rejected_subcase", "Case {0}.{1}: rejected candidate", "ii", nullptr, nullptr},
+    {"view.candidates", "Candidates", "", "Candidatos", "Candidats"},
+    {"view.read_candidates", "These values solve this case equation. Check each candidate in the original equation and its conditions.", "", nullptr, nullptr},
 };
 static_assert(sizeof(catalog) / sizeof(catalog[0]) == unsigned(Message::Count), "catalog coverage");
 char schemaType(ParameterKind p) {
@@ -224,7 +253,8 @@ const char *ruleId(Rule r) {
         "polynomial.factor",  "square.branches",   "quadratic.formula", "product.zero",
         "candidate.excluded", "terminal.isolated", "terminal.identity", "terminal.contradiction",
         "terminal.finish",    "system.swap",       "system.scale",      "system.add",
-        "system.finish"};
+        "system.finish", "condition.range", "abs.cases", "radical.candidates", "terminal.nonnegative",
+        "candidate.original_valid", "candidate.original_invalid", "candidate.duplicate", "domain.radicand_nonnegative"};
     return unsigned(r) < sizeof(ids) / sizeof(ids[0]) ? ids[unsigned(r)] : "unknown";
 }
 const char *messageKey(Message k) {
@@ -288,12 +318,39 @@ std::string explain(Message k, const Vector<Parameter> &p, Locale locale) {
     }
     return locale == Locale::Pseudo ? "[!! " + out + " !!]" : out;
 }
+namespace {
+bool equalTree(const EngineResultNode& a, const EngineResultNode& b, unsigned depth=0) {
+    if(depth>Limits::depth || a.kind!=b.kind || a.text!=b.text || a.children.size()!=b.children.size() ||
+       a.rows!=b.rows || a.columns!=b.columns || a.leftClosed!=b.leftClosed || a.rightClosed!=b.rightClosed || a.fallbackReason!=b.fallbackReason) return false;
+    for(size_t i=0;i<a.children.size();++i) if(!equalTree(a.children[i],b.children[i],depth+1))return false;
+    return true;
+}
+void hashTree(uint64_t& h,const EngineResultNode& n,unsigned depth=0) {
+    hashBytes(h,std::to_string(unsigned(n.kind))); hashBytes(h,n.text);
+    if(depth>Limits::depth)return;
+    for(const auto& c:n.children)hashTree(h,c,depth+1);
+}
+size_t treeBytes(const EngineResultNode& n,unsigned depth=0) {
+    if(depth>Limits::depth)return Limits::retainedBytes;
+    size_t bytes=n.text.capacity()+1+n.children.capacity()*sizeof(EngineResultNode);
+    for(const auto& c:n.children)bytes+=treeBytes(c,depth+1);
+    return bytes;
+}
+}
+bool sameCondition(const Condition& a,const Condition& b) {
+    return a.nonzero==b.nonzero && a.source.equation==b.source.equation && a.source.side==b.source.side && a.source.children==b.source.children &&
+        a.kind==b.kind && a.role==b.role && a.sourceState==b.sourceState && a.verification==b.verification &&
+        bool(a.expression)==bool(b.expression) && (!a.expression || equalTree(*a.expression,*b.expression));
+}
 uint64_t fingerprint(const State &s) {
     uint64_t h = 1469598103934665603ull;
     hashBytes(h, std::to_string(unsigned(s.conclusion)));
     for (const auto &b : s.branches) {
         hashBytes(h, std::to_string(b.id));
         hashBytes(h, std::to_string(unsigned(b.status)));
+        if (b.origin || b.originalCheck != Verdict::Unknown) {
+            hashBytes(h, std::to_string(b.origin)); hashBytes(h, std::to_string(unsigned(b.originalCheck)));
+        }
         for (const auto &e : b.equations) {
             hashBytes(h, e.lhs);
             hashBytes(h, e.rhs);
@@ -301,6 +358,11 @@ uint64_t fingerprint(const State &s) {
     }
     for (const auto &c : s.conditions) {
         hashBytes(h, c.nonzero);
+        if (c.kind != ConditionKind::Nonzero || c.role != ConditionRole::Denominator || c.sourceState || c.verification != Verdict::Unknown || c.expression) {
+            hashBytes(h, std::to_string(unsigned(c.kind))); hashBytes(h, std::to_string(unsigned(c.role)));
+            hashBytes(h, std::to_string(c.sourceState)); hashBytes(h, std::to_string(unsigned(c.verification)));
+            if (c.expression) hashTree(h, *c.expression);
+        }
         hashBytes(h, std::to_string(c.source.equation));
         hashBytes(h, std::to_string(c.source.side));
         for (auto i : c.source.children)
@@ -351,8 +413,11 @@ size_t retainedBytes(const Derivation &d) {
         n += s.branches.capacity() * sizeof(Branch) + s.conditions.capacity() * sizeof(Condition);
         for (const auto &b : s.branches)
             eqs(b.equations);
-        for (const auto &c : s.conditions)
+        for (const auto &c : s.conditions) {
             n += c.nonzero.capacity() + 1 + c.source.children.capacity();
+            // Conservative accounting includes shared tree payload per state.
+            if(c.expression)n+=sizeof(EngineResultNode)+32+treeBytes(*c.expression);
+        }
     }
     for (const auto &s : d.steps) {
         n += s.operand.capacity() + 1 + s.auxiliaries.capacity() * sizeof(std::string) +
@@ -458,7 +523,18 @@ std::string replayJson(const Derivation &d, Locale locale) {
                 o << ',';
             path(s.conditions[j].source);
         }
-        o << "],\"branches\":[";
+        o << "]";
+        bool typed=false;for(const auto& c:s.conditions)typed=typed || bool(c.expression);
+        if(typed) {
+            o << ",\"typedConditions\":[";
+            for(size_t j=0;j<s.conditions.size();++j) {
+                if(j)o<<',';const auto& c=s.conditions[j];
+                o<<"{\"kind\":"<<unsigned(c.kind)<<",\"role\":"<<unsigned(c.role)<<",\"sourceState\":"<<c.sourceState
+                 <<",\"verification\":"<<unsigned(c.verification)<<",\"expression\":"<<quote(c.nonzero)<<'}';
+            }
+            o<<']';
+        }
+        o << ",\"branches\":[";
         for (size_t j = 0; j < s.branches.size(); ++j) {
             if (j)
                 o << ',';
@@ -466,6 +542,7 @@ std::string replayJson(const Derivation &d, Locale locale) {
             o << "{\"id\":" << unsigned(b.id)
               << ",\"rejected\":" << (b.status == BranchStatus::Rejected) << ",\"equations\":";
             equations(b.equations);
+            if(b.origin)o<<",\"origin\":"<<unsigned(b.origin)<<",\"status\":"<<unsigned(b.status)<<",\"originalCheck\":"<<unsigned(b.originalCheck);
             o << '}';
         }
         o << "]}";
@@ -502,6 +579,7 @@ std::string replayJson(const Derivation &d, Locale locale) {
         numbers(s.introduced);
         o << ",\"discharged\":";
         numbers(s.discharged);
+        if(s.caseStart!=UINT16_MAX)o<<",\"caseStart\":"<<s.caseStart<<",\"caseBranch\":"<<unsigned(s.caseBranch);
         o << ",\"substeps\":";
         numbers(s.substeps);
         o << ",\"affected\":[";

@@ -133,21 +133,32 @@ NodePtr build(const Derivation& d, FormulaRef ref, unsigned& calls) {
         const auto& branch = d.states[ref.state].branches[ref.branch];
         return ref.row < branch.equations.size() ? equation(branch.equations[ref.row], calls) : nullptr;
     }
+    if (ref.kind == FormulaKind::SolutionSet) {
+        if(ref.state>=d.states.size())return nullptr;
+        auto list=makeRow();auto* row=static_cast<NodeRow*>(list.get());
+        for(const auto& branch:d.states[ref.state].branches)if(branch.status==BranchStatus::Active) {
+            if(branch.equations.size()!=1)return nullptr;
+            if(row->childCount())row->appendChild(makeSymbol(";"));
+            auto value=equation(branch.equations[0],calls);if(!value)return nullptr;
+            row->appendChild(std::move(value));
+        }
+        return list;
+    }
     if (ref.kind == FormulaKind::Authored)
         return ref.row < d.input.authored.size() ? equation(d.input.authored[ref.row], calls, ProductNotation::Explicit) : nullptr;
     if (ref.kind == FormulaKind::Conditions) {
         if (ref.state >= d.states.size()) return nullptr;
         auto list = makeRow(); auto* row = static_cast<NodeRow*>(list.get());
         for (const auto& condition : d.states[ref.state].conditions) {
-            auto term = typedTerm(condition.nonzero, calls);
+            auto term = condition.expression ? converted(*condition.expression) : typedTerm(condition.nonzero, calls);
             if (!term) return nullptr;
             if (row->childCount()) row->appendChild(makeSymbol("; "));
-            row->appendChild(relation(std::move(term), makeNumber("0"), OpKind::Ne));
+            row->appendChild(relation(std::move(term), makeNumber("0"), condition.kind==ConditionKind::Nonnegative?OpKind::Ge:condition.kind==ConditionKind::Positive?OpKind::Gt:OpKind::Ne));
         }
         return list;
     }
     if (ref.kind == FormulaKind::Operand) {
-        const bool subtract = std::string_view(messageKey(step.explanation)).find("equation.subtract") == 0;
+        const bool subtract = (std::string_view(messageKey(step.explanation)).find("equation.subtract") == 0 || step.explanation==Message::AbsSubtract || step.explanation==Message::RadicalSubtract);
         return typedTerm(subtract ? "-(" + step.operand + ")" : step.operand, calls);
     }
     if (ref.kind == FormulaKind::RowOperation) {

@@ -15,6 +15,14 @@ spec = importlib.util.spec_from_file_location("eq_guided_review", ROOT / "script
 eq = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(eq)
 CASES = {
+    "abs-linear": ["SHIFT sqrt 2 x - 3 RIGHT = 5"],
+    "abs-variable": ["SHIFT sqrt x - 1 RIGHT = x + 3"],
+    "abs-negative": ["SHIFT sqrt x RIGHT = - 3"],
+    "abs-four-roots": ["SHIFT sqrt x ^ 2 RIGHT - 5 RIGHT = 4"],
+    "radical-extraneous": ["sqrt x + 1 RIGHT = x - 1"],
+    "radical-linear": ["sqrt 2 x + 3 RIGHT = x"],
+    "radical-isolate": ["2 sqrt x + 1 RIGHT + 1 = 7"],
+    "radical-wide": ["sqrt 3 1 2 3 4 5 x + 2 1 2 3 4 5 RIGHT = x"],
     "notation-factor": ["2 x ^ 2 RIGHT + 3 x - 5 = 0"],
     "isolated": ["x = 1"],
     "reversed": ["1 = x"],
@@ -93,6 +101,10 @@ def render_contacts(out, records):
 
 def check_presentation(name, mode, trace, views):
     """Check evidence links and instructional content, independently of LVGL layout."""
+    if name.startswith("abs-"):
+        assert "abs(" in trace["authored"][0][0], (name, "physical absolute-value template was not entered")
+    if name.startswith("radical-"):
+        assert "sqrt(" in trace["authored"][0][0], (name, "principal-root template was not entered")
     states, steps = trace["states"], trace["steps"]
     equation_refs = []
     for page in views:
@@ -115,7 +127,13 @@ def check_presentation(name, mode, trace, views):
             elif kind == "conditions":
                 conditions = states[formula["state"]]["conditions"]
                 assert conditions
-                assert sum(n["text"] == "≠" for n in ast_nodes(formula["ast"])) == len(conditions), (name, "condition missing structured not-equal")
+                typed = states[formula["state"]].get("typedConditions", [{"kind": 0} for _ in conditions])
+                for kind, symbol in [(0, "≠"), (1, "≥"), (2, ">")]:
+                    assert sum(n["text"] == symbol for n in ast_nodes(formula["ast"])) == sum(c["kind"] == kind for c in typed), (name, "condition missing structured relation")
+            elif kind == "solution_set":
+                assert page["kind"] == "final" and states[formula["state"]]["conclusion"] == 1
+                accepted = [b for b in states[formula["state"]]["branches"] if b.get("status", 0) == 0]
+                assert sum(n["text"] == "=" for n in ast_nodes(formula["ast"])) == len(accepted)
             elif kind in ("operand", "row_operation"):
                 assert steps[formula["step"]]["operand"] or steps[formula["step"]]["rule"] == "system.swap"
             else:
@@ -150,9 +168,12 @@ def check_presentation(name, mode, trace, views):
             shown = {(f["state"], f["branch"], f["row"]) for f in page["formulas"] if f["kind"] == "equation"}
             if final["conclusion"] in (1, 3, 4):
                 expected = {(steps[page["lastStep"]]["after"], bi, ri)
-                            for bi, branch in enumerate(final["branches"]) if not branch["rejected"]
+                            for bi, branch in enumerate(final["branches"]) if not branch["rejected"] and branch.get("status", 0) == 0
                             for ri in range(len(branch["equations"]))}
-                assert shown == expected, (name, "final omitted accepted solution or system relationship")
+                if any(f["kind"] == "solution_set" for f in page["formulas"]):
+                    assert not shown and len(expected) > 3
+                else:
+                    assert shown == expected, (name, "final omitted accepted solution or system relationship")
             if final["conditions"]:
                 assert any(f["kind"] == "conditions" and f["state"] == steps[page["lastStep"]]["after"] for f in page["formulas"]), (name, "final omitted original restrictions")
         if page["kind"] == "coefficients" and states[steps[page["step"]]["before"]]["branches"][0]["equations"][0][1] != "0":
@@ -228,14 +249,18 @@ def main():
         if args.cases and name not in args.cases:
             continue
         start = (eq.single(equations[0]) if len(equations) == 1 else eq.system(equations)) + eq.keys("tools")
+        if name.startswith("abs-"):
+            # Legacy script key aliases do not carry the production semantic
+            # modifier event. Exercise the actual SHIFT + square-root contacts.
+            start = start.replace(eq.keys("SHIFT sqrt"), physical("SHIFT", "SQRT"))
         if name == "physical-negative":
             start = eq.OPEN + physical("EXE", "EXE", "VAR_X", "EQUAL", "NEGATE", "NUM_3", "EXE", "DOWN", "DOWN", "EXE", "TOOLBOX")
         if name in ("complex", "quadratic-complex"):
             start = start.replace("policy real", "policy complex")
         modes = [("guided", "")]
-        if name in ("linear", "quadratic", "rational", "system", "linear-unfamiliar"):
+        if name in ("linear", "quadratic", "rational", "system", "linear-unfamiliar", "abs-variable", "radical-extraneous"):
             modes.append(("summary", eq.keys("EXE")))
-        if name == "linear":
+        if name in ("linear", "abs-variable", "radical-extraneous"):
             modes.extend([(locale, "assert_equations locale " + locale + "\n") for locale in ("es", "fr", "pseudo")])
         if name == "quadratic":
             modes.append(("pseudo", "assert_equations locale pseudo\n"))
@@ -292,6 +317,21 @@ def main():
             (out / "results.json").write_text(json.dumps(records, indent=2), encoding="utf-8")
             print(label, count, "pages", flush=True)
     from PIL import Image, ImageDraw
+    if not args.cases or 'radical-wide' in args.cases:
+        script=eq.single(CASES['radical-wide'][0])+eq.keys('tools RIGHT RIGHT RIGHT RIGHT RIGHT')
+        script+='assert_equations trace complete\nassert_equations trace dump\n'
+        for i in range(33):
+            script+=(eq.keys('VAR') if i else '')+'assert_equations view page 5\n'+shot(f'radical-pan-{i:02}')
+        script+='assert_equations trace dump\nassert_equations trace builds 1\n'
+        result=run('radical-pan',script)
+        assert stable(result['traces'][0])==stable(result['traces'][1])
+        pixels=[]
+        for i in range(33):
+            frame=Image.open(out/f'radical-pan-{i:02}.ppm');frame.save(out/f'radical-pan-{i:02}.png')
+            pixels.append(frame.crop((0,54,320,220)).tobytes())
+        assert any(p!=pixels[0] for p in pixels[1:]),'radical formula did not pan'
+        assert pixels[0] in pixels[1:],'radical pan did not return'
+        (out/'radical-pan-result.json').write_text(json.dumps({'pass':True,'frames':33,'return_at':pixels[1:].index(pixels[0])+1}))
     if not args.cases or "wide-pan" in args.cases:
         wide = "( ( 3 1 2 3 4 5 * x - 2 1 2 3 4 5 ) * ( x + 4 1 2 3 4 5 ) ) / ( x + 4 1 2 3 4 5 ) RIGHT = 0"
         script = eq.single(wide) + eq.keys("tools") + "assert_equations trace complete\nassert_equations trace dump\n"

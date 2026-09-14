@@ -62,7 +62,10 @@ def cases(seed):
             equations.append(f'({left})/2={right}/2' if i % 2 else f'{left}={right}')
         yield {'id': f'seed-system3-{i}', 'equations': equations, 'tuple': list(map(str, values))}
     for i, equation in enumerate(['sqrt(x+2)=x', 'ln(x)=1', 'abs(x)=2', 'exp(x)=3', 'sin(x)=0', 'x^3=7']):
-        yield {'id': f'extension-{i}', 'equations': [equation], 'unsupported': True}
+        # 02A intentionally upgrades these two historical refusal fixtures.
+        # The other original families and their mathematical expectations remain.
+        yield {'id': f'extension-{i}', 'equations': [equation], 'unsupported': i not in (0, 2),
+               **({'roots': ['2']} if i == 0 else {'roots': ['-2', '2']} if i == 2 else {})}
 
 
 def check(case, d):
@@ -79,7 +82,7 @@ def check(case, d):
         assert step['before'] == i and step['after'] == i+1 and step['verdict'] == 1
         before, after = d['states'][i:i+2]
         assert step['prerequisites'] == list(range(len(before['conditions'])))
-        if step['rule'] != 'domain.nonzero': assert before['conditions'] == after['conditions']
+        if step['rule'] not in ('domain.nonzero', 'domain.radicand_nonnegative', 'condition.range'): assert before['conditions'] == after['conditions']
         if step['relation'] == 0:
             assert before['branches'] != after['branches'] and after['fingerprint'] not in seen
         seen.add(before['fingerprint'])

@@ -73,24 +73,40 @@ void EquationsApp::drawStep(bool preserveScroll) {
             if(count>=refs.size())throw std::bad_alloc(); // bounded projection, never silently omit a formula
             refs[count]=formula;captions[count]=std::move(caption);++count;
         };
-        auto caseCaption=[&](unsigned branch, bool active, bool final=false) {
+        bool absSplit=false;
+        for(const auto& s:_derivation.steps)if(s.rule==Rule::AbsCases && _derivation.states[s.after].branches.size()>1)absSplit=true;
+        auto caseCaption=[&](const numos::tutor::State& value,unsigned branch, bool active, bool final=false) {
             if(final)return numbered(Message::ViewSolutionNumber,branch+1);
-            if(after.branches[branch].status==BranchStatus::Rejected)return numbered(Message::RejectedAlternative,branch+1);
+            const auto& b=value.branches[branch];
+            if(absSplit && b.origin && b.id>2*b.origin) {
+                const auto key=b.status==BranchStatus::Rejected?Message::ViewRejectedSubcase:active?Message::ViewActiveSubcase:Message::ViewSubcase;
+                return explain(key,{{ParameterKind::Integer,std::to_string(b.origin)},{ParameterKind::Integer,std::to_string(b.id-2*b.origin)}},_stepLocale);
+            }
+            if(b.status==BranchStatus::Rejected)return numbered(Message::RejectedAlternative,branch+1);
             return numbered(active?Message::ActiveAlternative:Message::ViewUnchangedCase,branch+1);
         };
         auto addState=[&](unsigned state,bool final) {
             const auto& value=_derivation.states[state];
+            if(final && value.branches.size()>3 && !value.conditions.empty()) {
+                add(ref(FormulaKind::SolutionSet,state),words(Message::ViewSolutions));return;
+            }
             unsigned solution=0;
             for(unsigned b=0;b<value.branches.size();++b) {
-                if(final&&value.branches[b].status==BranchStatus::Rejected)continue;
+                if(final&&value.branches[b].status!=BranchStatus::Active)continue;
+                if(!final && step.caseStart!=UINT16_MAX && value.branches[b].origin!=before.branches[step.branch].origin)continue;
                 ++solution;
                 for(unsigned r=0;r<value.branches[b].equations.size();++r) {
                     std::string caption;
                     if(value.branches[b].equations.size()>1)caption=numbered(Message::EquationRow,r+1);
-                    else if(value.branches.size()>1)caption=final?numbered(Message::ViewSolutionNumber,solution):numbered(Message::Alternative,b+1);
+                    else if(value.branches.size()>1)caption=final?numbered(Message::ViewSolutionNumber,solution):
+                        absSplit && value.branches[b].origin && value.branches[b].id>2*value.branches[b].origin?caseCaption(value,b,false):numbered(Message::Alternative,b+1);
                     add(ref(FormulaKind::Equation,state,b,r),std::move(caption));
                 }
             }
+        };
+        auto factCaption=[&](Message key) {
+            return absSplit && step.caseStart!=UINT16_MAX
+                ? caseCaption(before,step.branch,true)+"\n"+words(key) : words(key);
         };
         switch(page.kind) {
         case TeachingKind::Start:
@@ -100,22 +116,23 @@ void EquationsApp::drawStep(bool preserveScroll) {
             break;
         case TeachingKind::Coefficients:
             titleKey=Message::ViewCoefficients;prose=words(Message::ViewMatchCoefficients);
-            add(ref(FormulaKind::CoefficientEquation),words(Message::ViewZeroRight));
+            add(ref(FormulaKind::CoefficientEquation),factCaption(Message::ViewZeroRight));
             add(ref(FormulaKind::StandardQuadratic),words(Message::ViewStandardForm));
             add(ref(FormulaKind::Coefficients),words(Message::ViewCoefficientValues));
             break;
         case TeachingKind::Discriminant:
             titleKey=Message::ViewDiscriminant;prose=words(Message::ViewComputeDiscriminant);
-            add(ref(FormulaKind::DiscriminantDefinition),words(Message::ViewDefinition));
+            add(ref(FormulaKind::DiscriminantDefinition),factCaption(Message::ViewDefinition));
             add(ref(FormulaKind::DiscriminantValues),words(Message::ViewEvaluated));
             break;
         case TeachingKind::QuadraticFormula:
             titleKey=Message::ViewFormula;prose=words(Message::ViewUseFormula);
-            add(ref(FormulaKind::GeneralFormula),words(Message::ViewFormula));
+            add(ref(FormulaKind::GeneralFormula),factCaption(Message::ViewFormula));
             add(ref(FormulaKind::SubstitutedFormula),words(Message::ViewSubstitution));
             break;
         case TeachingKind::Roots:
-            titleKey=Message::ViewSolutions;prose=words(Message::ViewReadRoots);
+            titleKey=step.caseStart!=UINT16_MAX?Message::ViewCandidates:Message::ViewSolutions;
+            prose=words(step.caseStart!=UINT16_MAX?Message::ViewReadCandidates:Message::ViewReadRoots);
             addState(step.after,false);break;
         case TeachingKind::Final:
             if(page.first!=page.last) {
@@ -144,6 +161,12 @@ void EquationsApp::drawStep(bool preserveScroll) {
             break;
         case TeachingKind::Transition: {
             switch(step.rule) {
+            case Rule::RangeCondition:titleKey=Message::ViewSign;break;
+            case Rule::AbsCases:titleKey=Message::ViewAbsCases;break;
+            case Rule::RadicalCandidates:titleKey=Message::ViewSquareBoth;break;
+            case Rule::CheckOriginal:case Rule::RejectOriginal:case Rule::DuplicateCandidate:titleKey=Message::ViewOriginalCheck;break;
+            case Rule::Contradiction:case Rule::QuadraticFormula:titleKey=Message::ViewEmptyCase;break;
+            case Rule::RadicandDomain:
             case Rule::Domain:titleKey=Message::ViewDomain;break;
             case Rule::SubstituteValues:titleKey=Message::ViewSavedValues;break;
             case Rule::Expand:titleKey=Message::ViewExpand;break;
@@ -164,8 +187,10 @@ void EquationsApp::drawStep(bool preserveScroll) {
             const bool system=before.branches[step.branch].equations.size()>1;
             const bool rowOperation=step.rule==Rule::RowAdd||step.rule==Rule::RowScale||step.rule==Rule::RowSwap;
             const auto label=system?numbered(Message::EquationRow,step.row+1):
-                before.branches.size()>1?numbered(Message::ActiveAlternative,step.branch+1):std::string{};
-            add(ref(FormulaKind::Equation,step.before,step.branch,step.row),label);
+                before.branches.size()>1?caseCaption(before,step.branch,true):std::string{};
+            const bool checking=step.rule==Rule::CheckOriginal || step.rule==Rule::RejectOriginal || step.rule==Rule::DuplicateCandidate;
+            add(ref(FormulaKind::Equation,checking?step.after:step.before,step.branch,step.row),
+                step.rule==Rule::RejectOriginal?caseCaption(after,step.branch,true):label);
             if(step.rule==Rule::RowAdd||step.rule==Rule::RowSwap)
                 add(ref(FormulaKind::Equation,step.before,step.branch,step.otherRow),numbered(Message::EquationRow,step.otherRow+1));
             proseAfter=count;
@@ -173,7 +198,11 @@ void EquationsApp::drawStep(bool preserveScroll) {
             else if(step.rule==Rule::ClearDenominators ||
                     teachingNeedsOperand(step))
                 add(ref(FormulaKind::Operand),words(Message::ViewOperand));
-            if(step.rule==Rule::Domain)break; // new condition is the actual changed mathematical content
+            if(step.rule==Rule::Domain || step.rule==Rule::RadicandDomain || step.rule==Rule::RangeCondition || step.rule==Rule::CheckOriginal || step.rule==Rule::RejectOriginal || step.rule==Rule::DuplicateCandidate)break; // new condition is the actual changed mathematical content
+            if(step.caseStart!=UINT16_MAX && after.branches[step.branch].status==BranchStatus::Empty) {
+                if(step.rule==Rule::QuadraticFormula)add(ref(FormulaKind::DiscriminantValues));
+                break;
+            }
             if(step.relation==Relation::ExhaustiveSplit)addState(step.after,false);
             else if(step.rule==Rule::RowSwap) {
                 // Four widgets: the two before rows and the two after rows.
@@ -183,10 +212,10 @@ void EquationsApp::drawStep(bool preserveScroll) {
                 add(ref(FormulaKind::Equation,step.after,step.branch,step.otherRow),numbered(Message::EquationRow,step.otherRow+1));
             } else {
                 add(ref(FormulaKind::Equation,step.after,step.branch,step.row),
-                    before.branches.size()>1?caseCaption(step.branch,true):system?numbered(Message::EquationRow,step.row+1):std::string{});
+                    before.branches.size()>1?caseCaption(after,step.branch,true):system?numbered(Message::EquationRow,step.row+1):std::string{});
                 if(after.branches.size()>1 && after.conditions.empty() && count<4)
                     for(unsigned b=0;b<after.branches.size();++b)if(b!=step.branch)
-                        add(ref(FormulaKind::Equation,step.after,b),caseCaption(b,false));
+                        add(ref(FormulaKind::Equation,step.after,b),caseCaption(after,b,false));
             }
             break;
         }

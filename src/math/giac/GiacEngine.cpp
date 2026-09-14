@@ -1726,7 +1726,15 @@ StructuredSolveResult runStructuredSolve(
                 giac::gen left,right;
                 splitEquality(equationGens.front(),left,right);
                 const giac::gen canonical=giac::symb_equal(left.eval(1,ctx),right.eval(1,ctx));
-                raw = giac::solve(canonical, variables.front(),
+                // WHY: pinned ksolve.cc first applies exp2pow(), then overwrites
+                // that result when its input is an equality. For a sqrt node
+                // this loses the normalization and can return [] for sqrt(x)=3.
+                // The public _solve path calls equal2diff BEFORE solve. Match
+                // that path only for radical rows; keep authored equations above
+                // for domain/candidate validation and never use tutor answers here.
+                const giac::gen solveInput=giac::has_op(equationGens.front(),*giac::at_sqrt)
+                    ? giac::equal2diff(canonical) : canonical;
+                raw = giac::solve(solveInput, variables.front(),
                                   policy == SolveDomainPolicy::RealAndComplex ? 1 : 0,
                                   ctx);
             } else {

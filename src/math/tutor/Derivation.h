@@ -4,6 +4,9 @@
 #include <array>
 #include <cstdint>
 #include <string>
+#include <memory>
+
+namespace numos { struct EngineResultNode; }
 
 namespace numos::tutor {
 // Stable, engine-neutral wire model. Mathematical strings use the existing
@@ -39,7 +42,9 @@ enum class Rule : uint8_t {
     RowSwap,
     RowScale,
     RowAdd,
-    SystemFinish
+    SystemFinish,
+    RangeCondition, AbsCases, RadicalCandidates, NonnegativeImpossible,
+    CheckOriginal, RejectOriginal, DuplicateCandidate, RadicandDomain
 };
 enum class Message : uint8_t {
     Domain,
@@ -112,6 +117,13 @@ enum class Message : uint8_t {
     ViewExpand, ViewCollect, ViewBalance, ViewDivide, ViewClear, ViewFactor,
     ViewSquareRoots, ViewCases, ViewCheckCandidate, ViewRowSwap, ViewRowScale,
     ViewRowAdd, ViewSavedValues, ViewDomain, ViewSolveFirst, ViewZeroRight,
+    AbsRange, RadicalRange, RadicalDomain, AbsCases, AbsZero, RadicalSquare,
+    AbsImpossible, RadicalImpossible, OriginalWorks, OriginalFails,
+    SignFails, RadicandFails, DuplicateValue,
+    AbsAdd, AbsSubtract, AbsDivide, RadicalAdd, RadicalSubtract, RadicalDivide,
+    ViewSign, ViewAbsCases, ViewSquareBoth, ViewOriginalCheck, ViewEmptyCase,
+    ViewSubcase, ViewActiveSubcase, ViewRejectedSubcase,
+    ViewCandidates, ViewReadCandidates,
     Count
 };
 enum class ParameterKind : uint8_t { Expression, Variable, Row, Integer };
@@ -137,15 +149,27 @@ struct Path {
     uint8_t equation = 0, side = 0;
     Vector<uint8_t> children;
 };
+enum class ConditionKind : uint8_t { Nonzero, Nonnegative, Positive };
+enum class ConditionRole : uint8_t { Denominator, Radicand, IsolatedRange };
 struct Condition {
     std::string nonzero;
     Path source;
+    ConditionKind kind = ConditionKind::Nonzero;
+    ConditionRole role = ConditionRole::Denominator;
+    uint16_t sourceState = 0;
+    Verdict verification = Verdict::Unknown;
+    // Shared immutable typed mathematical value; no Giac type/context lifetime.
+    // Legacy denominator records retain their existing canonical representation.
+    std::shared_ptr<const EngineResultNode> expression;
 };
-enum class BranchStatus : uint8_t { Active, Rejected };
+bool sameCondition(const Condition& a, const Condition& b);
+enum class BranchStatus : uint8_t { Active, Rejected, Empty, Duplicate };
 struct Branch {
     uint8_t id = 0;
     BranchStatus status = BranchStatus::Active;
     Vector<Equation> equations;
+    uint8_t origin = 0;
+    Verdict originalCheck = Verdict::Unknown;
 };
 enum class Conclusion : uint8_t { None, Finite, Empty, Identity, Family };
 struct State {
@@ -168,9 +192,13 @@ struct Step {
     uint16_t group = 0;        // contiguous verified primitives, detail retained
     Vector<uint16_t> substeps; // optional references; primitive plans leave empty
     Verdict verification = Verdict::Unknown;
+    // Lift an EXISTING polynomial primitive into one nonlinear case. The
+    // checker projects that case and independently replays the original rule.
+    uint16_t caseStart = UINT16_MAX;
+    uint8_t caseBranch = 0;
 };
 struct Limits {
-    static constexpr unsigned steps = 48, branches = 2, equations = 3;
+    static constexpr unsigned steps = 48, branches = 4, equations = 3;
     static constexpr unsigned conditions = 8, depth = 20, sourceNodes = 160;
     static constexpr unsigned sourceBytes = 512, expressionBytes = 512;
     // Full replay of dense rational 3x3 elimination needs more calls than a

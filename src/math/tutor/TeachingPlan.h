@@ -18,7 +18,7 @@ inline bool teachingNeedsOperand(const Step& s) {
 }
 inline bool terminalRule(Rule rule) {
     return rule == Rule::AlreadySolved || rule == Rule::Identity ||
-           rule == Rule::Contradiction || rule == Rule::Finish || rule == Rule::SystemFinish;
+           rule == Rule::Contradiction || rule == Rule::Finish || rule == Rule::SystemFinish || rule == Rule::NonnegativeImpossible;
 }
 
 inline bool quadraticHasUnchangedFinish(const Derivation& d, size_t index) {
@@ -43,15 +43,14 @@ inline bool quadraticHasUnchangedFinish(const Derivation& d, size_t index) {
     for (size_t b = 0; b < before.branches.size(); ++b) {
         const auto& a = before.branches[b]; const auto& z = after.branches[b];
         if (a.id != z.id || a.status != BranchStatus::Active || a.status != z.status ||
-            a.equations.size() != z.equations.size()) return false;
+            a.origin != z.origin || a.originalCheck != z.originalCheck || a.equations.size() != z.equations.size()) return false;
         for (size_t e = 0; e < a.equations.size(); ++e)
             if (a.equations[e].lhs != z.equations[e].lhs ||
                 a.equations[e].rhs != z.equations[e].rhs) return false;
     }
     for (size_t c = 0; c < before.conditions.size(); ++c) {
         const auto& a = before.conditions[c]; const auto& z = after.conditions[c];
-        if (a.nonzero != z.nonzero || a.source.equation != z.source.equation ||
-            a.source.side != z.source.side || a.source.children != z.source.children) return false;
+        if (!sameCondition(a,z)) return false;
     }
     return true;
 }
@@ -67,14 +66,15 @@ template<class Visit> inline unsigned visitTeachingPages(const Derivation& d, bo
         if (step.rule == Rule::QuadraticFormula) {
             emit(i, i, TeachingKind::Coefficients);
             emit(i, i, TeachingKind::Discriminant);
-            if (d.states[step.after].conclusion != Conclusion::Empty) {
+            if (d.states[step.after].conclusion != Conclusion::Empty &&
+                d.states[step.after].branches[step.branch].status != BranchStatus::Empty) {
                 emit(i, i, TeachingKind::QuadraticFormula);
                 if (quadraticHasUnchangedFinish(d, i)) {
                     emit(i, i + 1, TeachingKind::Final);
                     ++i; // presentation spans both primitives; the proof is untouched
                 } else if (guided) emit(i, i, TeachingKind::Roots);
-            } else emit(i, i, TeachingKind::Final);
-        } else if (terminalRule(step.rule)) emit(i, i, TeachingKind::Final);
+            } else emit(i, i, step.caseStart==UINT16_MAX?TeachingKind::Final:TeachingKind::Transition);
+        } else if (terminalRule(step.rule) && step.caseStart==UINT16_MAX) emit(i, i, TeachingKind::Final);
         else {
             size_t last = i;
             const auto& before = d.states[step.before];

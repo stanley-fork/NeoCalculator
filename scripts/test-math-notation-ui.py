@@ -7,11 +7,22 @@ compares every proof field except elapsed micros; presentation differences are
 asserted individually, never removed from the mathematical replay wholesale.
 """
 import argparse, json
+from fractions import Fraction
 from pathlib import Path
 
 def nodes(n):
     yield n
     for c in n['children']: yield from nodes(c)
+
+def checked_scalar(n):
+    # Inspect the actual final-value subtree, including a standalone unary
+    # minus. Searching every leaf can accidentally match a coefficient instead.
+    cs=n['children']
+    if n['type']==1 and not cs:return Fraction(n['text'])
+    if n['type']==0 and len(cs)==1:return checked_scalar(cs[0])
+    if n['type']==0 and len(cs)==2 and cs[0]['text']=='-':return -checked_scalar(cs[1])
+    if n['type']==4 and len(cs)==2:return checked_scalar(cs[0])/checked_scalar(cs[1])
+    raise AssertionError(('unsupported scalar structure',n))
 
 def main():
     p=argparse.ArgumentParser(description=__doc__)
@@ -46,7 +57,10 @@ def main():
                         assert texts.count('×')==2,('numeric instructional products hidden',texts)
                         # Checked discriminant binding, not a computed replacement.
                         step=trace['steps'][f['step']]
-                        assert step['auxiliaries'][-1] in texts,(step,texts)
+                        equation=f['ast']
+                        while len(equation['children'])==1:equation=equation['children'][0]
+                        assert equation['children'][-2]['text']=='='
+                        assert checked_scalar(equation['children'][-1])==Fraction(step['auxiliaries'][-1]),(step,texts)
                 if path.name.startswith('notation-factor') and v['page']==0 and f['kind']=='equation' and f['state']==1:
                     assert '×' not in texts and '*' not in texts
                     assert '2' in texts and '5' in texts and '1' in texts

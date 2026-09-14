@@ -1898,7 +1898,11 @@ namespace giac {
 	if (equalposcomp(substin,lsvar))
 	  continue;
 	substin.push_back(lsvar);
-	gen tmp("c__"+print_intvar_counter(contextptr),contextptr);
+	// NumOS: this is a solver-owned auxiliary, not authored parser input.
+	// Parsing each fresh name interns it permanently even after purgenoassume.
+	// Keep the existing name/counter and context-based assumptions, but let
+	// the identifier's normal reference-counted lifetime release its storage.
+	gen tmp(identificateur("c__"+print_intvar_counter(contextptr)));
 	if (!(ls[3*i+1].val %2)){
 	  assumesymbolic(symb_superieur_egal(tmp,0),0,contextptr); 
 	  assumedvars.push_back(tmp);

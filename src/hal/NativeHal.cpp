@@ -4182,6 +4182,22 @@ extern "C" EMSCRIPTEN_KEEPALIVE int numos_send_logical_key(int keyCode,
         return 0;
     }
     const KeyAction action = static_cast<KeyAction>(actionCode);
+    // Equations' physical SHIFT + SQRT produces the absolute-value template.
+    // The browser's logical bridge otherwise drops that semantic identity and
+    // inserts an ordinary root. Reuse the production resolver for this exact
+    // modified key; global keys and the legacy script aliases are unchanged.
+    if(g_mode==AppMode::EQUATIONS && g_equationsApp &&
+       keyCode==static_cast<int>(KeyCode::SQRT) && action!=KeyAction::RELEASE &&
+       vpam::KeyboardManager::instance().isShift()) {
+        const auto resolved=numos::input::KeySemanticResolver::resolve(
+            KeyCode::SQRT,numos::input::InputContext::Math,action);
+        if(resolved.dispatch) {
+            KeyEvent event{};event.code=resolved.code;event.action=action;
+            event.row=-1;event.col=-1;event.semanticId=static_cast<uint16_t>(resolved.semantic);event.text=resolved.text;
+            g_equationsApp->handleKey(event);
+        }
+        return 1;
+    }
     dispatchKey(static_cast<KeyCode>(keyCode), action,
                 action != KeyAction::RELEASE);
     return 1;
@@ -4290,6 +4306,11 @@ extern "C" EMSCRIPTEN_KEEPALIVE const char* numos_diagnostic_state()
         << (g_equationsApp ? g_equationsApp->debugResultKindName() : "")
         << "\",\"solutionCount\":"
         << (g_equationsApp ? g_equationsApp->debugSolutionCount() : 0)
+        << ",\"tutorStatus\":\"" << (g_equationsApp ? g_equationsApp->debugTutorStatusName() : "") << "\""
+        << ",\"teachingPages\":" << (g_equationsApp ? g_equationsApp->debugTeachingPages() : 0)
+        << ",\"teachingPage\":" << (g_equationsApp ? g_equationsApp->debugTeachingPage() : 0)
+        << ",\"teachingFormulas\":" << (g_equationsApp ? g_equationsApp->debugTeachingFormulas() : 0)
+        << ",\"tutorBuilds\":" << (g_equationsApp ? g_equationsApp->debugTutorBuilds() : 0)
         << ",\"x0Exact\":\""
         << jsonEscaped(g_equationsApp
                            ? g_equationsApp->debugSolutionExactText("x", 0)

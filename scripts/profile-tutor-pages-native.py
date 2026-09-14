@@ -61,8 +61,11 @@ if 'bool safe = tutorkernel::domainSafe' in tail:
 else:
  tail=edit(tail,'try {\n            tutorkernel::capture','contextProbe.stop();\n        try {\n            pageprobe::Span captureProbe(pageprobe::capture);\n            tutorkernel::capture')
  tail=edit(tail,'if (!tutorkernel::domainSafe','pageprobe::Span domainProbe(pageprobe::domain);\n        if (!tutorkernel::domainSafe')
-tail=edit(tail,'int budget = kTreeNodeBudget;','domainProbe.stop();\n        int budget = kTreeNodeBudget;\n        pageprobe::Span evalProbe(pageprobe::eval);\n        const auto equality=giac::symb_equal(l.eval(1, _state->ctx), r.eval(1, _state->ctx));\n        evalProbe.stop();pageprobe::Span convertProbe(pageprobe::convert);')
-tail=edit(tail,'genToNode(giac::symb_equal(l.eval(1, _state->ctx), r.eval(1, _state->ctx)),','genToNode(equality,')
+equality=('giac::symb_equal(tutorkernel::displayEval(a,l), tutorkernel::displayEval(a,r))'
+          if 'tutorkernel::displayEval(a,l)' in tail else
+          'giac::symb_equal(l.eval(1, _state->ctx), r.eval(1, _state->ctx))')
+tail=edit(tail,'int budget = kTreeNodeBudget;','domainProbe.stop();\n        int budget = kTreeNodeBudget;\n        pageprobe::Span evalProbe(pageprobe::eval);\n        const auto equality='+equality+';\n        evalProbe.stop();pageprobe::Span convertProbe(pageprobe::convert);')
+tail=edit(tail,'genToNode('+equality+',','genToNode(equality,')
 (scratch/'GiacTutor.inc').write_text(head+'StructuredEngineResult GiacEngine::tutorFormula('+tail,encoding='utf-8')
 database=json.loads((source/a.database).read_text(encoding='utf-8'))
 for file in ['EquationsApp.cpp','GiacEngine.cpp']:

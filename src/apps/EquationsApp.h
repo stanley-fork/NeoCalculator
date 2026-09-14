@@ -49,6 +49,10 @@ public:
     std::string debugSolutionExactText(const std::string&, int) const;
     const char* debugResultKindName() const;
     const char* debugTutorStatusName() const;
+    unsigned debugTeachingPages() const { return numos::tutor::teachingPageCount(_derivation,_stepDetail); }
+    unsigned debugTeachingPage() const { return _teachingPage; }
+    unsigned debugTutorBuilds() const { return _tutorBuilds; }
+    unsigned debugTeachingFormulas() const { return _stepFormulaCount; }
     bool debugAssert(const std::string& expected);
 #endif
 private:
