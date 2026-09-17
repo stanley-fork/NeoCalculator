@@ -9,18 +9,22 @@ const snapshot=process.argv[2];assert.ok(snapshot,'pass the explicit ASCII snaps
 const baseline=process.argv.includes('--baseline');
 const browserName=process.argv.find(x=>x.startsWith('--browser='))?.split('=')[1]||'chromium';
 const browserType={chromium,firefox,webkit}[browserName];assert.ok(browserType,'unknown browser');
-const folder=resolve('out/tutor-teaching-ux-01/review-math/web',baseline?'baseline-sequence':('candidate-sequence'+(browserName==='chromium'?'':'-'+browserName)));
+const outputOverride=process.argv.find(x=>x.startsWith('--out='))?.slice(6);
+const port=Number(process.argv.find(x=>x.startsWith('--port='))?.slice(7)||8796);
+assert.ok(Number.isInteger(port)&&port>1024&&port<65536,'invalid test port');
+const origin=`http://127.0.0.1:${port}`;
+const folder=outputOverride?resolve(outputOverride):resolve('out/tutor-teaching-ux-01/review-math/web',baseline?'baseline-sequence':('candidate-sequence'+(browserName==='chromium'?'':'-'+browserName)));
 await mkdir(folder,{recursive:true});
 const manifest=JSON.parse(await readFile(resolve(snapshot,'out/wasm/dist/release/numos-assets.json'),'utf8'));
 const rawHash=createHash('sha256').update(await readFile(resolve(snapshot,'out/wasm/release/numos-emulator.wasm'))).digest('hex');
 assert.equal(manifest.assets.wasm.sha256,rawHash,'package the freshly compiled WASM');
-const server=spawn('python',['-m','http.server','8796','--bind','127.0.0.1','--directory',resolve(snapshot,'out/wasm/dist/release')],{stdio:'ignore',windowsHide:true});
+const server=spawn('python',['-m','http.server',String(port),'--bind','127.0.0.1','--directory',resolve(snapshot,'out/wasm/dist/release')],{stdio:'ignore',windowsHide:true});
 const delay=ms=>new Promise(r=>setTimeout(r,ms));let browser,page,canvas;
 try{
-  for(let i=0;i<100;++i){try{if((await fetch('http://127.0.0.1:8796/index.html')).ok)break;}catch{}await delay(50);}
+  for(let i=0;i<100;++i){try{if((await fetch(origin+'/index.html')).ok)break;}catch{}await delay(50);}
   browser=await browserType.launch({headless:true});page=await browser.newPage({viewport:{width:900,height:720}});
   const errors=[];page.on('pageerror',e=>errors.push(String(e)));
-  await page.goto('http://127.0.0.1:8796/index.html?persistence=disabled');
+  await page.goto(origin+'/index.html?persistence=disabled');
   await page.waitForFunction(()=>window.numos?.isReady(),null,{timeout:30000});
   canvas=page.locator('numos-emulator').locator('canvas');const box=await canvas.boundingBox();
   if(process.argv.includes('--nonlinear')) {
@@ -82,11 +86,23 @@ try{
       ['radical-linear',[32,42,17,44,43,16,78,17],1,'3'],
       ['radical-isolate',[42,32,17,44,41,16,44,41,78,25],1,'8'],
     ];
+    if(process.argv.includes('--transcendental'))fixtures.push(
+      ['exp-injective',[1,51,42,17,37,41,16,78,1,51,43,16],1,'2'],
+      // Both are exact vendor spellings. The C++ tutor independently verifies
+      // the common-base exponent and reconciles it symbolically with Giac.
+      ['exp-common-base',[42,31,17,16,78,26],1,['3','ln(8)/ln(2)']],
+      ['exp-affine-identity',[42,31,17,44,46,16,78,26],1,['3','ln(8)/ln(2)']],
+      ['exp-negative',[1,51,17,16,78,37,41],0,''],
+      ['log-domain',[51,17,37,41,16,78,42],1,'exp(2)+1'],
+      ['log-isolate',[43,51,17,16,37,35,78,46],1,'exp(2)'],
+      ['log-injective',[51,17,16,78,51,34,16],1,'5'],
+      ['log-base',[53,42,16,17,16,78,43],1,'8']);
     for(const [name,keys,count,first] of fixtures) {
       for(const key of [70,14,14,50,10,...keys,50,15,15,50])await press(key);
       await page.waitForFunction(expected=>{
         const e=window.numos.diagnosticState().equations;
-        return e.tutorStatus==='complete' && e.solutionCount===expected.count && e.x0Exact===expected.first;
+        return e.tutorStatus==='complete' && e.solutionCount===expected.count &&
+          (Array.isArray(expected.first)?expected.first.includes(e.x0Exact):e.x0Exact===expected.first);
       },{count,first},{timeout:20000});
       const solved=await page.evaluate(()=>window.numos.diagnosticState());
       await capture(name+'-result');await press(72);

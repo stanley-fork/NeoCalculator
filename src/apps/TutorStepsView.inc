@@ -53,7 +53,8 @@ void EquationsApp::drawStep(bool preserveScroll) {
     _teachingPage=std::min(_teachingPage,total-1);
     const auto page=teachingPageAt(_derivation,_stepDetail,_teachingPage);
     _stepIndex=page.first;
-    const unsigned operationIndex=page.kind==TeachingKind::Final?page.last:page.first;
+    const unsigned operationIndex=page.kind==TeachingKind::Final ||
+        _derivation.steps[page.first].rule==Rule::BaseDomain?page.last:page.first;
     const auto& step=_derivation.steps[operationIndex];
     const auto& before=_derivation.states[step.before];
     const auto& after=_derivation.states[step.after];
@@ -68,7 +69,7 @@ void EquationsApp::drawStep(bool preserveScroll) {
         return FormulaRef{kind,uint16_t(state),uint16_t(source==65535?operationIndex:source),uint8_t(branch),uint8_t(row)};
     };
     try {
-        std::string prose=explain(step.explanation,step.parameters,_stepLocale);
+        std::string prose=teachingOperationText(step,_stepLocale);
         auto add=[&](FormulaRef formula,std::string caption=std::string{}) {
             if(count>=refs.size())throw std::bad_alloc(); // bounded projection, never silently omit a formula
             refs[count]=formula;captions[count]=std::move(caption);++count;
@@ -156,12 +157,16 @@ void EquationsApp::drawStep(bool preserveScroll) {
             add(ref(FormulaKind::Equation,step.before),words(Message::ViewBefore));
             for(unsigned i=page.first;i<=page.last;++i) {
                 const auto& item=_derivation.steps[i];
-                add(ref(FormulaKind::Equation,item.after,0,0,i),explain(item.explanation,item.parameters,_stepLocale));
+                add(ref(FormulaKind::Equation,item.after,0,0,i),teachingOperationText(item,_stepLocale));
             }
             break;
         case TeachingKind::Transition: {
             switch(step.rule) {
-            case Rule::RangeCondition:titleKey=Message::ViewSign;break;
+            case Rule::ExpInjective:case Rule::LogInjective:titleKey=Message::ViewInjective;break;
+            case Rule::ExpInverse:case Rule::LogInverse:titleKey=Message::ViewInverse;break;
+            case Rule::ExpExactPower:titleKey=Message::ViewExactPower;break;
+            case Rule::PositiveDomain:case Rule::BaseDomain:titleKey=Message::ViewDomain;break;
+            case Rule::ExpRange:case Rule::RangeCondition:titleKey=Message::ViewSign;break;
             case Rule::AbsCases:titleKey=Message::ViewAbsCases;break;
             case Rule::RadicalCandidates:titleKey=Message::ViewSquareBoth;break;
             case Rule::CheckOriginal:case Rule::RejectOriginal:case Rule::DuplicateCandidate:titleKey=Message::ViewOriginalCheck;break;
@@ -195,10 +200,11 @@ void EquationsApp::drawStep(bool preserveScroll) {
                 add(ref(FormulaKind::Equation,step.before,step.branch,step.otherRow),numbered(Message::EquationRow,step.otherRow+1));
             proseAfter=count;
             if(rowOperation)add(ref(FormulaKind::RowOperation));
-            else if(step.rule==Rule::ClearDenominators ||
-                    teachingNeedsOperand(step))
+            else if(step.rule==Rule::AddBoth || step.rule==Rule::DivideBoth)
+                add(ref(FormulaKind::BalancedOperation,step.before,step.branch,step.row));
+            else if(step.rule==Rule::ClearDenominators)
                 add(ref(FormulaKind::Operand),words(Message::ViewOperand));
-            if(step.rule==Rule::Domain || step.rule==Rule::RadicandDomain || step.rule==Rule::RangeCondition || step.rule==Rule::CheckOriginal || step.rule==Rule::RejectOriginal || step.rule==Rule::DuplicateCandidate)break; // new condition is the actual changed mathematical content
+            if(step.rule==Rule::Domain || step.rule==Rule::RadicandDomain || step.rule==Rule::PositiveDomain || step.rule==Rule::BaseDomain || step.rule==Rule::ExpRange || step.rule==Rule::RangeCondition || step.rule==Rule::CheckOriginal || step.rule==Rule::RejectOriginal || step.rule==Rule::DuplicateCandidate)break; // new condition is the actual changed mathematical content
             if(step.caseStart!=UINT16_MAX && after.branches[step.branch].status==BranchStatus::Empty) {
                 if(step.rule==Rule::QuadraticFormula)add(ref(FormulaKind::DiscriminantValues));
                 break;
@@ -220,7 +226,10 @@ void EquationsApp::drawStep(bool preserveScroll) {
             break;
         }
         }
-        if(page.kind!=TeachingKind::Start && !after.conditions.empty())
+        bool transcendental=false;
+        for(const auto& s:_derivation.steps)if(s.rule>=Rule::PositiveDomain)transcendental=true;
+        const bool showConditions=!transcendental || page.kind==TeachingKind::Final || step.rule==Rule::PositiveDomain || step.rule==Rule::BaseDomain || step.rule==Rule::ExpRange || step.rule==Rule::RejectOriginal;
+        if(showConditions && page.kind!=TeachingKind::Start && !after.conditions.empty())
             add(ref(FormulaKind::Conditions,step.after),numbered(Message::ViewRestrictions,unsigned(after.conditions.size())));
 
         // Construct transactionally before changing the visible page. Authored

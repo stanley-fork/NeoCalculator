@@ -4182,15 +4182,16 @@ extern "C" EMSCRIPTEN_KEEPALIVE int numos_send_logical_key(int keyCode,
         return 0;
     }
     const KeyAction action = static_cast<KeyAction>(actionCode);
-    // Equations' physical SHIFT + SQRT produces the absolute-value template.
+    // Equations' physical SHIFT + SQRT/LN produces absolute value / Euler power.
     // The browser's logical bridge otherwise drops that semantic identity and
-    // inserts an ordinary root. Reuse the production resolver for this exact
+    // inserts an ordinary root/logarithm. Reuse the production resolver for this
     // modified key; global keys and the legacy script aliases are unchanged.
     if(g_mode==AppMode::EQUATIONS && g_equationsApp &&
-       keyCode==static_cast<int>(KeyCode::SQRT) && action!=KeyAction::RELEASE &&
+       (keyCode==static_cast<int>(KeyCode::SQRT) || keyCode==static_cast<int>(KeyCode::LN)) &&
+       action!=KeyAction::RELEASE &&
        vpam::KeyboardManager::instance().isShift()) {
         const auto resolved=numos::input::KeySemanticResolver::resolve(
-            KeyCode::SQRT,numos::input::InputContext::Math,action);
+            static_cast<KeyCode>(keyCode),numos::input::InputContext::Math,action);
         if(resolved.dispatch) {
             KeyEvent event{};event.code=resolved.code;event.action=action;
             event.row=-1;event.col=-1;event.semanticId=static_cast<uint16_t>(resolved.semantic);event.text=resolved.text;

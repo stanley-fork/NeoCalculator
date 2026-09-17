@@ -21,6 +21,7 @@ def main():
     p=argparse.ArgumentParser()
     p.add_argument('--bin', required=True)
     p.add_argument('--out', type=Path, required=True)
+    p.add_argument('--transcendental', action='store_true')
     args=p.parse_args()
     os.chdir(ROOT)
     args.out.mkdir(parents=True, exist_ok=True)
@@ -31,6 +32,9 @@ def main():
         eq.system(eq.SYSTEMS['system-2x2'][0]),
         eq.system(eq.SYSTEMS['system-3x3'][0]),
     ]
+    if args.transcendental:
+        starts=[starts[0],starts[1],eq.single('2 x ^ 2 RIGHT + 3 x - 4 = 0'),
+                eq.single('2 ^ x + 0 RIGHT = 8'),eq.single('ln x - 1 RIGHT = 2')]
     env=dict(os.environ,NUMOS_EQUATIONS_BOUNDS='1')
     dll=eq.helper.sdl2_dll_dir(args.bin)
     if dll:env['PATH']=dll+os.pathsep+env.get('PATH','')

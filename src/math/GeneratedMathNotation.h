@@ -57,6 +57,11 @@ inline Factor classify(const vpam::MathNode* n) {
     n = unwrap(n);
     if (!n) return {};
     if (n->type() == NodeType::Number) return {Shape::Number, 0};
+    // WHY: the structured exponential is a power of the Euler CONSTANT node,
+    // not an identifier named e. Keep repeated Euler factors visibly distinct.
+    if (n->type() == NodeType::Constant &&
+        static_cast<const NodeConstant*>(n)->constKind() == ConstKind::E)
+        return {Shape::Symbol, 'e'};
     if (n->type() == NodeType::Variable) {
         char c = static_cast<const NodeVariable*>(n)->name();
         return knownScalar(c) ? Factor{Shape::Symbol, c} : Factor{};
@@ -69,7 +74,8 @@ inline Factor classify(const vpam::MathNode* n) {
     if (!scalar(n, algebraic)) return {};
     if (n->type() == NodeType::Power) {
         auto base = unwrap(n->child(0));
-        if (base && (base->type() == NodeType::Variable || base->type() == NodeType::Symbol))
+        if (base && (base->type() == NodeType::Variable || base->type() == NodeType::Symbol ||
+                     base->type() == NodeType::Constant))
             return classify(base);
         return {};
     }

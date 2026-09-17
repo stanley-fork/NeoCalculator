@@ -153,13 +153,40 @@ NodePtr build(const Derivation& d, FormulaRef ref, unsigned& calls) {
             auto term = condition.expression ? converted(*condition.expression) : typedTerm(condition.nonzero, calls);
             if (!term) return nullptr;
             if (row->childCount()) row->appendChild(makeSymbol("; "));
-            row->appendChild(relation(std::move(term), makeNumber("0"), condition.kind==ConditionKind::Nonnegative?OpKind::Ge:condition.kind==ConditionKind::Positive?OpKind::Gt:OpKind::Ne));
+            row->appendChild(relation(std::move(term), makeNumber(condition.kind==ConditionKind::NotOne?"1":"0"), condition.kind==ConditionKind::Nonnegative?OpKind::Ge:condition.kind==ConditionKind::Positive?OpKind::Gt:OpKind::Ne));
         }
         return list;
     }
     if (ref.kind == FormulaKind::Operand) {
-        const bool subtract = (std::string_view(messageKey(step.explanation)).find("equation.subtract") == 0 || step.explanation==Message::AbsSubtract || step.explanation==Message::RadicalSubtract);
+        const bool subtract = (std::string_view(messageKey(step.explanation)).find("equation.subtract") == 0 || step.explanation==Message::AbsSubtract || step.explanation==Message::RadicalSubtract || step.explanation==Message::TransSubtract);
         return typedTerm(subtract ? "-(" + step.operand + ")" : step.operand, calls);
+    }
+    if (ref.kind == FormulaKind::BalancedOperation) {
+        if ((step.rule != Rule::AddBoth && step.rule != Rule::DivideBoth) ||
+            ref.state != step.before || ref.branch != step.branch || ref.row != step.row ||
+            ref.state >= d.states.size() || ref.branch >= d.states[ref.state].branches.size()) return nullptr;
+        const auto& branch = d.states[ref.state].branches[ref.branch];
+        if (ref.row >= branch.equations.size()) return nullptr;
+        auto before = equation(branch.equations[ref.row], calls);
+        if (!before || before->type() != NodeType::Row || before->childCount() != 3) return nullptr;
+        const bool subtract = step.rule == Rule::AddBoth &&
+            (std::string_view(messageKey(step.explanation)).find("equation.subtract") == 0 ||
+             step.explanation == Message::AbsSubtract || step.explanation == Message::RadicalSubtract ||
+             step.explanation == Message::TransSubtract);
+        auto amount = typedTerm(subtract ? "-(" + step.operand + ")" : step.operand, calls);
+        // WHY: compose the declared operation AFTER conversion. Evaluating the
+        // whole formula would erase precisely the arithmetic being taught.
+        // Each side owns its own nodes; no tree is shared between canvases.
+        auto side = [&](unsigned index) -> NodePtr {
+            auto term = cloneNode(before->child(index));
+            auto operand = cloneNode(amount.get());
+            if (!term || !operand) throw std::bad_alloc();
+            if (step.rule == Rule::DivideBoth)
+                return makeFraction(std::move(term), std::move(operand));
+            return rowOf(std::move(term), makeOperator(subtract ? OpKind::Sub : OpKind::Add), factor(std::move(operand)));
+        };
+        auto left = side(0), right = side(2);
+        return relation(std::move(left), std::move(right));
     }
     if (ref.kind == FormulaKind::RowOperation) {
         if (step.rule == Rule::RowSwap)

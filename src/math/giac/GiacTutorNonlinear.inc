@@ -50,7 +50,9 @@ gen replaceTree(const gen& g,const gen& from,const gen& to,unsigned depth=0) {
     }
     return g; // parsed fractional arithmetic has symbolic division/inverse nodes
 }
+gen transPreservingNormal(Algebra&,const gen&);
 gen preservingNormal(Algebra& a,const gen& g) {
+    if(a.transcendentalInput)return transPreservingNormal(a,g);
     Special special;findSpecial(g,special);
     if(!special.count)return a.normal(g);
     OpaqueScope scope(a.ctx);const gen& opaque=scope.value;
@@ -73,9 +75,12 @@ bool hasOpenSpecial(const gen& g,unsigned depth=0) {
     if(g.type==giac::_VECT)for(const auto& c:*g._VECTptr)if(hasOpenSpecial(c,depth+1))return true;
     return false;
 }
+bool transDisplayNeeded(const gen&,unsigned=0);
+gen transDisplay(Algebra&,const gen&,unsigned=0);
 gen displayEval(Algebra& a,const gen& g) {
     // WHY: preserve variable-function provenance without adding a mask, context
     // quote or polynomial capture to the optimized closed quadratic-root path.
+    if(transDisplayNeeded(g))return transDisplay(a,g);
     if(!hasOpenSpecial(g))return g.eval(1,a.ctx);
     Special special;findSpecial(g,special);
     if(!special.count)return g.eval(1,a.ctx);
@@ -127,17 +132,21 @@ Condition realCondition(Algebra& a,const gen& value,const Path& path,ConditionRo
     if(tree->kind==EngineNodeKind::Unsupported)throw UnsupportedInput{__LINE__};
     c.expression=std::move(tree);return c;
 }
+bool exactPositive(Algebra&,const gen&);
 bool conditionTrue(Algebra& a,const Condition& c,const gen& candidate) {
     const gen value=a.normal(a.sub(a.parse(c.nonzero),a.parse(a.input.variables[0]),candidate));
     if(c.kind==ConditionKind::Nonzero)return !a.zero(value);
+    if(c.kind==ConditionKind::NotOne)return !a.same(value,gen(1));
     if(a.zero(value))return c.kind==ConditionKind::Nonnegative;
+    // New logarithm/base conditions use only bounded exact sign theorems.
+    if(c.role>=ConditionRole::LogArgument)return exactPositive(a,value);
     a.tick();if(giac::is_strictly_positive(value,a.ctx))return true;
     if(a.negative(value))return false;
     throw UnsupportedInput{__LINE__,"exact sign could not be established"};
 }
 std::string candidateFailure(Algebra& a,const State& state,const gen& candidate) {
     for(const auto& c:state.conditions)if(!conditionTrue(a,c,candidate))
-        return c.role==ConditionRole::IsolatedRange?"sign":c.role==ConditionRole::Radicand?"radicand":"domain";
+        return c.role==ConditionRole::IsolatedRange?"sign":c.role==ConditionRole::Radicand?"radicand":c.role==ConditionRole::LogArgument?"log_domain":"domain";
     const gen x=a.parse(a.input.variables[0]);
     for(const auto& e:a.input.authored) {
         const gen l=a.normal(a.sub(a.bound(a.parse(e.lhs)),x,candidate));

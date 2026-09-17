@@ -62,10 +62,10 @@ def cases(seed):
             equations.append(f'({left})/2={right}/2' if i % 2 else f'{left}={right}')
         yield {'id': f'seed-system3-{i}', 'equations': equations, 'tuple': list(map(str, values))}
     for i, equation in enumerate(['sqrt(x+2)=x', 'ln(x)=1', 'abs(x)=2', 'exp(x)=3', 'sin(x)=0', 'x^3=7']):
-        # 02A intentionally upgrades these two historical refusal fixtures.
-        # The other original families and their mathematical expectations remain.
-        yield {'id': f'extension-{i}', 'equations': [equation], 'unsupported': i not in (0, 2),
-               **({'roots': ['2']} if i == 0 else {'roots': ['-2', '2']} if i == 2 else {})}
+        # 02A and 02B upgrade only their explicit historical refusal fixtures.
+        yield {'id': f'extension-{i}', 'equations': [equation], 'unsupported': i not in (0, 1, 2, 3),
+               **({'roots': ['2']} if i == 0 else {'roots': ['-2', '2']} if i == 2 else
+                  {'exactRoots': ['exp(1)']} if i == 1 else {'exactRoots': ['ln(3)']} if i == 3 else {})}
 
 
 def check(case, d):
@@ -82,7 +82,7 @@ def check(case, d):
         assert step['before'] == i and step['after'] == i+1 and step['verdict'] == 1
         before, after = d['states'][i:i+2]
         assert step['prerequisites'] == list(range(len(before['conditions'])))
-        if step['rule'] not in ('domain.nonzero', 'domain.radicand_nonnegative', 'condition.range'): assert before['conditions'] == after['conditions']
+        if step['rule'] not in ('domain.nonzero', 'domain.radicand_nonnegative', 'condition.range', 'domain.positive', 'domain.base', 'exponential.range'): assert before['conditions'] == after['conditions']
         if step['relation'] == 0:
             assert before['branches'] != after['branches'] and after['fingerprint'] not in seen
         seen.add(before['fingerprint'])
@@ -105,6 +105,9 @@ def check(case, d):
     if 'roots' in case:
         actual = [] if final['conclusion'] == 2 else [str(Fraction(b['equations'][0][1])) for b in final['branches'] if not b['rejected']]
         assert set(actual) == set(case['roots']), (actual, case['roots'])
+    if 'exactRoots' in case:
+        actual = [] if final['conclusion'] == 2 else [b['equations'][0][1] for b in final['branches'] if not b['rejected']]
+        assert set(actual) == set(case['exactRoots']), (actual, case['exactRoots'])
     if 'tuple' in case:
         assert [str(Fraction(e[1])) for e in final['branches'][0]['equations']] == case['tuple']
     if case['id'] == 'acceptance-00': assert [s['rule'] for s in d['steps']] == ['terminal.isolated']

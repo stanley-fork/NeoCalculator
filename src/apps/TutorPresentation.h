@@ -5,7 +5,8 @@
 namespace tutorview {
 enum class FormulaKind : uint8_t { Equation, Authored, Conditions, StandardQuadratic,
     Coefficients, DiscriminantDefinition, DiscriminantValues, GeneralFormula,
-    SubstitutedFormula, Operand, RowOperation, CoefficientEquation, SolutionSet };
+    SubstitutedFormula, Operand, RowOperation, CoefficientEquation, SolutionSet,
+    BalancedOperation };
 // Every displayed mathematical object names its immutable checked source.
 struct FormulaRef {
     FormulaKind kind = FormulaKind::Equation;

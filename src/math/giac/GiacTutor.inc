@@ -50,6 +50,7 @@ struct Algebra {
     const Snapshot &input;
     unsigned calls = 0;
     bool presentationOnly = false;
+    bool transcendentalInput = false;
     int rejectedLine = 0;
     Verdict reject(int line) {
         rejectedLine = line;
@@ -154,6 +155,23 @@ bool validIdentifier(const std::string &s) {
     return s.size() == 1 && (s[0] == 'x' || s[0] == 'y' || s[0] == 'z');
 }
 
+// Only semantic nodes from the pinned parser enter this admission seam.
+bool transExponent(const gen& g,unsigned depth=0) {
+    if(depth>Limits::depth)return false;
+    if(g.type==giac::_IDNT)return true;
+    if(g.type==giac::_SYMB)return transExponent(g._SYMBptr->feuille,depth+1);
+    if(g.type==giac::_VECT)for(const auto& c:*g._VECTptr)if(transExponent(c,depth+1))return true;
+    return false;
+}
+bool transAtom(const gen& g) {
+    if(g.type!=giac::_SYMB)return false;
+    const auto op=g._SYMBptr->sommet;
+    if(op==giac::at_exp || op==giac::at_ln || op==giac::at_log10 || op==giac::at_logb)return true;
+    if(op!=giac::at_pow)return false;
+    const auto& f=g._SYMBptr->feuille;
+    return f.type==giac::_VECT && f._VECTptr->size()==2 && transExponent(f._VECTptr->back());
+}
+bool transDomainSafe(Algebra&,const gen&,const State&,unsigned,unsigned&);
 // Pure structural preflight precedes ALL expansion/evaluation. Nested powers
 // cannot turn a short source into an unbounded polynomial expansion.
 unsigned sourceShape(const gen &g, unsigned depth, unsigned &nodes) {
@@ -172,9 +190,14 @@ unsigned sourceShape(const gen &g, unsigned depth, unsigned &nodes) {
     const auto &f = g._SYMBptr->feuille;
     if (op != giac::at_plus && op != giac::at_prod && op != giac::at_neg &&
         op != giac::at_binary_minus && op != giac::at_division && op != giac::at_inv &&
-        op != giac::at_pow && op != giac::at_abs && op != giac::at_sqrt)
+        op != giac::at_pow && op != giac::at_abs && op != giac::at_sqrt && !transAtom(g))
         throw UnsupportedInput{__LINE__};
     unsigned degree = 0;
+    if(transAtom(g)) {
+        if(f.type==giac::_VECT)for(const auto& child:*f._VECTptr)sourceShape(child,depth+1,nodes);
+        else sourceShape(f,depth+1,nodes);
+        return 1;
+    }
     if (op == giac::at_pow) {
         if (f.type != giac::_VECT || f._VECTptr->size() != 2 ||
             f._VECTptr->back().type != giac::_INT_)
@@ -206,6 +229,7 @@ bool domainSafe(Algebra &a, const gen &g, const State &state, unsigned depth, un
         return false;
     if (a.rational(g))
         return true;
+    if(transAtom(g))return transDomainSafe(a,g,state,depth,nodes);
     if (g.type == giac::_CPLX)
         return a.rational(*g._CPLXptr) && a.rational(*(g._CPLXptr + 1));
     if (g.type == giac::_IDNT) {
@@ -227,7 +251,7 @@ bool domainSafe(Algebra &a, const gen &g, const State &state, unsigned depth, un
             return !giac::is_undef(den);
         gen product(1);
         for (const auto &c : state.conditions)
-            if(c.kind != ConditionKind::Nonnegative) product = product * a.parse(c.nonzero);
+            if(c.kind == ConditionKind::Nonzero || c.kind == ConditionKind::Positive) product = product * a.parse(c.nonzero);
         // If D divides a product known nonzero, D is nonzero. Each original factor
         // is retained, so normalization may safely combine denominator factors.
         const gen quotient = a.normal(product / den);
@@ -281,6 +305,7 @@ bool domainSafe(Algebra &a, const gen &g, const State &state, unsigned depth, un
 }
 
 #include "GiacTutorNonlinear.inc"
+#include "GiacTutorTranscendental.inc"
 
 // Capture domain-bearing syntax before normal/eval. Only a bounded rational
 // expression grammar represented by Giac's existing AST is admitted here.
@@ -392,10 +417,17 @@ State authoredState(const Snapshot &s) {
 }
 void capture(Algebra &a, Vector<Condition> &conditions, std::vector<gen> &denominators) {
     unsigned nodes = 0;
+    bool transcendental=false;
     for (const auto &e : a.input.authored) {
-        sourceShape(a.parse(e.lhs), 0, nodes);
-        sourceShape(a.parse(e.rhs), 0, nodes);
+        // Keep only one temporary authored parse alive, as in the old path.
+        for(const auto* text:{&e.lhs,&e.rhs}) {
+            const gen expression=a.parse(*text);
+            sourceShape(expression, 0, nodes);
+            transcendental=transDisplayNeeded(expression)||transcendental;
+        }
     }
+    a.transcendentalInput=transcendental;
+    if(transcendental&&captureTranscendental(a,conditions))return;
     validateSpecialSource(a);
     nodes = 0;
     for (size_t i = 0; i < a.input.authored.size(); ++i)
@@ -418,6 +450,15 @@ bool shortInteger(const gen &value, const std::string &text) {
 void message(Algebra &a, Step &s, const State &after) {
     s.parameters.clear();
     switch (s.rule) {
+    case Rule::PositiveDomain:s.explanation=Message::LogDomain;break;
+    case Rule::BaseDomain:s.explanation=Message::BaseValid;break;
+    case Rule::ExpRange:s.explanation=Message::ExpRange;break;
+    case Rule::ExpInjective:s.explanation=Message::ExpInjective;break;
+    case Rule::ExpInverse:s.explanation=s.auxiliaries==Vector<std::string>{"exp"}?Message::ExpInverse:Message::ExpBaseInverse;break;
+    case Rule::ExpExactPower:s.explanation=Message::ExpExactPower;break;
+    case Rule::LogInverse:s.explanation=s.auxiliaries==Vector<std::string>{"ln"}?Message::LogInverse:Message::LogBaseInverse;break;
+    case Rule::LogInjective:s.explanation=Message::LogInjective;break;
+    case Rule::PositiveImpossible:s.explanation=Message::PositiveImpossible;break;
     case Rule::RadicandDomain:
     case Rule::Domain:
         s.explanation = after.conditions.back().role == ConditionRole::Radicand ? Message::RadicalDomain : Message::Domain;
@@ -436,6 +477,9 @@ void message(Algebra &a, Step &s, const State &after) {
         s.parameters = {variable(a.input.variables.front())};
         break;
     case Rule::AddBoth: {
+        if(a.transcendentalInput && hasTrans(after.branches[s.branch].equations[s.row],a,true)) {
+            s.explanation=a.negative(a.parse(s.operand))?Message::TransSubtract:Message::TransAdd;break;
+        }
         auto special=findSpecialEquation(a,after.branches[s.branch].equations[s.row]);
         if(special.count) {
             bool neg=a.print(a.normal(a.parse(s.operand))).front()=='-';
@@ -476,6 +520,7 @@ void message(Algebra &a, Step &s, const State &after) {
         break;
     }
     case Rule::DivideBoth: {
+        if(a.transcendentalInput && hasTrans(after.branches[s.branch].equations[s.row],a,true)){s.explanation=Message::TransDivide;break;}
         auto special=findSpecialEquation(a,after.branches[s.branch].equations[s.row]);
         if(special.count) {s.explanation=special.radical?Message::RadicalDivide:Message::AbsDivide;break;}
         const auto v = a.normal(a.parse(s.operand));
@@ -570,7 +615,7 @@ void message(Algebra &a, Step &s, const State &after) {
     case Rule::CheckOriginal: s.explanation=Message::OriginalWorks;break;
     case Rule::RejectOriginal:
         s.explanation=s.auxiliaries==Vector<std::string>{"sign"}?Message::SignFails:
-                      s.auxiliaries==Vector<std::string>{"radicand"}?Message::RadicandFails:Message::OriginalFails;break;
+                      s.auxiliaries==Vector<std::string>{"radicand"}?Message::RadicandFails:s.auxiliaries==Vector<std::string>{"log_domain"}?Message::LogDomainFails:Message::OriginalFails;break;
     case Rule::DuplicateCandidate: s.explanation=Message::DuplicateValue;break;
     case Rule::SystemFinish:
         s.explanation = after.conclusion == Conclusion::Empty    ? Message::InconsistentSystem
@@ -580,6 +625,10 @@ void message(Algebra &a, Step &s, const State &after) {
     }
 }
 bool checkMessage(Algebra &a, const Step &s, const State &after) {
+    // A replayed state is untrusted. Reject a removed condition before the
+    // deterministic catalog selector reads its role through back().
+    if((s.rule==Rule::Domain || s.rule==Rule::RadicandDomain || s.rule==Rule::RangeCondition) &&
+       after.conditions.empty())return false;
     Step expected = s;
     message(a, expected, after);
     if (expected.explanation != s.explanation ||
@@ -629,8 +678,8 @@ Verdict verifyStep(Algebra &a, const Derivation &d, const Step &s) {
                 return a.reject(__LINE__);
         }
     }
-    const bool domain = s.rule == Rule::Domain || s.rule == Rule::RadicandDomain;
-    const bool range = s.rule == Rule::RangeCondition;
+    const bool domain = s.rule == Rule::Domain || s.rule == Rule::RadicandDomain || s.rule == Rule::PositiveDomain || s.rule == Rule::BaseDomain;
+    const bool range = s.rule == Rule::RangeCondition || s.rule == Rule::ExpRange;
     if (!domain && !range && (!sameConditions(before.conditions, after.conditions) || !s.introduced.empty()))
         return a.reject(__LINE__);
     if (s.prerequisites.size() != before.conditions.size())
@@ -640,7 +689,7 @@ Verdict verifyStep(Algebra &a, const Derivation &d, const Step &s) {
             return a.reject(__LINE__);
     Relation relation = Relation::Equivalent;
     if (domain || s.rule == Rule::AlreadySolved || s.rule == Rule::Identity ||
-        s.rule == Rule::Contradiction || s.rule == Rule::Finish || s.rule == Rule::SystemFinish || s.rule == Rule::RangeCondition || s.rule == Rule::NonnegativeImpossible || s.rule == Rule::CheckOriginal)
+        s.rule == Rule::Contradiction || s.rule == Rule::Finish || s.rule == Rule::SystemFinish || s.rule == Rule::RangeCondition || s.rule == Rule::NonnegativeImpossible || s.rule == Rule::CheckOriginal || s.rule == Rule::PositiveImpossible || s.rule == Rule::ExpRange)
         relation = Relation::Terminal;
     if (s.rule == Rule::SquareRoots || s.rule == Rule::QuadraticFormula ||
         s.rule == Rule::ZeroProduct || s.rule == Rule::AbsCases)
@@ -674,7 +723,7 @@ Verdict verifyStep(Algebra &a, const Derivation &d, const Step &s) {
         if (!domainSafe(a, a.parse(s.operand), before, 0, nodes))
             return a.reject(__LINE__);
     }
-    if(s.rule != Rule::RangeCondition && s.rule != Rule::NonnegativeImpossible && s.rule != Rule::RejectOriginal)
+    if(s.rule != Rule::RangeCondition && s.rule != Rule::NonnegativeImpossible && s.rule != Rule::RejectOriginal && s.rule != Rule::ExpInverse && s.rule != Rule::LogInverse)
     for (const auto &operand : s.auxiliaries) {
         unsigned nodes = 0;
         if (!domainSafe(a, a.parse(operand), before, 0, nodes))
@@ -706,13 +755,15 @@ Verdict verifyStep(Algebra &a, const Derivation &d, const Step &s) {
         return equationSame(a, e, l, r);
     };
     switch (s.rule) {
+    case Rule::PositiveDomain:
+    case Rule::BaseDomain:
     case Rule::RadicandDomain:
     case Rule::Domain: {
         Vector<Condition> all;
         std::vector<gen> den;
         capture(a, all, den);
         const size_t i = before.conditions.size();
-        ok = i < all.size() && (s.rule==Rule::RadicandDomain)==(all[i].kind==ConditionKind::Nonnegative) && s.operand == all[i].nonzero &&
+        ok = i < all.size() && s.rule==conditionRule(all[i]) && s.operand == all[i].nonzero &&
              s.introduced == Vector<uint8_t>{uint8_t(i)};
         if (ok)
             expected.conditions.push_back(all[i]);
@@ -748,6 +799,9 @@ Verdict verifyStep(Algebra &a, const Derivation &d, const Step &s) {
     case Rule::AddBoth: {
         const gen v = a.parse(s.operand);
         ok = !a.zero(v) && transformed(lhs + v, rhs + v);
+        if(a.transcendentalInput && hasTrans(eq,a,true)) {
+            auto form=transForm(a,eq);ok=ok && !form.reversed && a.same(v,-form.remainder);break;
+        }
         auto special=findSpecialEquation(a,eq);
         if(special.count) {
             auto form=isolatedForm(a,eq);
@@ -778,6 +832,9 @@ Verdict verifyStep(Algebra &a, const Derivation &d, const Step &s) {
     }
     case Rule::DivideBoth: {
         const gen v = a.normal(a.parse(s.operand));
+        if(a.transcendentalInput && hasTrans(eq,a,true)) {
+            auto form=transForm(a,eq);ok=!form.reversed && a.zero(form.remainder) && a.rational(v) && !a.zero(v) && !a.same(v,gen(1)) && a.same(v,form.coefficient) && transformed(lhs/v,rhs/v);break;
+        }
         auto special=findSpecialEquation(a,eq);
         if(special.count) {
             auto form=isolatedForm(a,eq);
@@ -980,6 +1037,7 @@ Verdict verifyStep(Algebra &a, const Derivation &d, const Step &s) {
         break;
     }
     #include "GiacTutorNonlinearChecks.inc"
+    #include "GiacTutorTranscendentalChecks.inc"
     case Rule::SystemFinish: {
         ok = before.branches.size() == 1 && a.input.variables.size() > 1 &&
              before.conditions.empty();
@@ -1053,12 +1111,12 @@ struct Planner {
         s.group = group;
         for (size_t i = 0; i < d.states.back().conditions.size(); ++i)
             s.prerequisites.push_back(uint8_t(i));
-        if (s.rule == Rule::Domain || s.rule == Rule::RadicandDomain || s.rule == Rule::RangeCondition) {
+        if (s.rule == Rule::Domain || s.rule == Rule::RadicandDomain || s.rule == Rule::RangeCondition || s.rule == Rule::PositiveDomain || s.rule == Rule::BaseDomain || s.rule == Rule::ExpRange) {
             s.relation = Relation::Terminal;
             s.introduced = {uint8_t(next.conditions.size() - 1)};
         }
         if (s.rule == Rule::AlreadySolved || s.rule == Rule::Identity ||
-            s.rule == Rule::Contradiction || s.rule == Rule::Finish || s.rule == Rule::SystemFinish || s.rule == Rule::RangeCondition || s.rule == Rule::NonnegativeImpossible || s.rule == Rule::CheckOriginal)
+            s.rule == Rule::Contradiction || s.rule == Rule::Finish || s.rule == Rule::SystemFinish || s.rule == Rule::RangeCondition || s.rule == Rule::NonnegativeImpossible || s.rule == Rule::CheckOriginal || s.rule == Rule::PositiveImpossible || s.rule == Rule::ExpRange)
             s.relation = Relation::Terminal;
         if (s.rule == Rule::SquareRoots || s.rule == Rule::QuadraticFormula ||
             s.rule == Rule::ZeroProduct || s.rule == Rule::AbsCases)
@@ -1454,6 +1512,7 @@ struct Planner {
                                                   : Conclusion::Finite);
     }
     void nonlinear();
+    void transcendental();
     void run() {
         Vector<Condition> conditions;
         std::vector<gen> denominators;
@@ -1466,7 +1525,7 @@ struct Planner {
             State next = current();
             next.conditions.push_back(c);
             Step s;
-            s.rule = c.role==ConditionRole::Radicand?Rule::RadicandDomain:Rule::Domain;
+            s.rule = conditionRule(c);
             s.operand = c.nonzero;
             add(s, std::move(next));
         }
@@ -1481,6 +1540,7 @@ struct Planner {
             add(s, std::move(next));
         }
         if (a.input.variables.size() == 1) {
+            if(a.transcendentalInput){transcendental();return;}
             if(findSpecialEquation(a,current().branches[0].equations[0]).count){nonlinear();return;}
             gen multiplier(1);
             for (const auto &den : denominators) {
@@ -1515,6 +1575,7 @@ struct Planner {
     }
 };
 #include "GiacTutorNonlinearPlanner.inc"
+#include "GiacTutorTranscendentalPlanner.inc"
 
 void groupPresentation(Derivation &d) {
     for (size_t i = 0; i < d.steps.size(); ++i) {
@@ -1639,7 +1700,7 @@ Verdict replay(Algebra &a, const Derivation &d) {
     if(finalConditions.size()<conditions.size())return Verdict::Rejected;
     for(size_t i=0;i<conditions.size();++i)if(!sameCondition(conditions[i],finalConditions[i]))return Verdict::Rejected;
     for(size_t i=conditions.size();i<finalConditions.size();++i)
-        if(finalConditions[i].role!=ConditionRole::IsolatedRange)return Verdict::Rejected;
+        if(finalConditions[i].role!=ConditionRole::IsolatedRange && finalConditions[i].role!=ConditionRole::ExponentialTarget)return Verdict::Rejected;
     if (d.status == Status::Complete && d.states.back().conclusion == Conclusion::None)
         return Verdict::Rejected;
     return Verdict::Verified;
@@ -1890,7 +1951,9 @@ StructuredEngineResult GiacEngine::tutorFormula(const tutor::Equation &equation)
         if (!safe)
             return out;
         int budget = kTreeNodeBudget;
-        genToNode(giac::symb_equal(tutorkernel::displayEval(a,l), tutorkernel::displayEval(a,r)), _state->ctx,
+        const bool preserveFunctions=tutorkernel::transDisplayNeeded(l)||tutorkernel::transDisplayNeeded(r);
+        genToNode(giac::symb_equal(preserveFunctions?tutorkernel::transDisplay(a,l):tutorkernel::displayEval(a,l),
+                                 preserveFunctions?tutorkernel::transDisplay(a,r):tutorkernel::displayEval(a,r)), _state->ctx,
                   out.tree, 0, budget);
         out.hasTree = out.tree.kind != EngineNodeKind::Unsupported;
         out.base.status = out.hasTree ? MathEngineStatus::Ok : MathEngineStatus::Unsupported;

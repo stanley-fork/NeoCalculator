@@ -16,9 +16,27 @@ inline bool teachingNeedsOperand(const Step& s) {
     for(const auto& p:s.parameters)if(p.kind==ParameterKind::Expression)return false;
     return true;
 }
+// A view caption derived only from the checked operand. Compound mathematics
+// stays in the structured operation formula, never in localized prose.
+inline std::string teachingOperationText(const Step& s, Locale locale) {
+    if(s.verification==Verdict::Verified && teachingNeedsOperand(s)) {
+        const auto& amount=s.operand;
+        const bool negative=!amount.empty() && amount.front()=='-';
+        bool integer=amount.size()>unsigned(negative) && amount.size()<=12;
+        for(size_t i=negative;i<amount.size();++i)
+            integer=integer && amount[i]>='0' && amount[i]<='9';
+        if(integer) {
+            const auto key=s.rule==Rule::DivideBoth?Message::ViewDivideAmount:
+                negative?Message::ViewSubtractAmount:Message::ViewAddAmount;
+            return explain(key,{{ParameterKind::Expression,
+                s.rule==Rule::AddBoth && negative?amount.substr(1):amount}},locale);
+        }
+    }
+    return explain(s.explanation,s.parameters,locale);
+}
 inline bool terminalRule(Rule rule) {
     return rule == Rule::AlreadySolved || rule == Rule::Identity ||
-           rule == Rule::Contradiction || rule == Rule::Finish || rule == Rule::SystemFinish || rule == Rule::NonnegativeImpossible;
+           rule == Rule::Contradiction || rule == Rule::Finish || rule == Rule::SystemFinish || rule == Rule::NonnegativeImpossible || rule == Rule::PositiveImpossible;
 }
 
 inline bool quadraticHasUnchangedFinish(const Derivation& d, size_t index) {
@@ -63,6 +81,15 @@ template<class Visit> inline unsigned visitTeachingPages(const Derivation& d, bo
     for (size_t i = 0; i < d.steps.size(); ++i) {
         const auto& step = d.steps[i];
         if (step.verification != Verdict::Verified || step.after >= d.states.size()) break;
+        if(step.rule==Rule::BaseDomain && i+1<d.steps.size()) {
+            const auto& next=d.steps[i+1];
+            if(next.rule==Rule::BaseDomain && next.verification==Verdict::Verified &&
+               next.before==step.after && next.after<d.states.size() && next.operand==step.operand) {
+                // One base-admissibility explanation exposes both checked facts.
+                // Both primitives remain addressable through first/last.
+                emit(i,i+1,TeachingKind::Transition);++i;continue;
+            }
+        }
         if (step.rule == Rule::QuadraticFormula) {
             emit(i, i, TeachingKind::Coefficients);
             emit(i, i, TeachingKind::Discriminant);

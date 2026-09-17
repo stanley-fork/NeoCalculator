@@ -53,6 +53,16 @@ int main() {
     }
     auto instruction=CalculationEngine::resultTreeToAST(mul(integer("2"),integer("3")),ProductNotation::Explicit);
     check(multiplications(instruction.get())==1,"instructional multiplication hidden");
+    const auto baseLogTree=node(K::Function,"logb",{symbol("x"),integer("2")});
+    const auto beforeBaseLog=signature(baseLogTree);
+    auto baseLog=CalculationEngine::resultTreeToAST(baseLogTree,ProductNotation::ScalarNatural);
+    check(baseLog && baseLog->childCount()==1 && baseLog->child(0)->type()==NodeType::LogBase,"base logarithm lost structured node");
+    auto* log=static_cast<NodeLogBase*>(baseLog->child(0));
+    std::string baseText,argumentText,canonical,error;
+    check(CalculationEngine::serializeForGiac(log->base(),baseText,error) && baseText=="2","wrong logarithm base");
+    check(CalculationEngine::serializeForGiac(log->argument(),argumentText,error) && argumentText=="x","wrong logarithm argument");
+    check(CalculationEngine::serializeForGiac(baseLog.get(),canonical,error) && canonical.find("logb(")==0,"logarithm serialization contract");
+    check(signature(baseLogTree)==beforeBaseLog,"base logarithm mutated result structure");
     const lv_font_t* fonts[]={&stix_math_18,&stix_math_12,&stix_math_8};
     for(auto* font:fonts) {
         lv_font_glyph_dsc_t stix,tex;

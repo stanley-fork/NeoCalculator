@@ -1,0 +1,29 @@
+{
+  "cases": [
+    {"id":"e-one","equation":"e^x=1","roots":["0"]},
+    {"id":"e-five","equation":"e^x=5","roots":["ln(5)"]},
+    {"id":"rational-power","equation":"4^x=2","roots":["1/2"]},
+    {"id":"log-route","equation":"2^x=3","roots":["ln(3)/ln(2)"]},
+    {"id":"shifted-exp","equation":"2*exp(x)+1=7","roots":["ln(3)"]},
+    {"id":"log-exp2","equation":"ln(x)=2","roots":["exp(2)"]},
+    {"id":"log-inverse-negative","equation":"ln(x)=-1","roots":["1/exp(1)"]},
+    {"id":"both-log-domains","equation":"ln(x-1)=ln(1-x)","roots":[]},
+    {"id":"exp-contradiction","equation":"exp(x)=exp(x+1)","roots":[]},
+    {"id":"explicit-base","equation":"logb(x,2)=3","roots":["8"]},
+    {"id":"decimal-base","equation":"log10(x)=2","roots":["100"]},
+    {"id":"decreasing-base","equation":"(1/2)^(3*x-1)=8","roots":["-2/3"]},
+    {"id":"negative-log-domain","equation":"ln(x)=ln(-1)","unsupported":true},
+    {"id":"removed-pole","equation":"ln((x^2-1)/(x-1))=0","unsupported":true},
+    {"id":"lambert","equation":"exp(x)=x","unsupported":true},
+    {"id":"complex-exp","equation":"exp(x)=3","complex":true,"unsupported":true},
+    {"id":"complex-log","equation":"ln(x)=2","complex":true,"unsupported":true},
+    {"id":"unknown-base","equation":"x^x=8","unsupported":true},
+    {"id":"two-logs","equation":"ln(x)+ln(x-1)=2","unsupported":true},
+    {"id":"nested","equation":"exp(ln(x))=2","unsupported":true},
+    {"id":"base-log-injective","equation":"logb(2*x-1,2)=logb(3,2)","roots":["2"]},
+    {"id":"decimal-log-injective","equation":"log10(x-2)=log10(3)","roots":["5"]},
+    {"id":"decreasing-log-base","equation":"logb(x,1/2)=-3","roots":["8"]},
+    {"id":"base-log-domain-rejection","equation":"logb(x-1,2)=logb(1-x,2)","roots":[]},
+    {"id":"fixed-injective-both-variables","equation":"2^(2*x-1)=2^(x+3)","roots":["4"]}
+  ]
+}

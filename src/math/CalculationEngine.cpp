@@ -739,6 +739,15 @@ bool appendConverted(const EngineResultNode& n, vpam::NodeRow* row,
         case EngineNodeKind::Function: {
             if (n.children.empty()) return false;
             const std::string& f = n.text;
+            if (f == "logb" && n.children.size() == 2) {
+                bool argumentOk = false, baseOk = false;
+                auto argument = convertToRow(n.children[0], depth + 1, argumentOk);
+                auto base = convertToRow(n.children[1], depth + 1, baseOk);
+                if (!argumentOk || !baseOk) return false;
+                // Giac logb is argument-first; VPAM owns separate base/argument.
+                row->appendChild(vpam::makeLogBase(std::move(base), std::move(argument)));
+                return true;
+            }
             if (n.children.size() != 1) {
                 auto call = vpam::makeCall(f);
                 auto* callNode = static_cast<vpam::NodeCall*>(call.get());

@@ -15,6 +15,15 @@ spec = importlib.util.spec_from_file_location("eq_guided_review", ROOT / "script
 eq = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(eq)
 CASES = {
+    "exp-injective": ["SHIFT ln 2 x - 1 RIGHT = SHIFT ln 3 RIGHT"],
+    "exp-common-base": ["2 ^ x RIGHT = 8"],
+    "exp-affine-identity": ["2 ^ x + 0 RIGHT = 8"],
+    "exp-negative": ["SHIFT ln x RIGHT = - 1"],
+    "exp-isolate": ["2 SHIFT ln x RIGHT + 1 = 7"],
+    "log-domain": ["ln x - 1 RIGHT = 2"],
+    "log-isolate": ["3 ln x RIGHT - 6 = 0"],
+    "log-injective": ["ln x RIGHT = ln 5 RIGHT"],
+    "log-base": ["logbase 2 RIGHT x RIGHT = 3"],
     "abs-linear": ["SHIFT sqrt 2 x - 3 RIGHT = 5"],
     "abs-variable": ["SHIFT sqrt x - 1 RIGHT = x + 3"],
     "abs-negative": ["SHIFT sqrt x RIGHT = - 3"],
@@ -128,14 +137,36 @@ def check_presentation(name, mode, trace, views):
                 conditions = states[formula["state"]]["conditions"]
                 assert conditions
                 typed = states[formula["state"]].get("typedConditions", [{"kind": 0} for _ in conditions])
-                for kind, symbol in [(0, "≠"), (1, "≥"), (2, ">")]:
-                    assert sum(n["text"] == symbol for n in ast_nodes(formula["ast"])) == sum(c["kind"] == kind for c in typed), (name, "condition missing structured relation")
+                for kinds, symbol in [((0, 3), "≠"), ((1,), "≥"), ((2,), ">")]:
+                    assert sum(n["text"] == symbol for n in ast_nodes(formula["ast"])) == sum(c["kind"] in kinds for c in typed), (name, "condition missing structured relation")
             elif kind == "solution_set":
                 assert page["kind"] == "final" and states[formula["state"]]["conclusion"] == 1
                 accepted = [b for b in states[formula["state"]]["branches"] if b.get("status", 0) == 0]
                 assert sum(n["text"] == "=" for n in ast_nodes(formula["ast"])) == len(accepted)
             elif kind in ("operand", "row_operation"):
                 assert steps[formula["step"]]["operand"] or steps[formula["step"]]["rule"] == "system.swap"
+            elif kind == "balanced_operation":
+                step = steps[formula["step"]]
+                assert step["rule"] in ("equation.add", "equation.divide")
+                assert formula["state"] == step["before"] and formula["branch"] == step["branch"]
+                tree = formula["ast"]
+                while len(tree["children"]) == 1:
+                    tree = tree["children"][0]
+                left, eq, right = tree["children"]
+                assert eq["text"] == "=", (name, "operation lost equality")
+                if step["rule"] == "equation.divide":
+                    assert left["type"] == right["type"] == 4, (name, "division not shown on both sides")
+                    assert scalar_text(ast_text(left["children"][1])) == scalar_text(step["operand"])
+                    assert left["children"][1] == right["children"][1], (name, "different divisors")
+                else:
+                    assert len(left["children"]) == len(right["children"]) == 3
+                    assert left["children"][1:] == right["children"][1:], (name, "unequal balancing operations")
+                    sign, amount = left["children"][1:]
+                    assert sign["text"] in ("+", "-", "\u2212")
+                    if re.fullmatch(r"-?\d+", step["operand"]):
+                        negative = int(step["operand"]) < 0
+                        assert (sign["text"] != "+") == negative, (name, "wrong operation sign")
+                        assert int(scalar_text(ast_text(amount))) == abs(int(step["operand"]))
             else:
                 step = steps[formula["step"]]
                 assert step["rule"] == "quadratic.formula" and len(step["auxiliaries"]) == 4, (name, "quadratic facts lack checked source")
@@ -159,6 +190,10 @@ def check_presentation(name, mode, trace, views):
                     roots = [n for n in ast_nodes(formula["ast"]) if n["type"] == 6]
                     assert any(scalar_text(ast_text(n)) == scalar_text(disc) for n in roots), (name, "substitution lost actual discriminant")
         final = states[steps[page["lastStep"]]["after"]]
+        if page["kind"] == "transition" and steps[page["step"]]["rule"] in ("equation.add", "equation.divide"):
+            assert sum(f["kind"] == "balanced_operation" for f in page["formulas"]) == 1, (name, "balancing arithmetic hidden")
+            assert not any(f["kind"] == "operand" for f in page["formulas"]), (name, "detached operand tile")
+            assert "Amount used" not in str(page["formulas"])
         if page["kind"] == "final":
             if page["step"] != page["lastStep"]:
                 assert steps[page["step"]]["rule"] == "quadratic.formula"
@@ -253,14 +288,16 @@ def main():
             # Legacy script key aliases do not carry the production semantic
             # modifier event. Exercise the actual SHIFT + square-root contacts.
             start = start.replace(eq.keys("SHIFT sqrt"), physical("SHIFT", "SQRT"))
+        if name.startswith("exp-"):
+            start = start.replace(eq.keys("SHIFT ln"), physical("SHIFT", "LN"))
         if name == "physical-negative":
             start = eq.OPEN + physical("EXE", "EXE", "VAR_X", "EQUAL", "NEGATE", "NUM_3", "EXE", "DOWN", "DOWN", "EXE", "TOOLBOX")
         if name in ("complex", "quadratic-complex"):
             start = start.replace("policy real", "policy complex")
         modes = [("guided", "")]
-        if name in ("linear", "quadratic", "rational", "system", "linear-unfamiliar", "abs-variable", "radical-extraneous"):
+        if name in ("linear", "quadratic", "rational", "system", "linear-unfamiliar", "abs-variable", "radical-extraneous", "exp-injective", "log-domain", "exp-isolate", "log-isolate"):
             modes.append(("summary", eq.keys("EXE")))
-        if name in ("linear", "abs-variable", "radical-extraneous"):
+        if name in ("linear", "abs-variable", "radical-extraneous", "log-domain", "exp-isolate", "log-isolate"):
             modes.extend([(locale, "assert_equations locale " + locale + "\n") for locale in ("es", "fr", "pseudo")])
         if name == "quadratic":
             modes.append(("pseudo", "assert_equations locale pseudo\n"))

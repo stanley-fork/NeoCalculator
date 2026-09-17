@@ -34,16 +34,19 @@ int contextReview(){
     auto graph=engine.compileNumeric("sin(x)","x",true);double before=0,after=0;
     bool ok=engine.evaluateNumeric(graph,30,before)&&std::abs(before-0.5)<1e-12;
     unsigned completed=0,unsupported=0;
-    for(unsigned i=0;i<30;++i){
-        Snapshot s;s.inputEpoch=i+1;s.degrees=true;s.variables={"x"};s.complex=i%3==2;
-        s.authored=i%3==0?Vector<Equation>{{"A*x","10"}}:i%3==1?Vector<Equation>{{"sqrt(x)","2"}}:Vector<Equation>{{"x^2+1","0"}};
+    for(unsigned i=0;i<36;++i){
+        Snapshot s;s.inputEpoch=i+1;s.degrees=true;s.variables={"x"};s.complex=i%6==2;
+        const Equation fixtures[]={{"A*x","10"},{"sqrt(x)","2"},{"x^2+1","0"},
+                                   {"exp(A*x)","1"},{"ln(x-1)","2"},{"sin(x)","0"}};
+        s.authored={fixtures[i%6]};
         auto answer=engine.solveStructured({s.authored[0].lhs,s.authored[0].rhs},"x",s.complex?SolveDomainPolicy::RealAndComplex:SolveDomainPolicy::RealOnly);
         auto d=engine.explainEquations(s,answer);
         if(d.status==Status::Complete){++completed;ok=ok&&engine.verifyDerivation(d,d.input)==Verdict::Verified;}else if(d.status==Status::Unsupported)++unsupported;else ok=false;
     }
-    ok=ok&&completed==20&&unsupported==10&&engine.generation()==generation&&graph.valid()&&engine.evaluateNumeric(graph,30,after)&&before==after;
+    const bool retained=graph.valid()&&engine.evaluateNumeric(graph,30,after)&&before==after;
+    ok=ok&&completed==30&&unsupported==6&&engine.generation()==generation&&retained;
     ok=ok&&angleModeIsDeg()&&engine.evaluate("sin(30)").exactText=="1/2"&&engine.evaluate("A").exactText=="5"&&engine.evaluate("B").exactText=="17"&&engine.evaluate("x").exactText=="7"&&engine.evaluate("abs(z)").exactText==assumption;
-    std::cout<<"{\"context_sequence\":30,\"complete\":"<<completed<<",\"unsupported\":"<<unsupported<<",\"retained_sample_before\":"<<before<<",\"retained_sample_after\":"<<after<<",\"pass\":"<<(ok?"true":"false")<<"}\n";
+    std::cout<<"{\"context_sequence\":36,\"complete\":"<<completed<<",\"unsupported\":"<<unsupported<<",\"retained_sample_before\":"<<before<<",\"retained_sample_after\":"<<after<<",\"pass\":"<<(ok?"true":"false")<<"}\n";
     engine.evaluate("purge(A)");engine.evaluate("purge(B)");engine.evaluate("purge(x)");engine.evaluate("purge(z)");setAngleMode(vpam::AngleMode::RAD);
     return ok?0:1;
 }

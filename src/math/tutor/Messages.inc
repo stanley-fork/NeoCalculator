@@ -217,6 +217,27 @@ constexpr CatalogEntry catalog[] = {
     {"view.rejected_subcase", "Case {0}.{1}: rejected candidate", "ii", nullptr, nullptr},
     {"view.candidates", "Candidates", "", "Candidatos", "Candidats"},
     {"view.read_candidates", "These values solve this case equation. Check each candidate in the original equation and its conditions.", "", nullptr, nullptr},
+    {"log.domain", "A real logarithm is defined only when its argument is positive.", "", "Un logaritmo real exige un argumento positivo.", "Un logarithme reel exige un argument positif."},
+    {"base.valid", "The base must be positive and different from one.", "", nullptr, nullptr},
+    {"exponential.range", "A real exponential value is always positive. The other side must be positive too.", "", "Un valor exponencial real siempre es positivo.", "Une valeur exponentielle reelle est toujours positive."},
+    {"exponential.injective", "With the same valid base, equal exponential values have equal exponents.", "", nullptr, nullptr},
+    {"exponential.inverse", "Take the natural logarithm of both sides. It is the inverse of the real exponential function.", "", nullptr, nullptr},
+    {"exponential.base_inverse", "Take natural logarithms of both sides, then divide by the logarithm of the base.", "", nullptr, nullptr},
+    {"exponential.exact_power", "Express the other side as an exact power of the same base.", "", nullptr, nullptr},
+    {"log.inverse", "Exponentiate both sides. The natural logarithm and exponential are inverse functions on the valid real domain.", "", "La funcion exponencial invierte el logaritmo natural en su dominio real.", "La fonction exponentielle inverse le logarithme naturel sur son domaine reel."},
+    {"log.base_inverse", "Raise the valid base to both sides. This inverts the logarithm on its positive domain.", "", nullptr, nullptr},
+    {"log.injective", "Logarithms with the same valid base are one-to-one on positive arguments, so their arguments must be equal.", "", nullptr, nullptr},
+    {"terminal.positive_range", "A real exponential value is always positive. It cannot equal zero or a negative value, so there is no real solution.", "", nullptr, nullptr},
+    {"transcendental.add", "Add the displayed term to both sides to isolate the function.", "", nullptr, nullptr},
+    {"transcendental.subtract", "Subtract the displayed term from both sides to isolate the function.", "", nullptr, nullptr},
+    {"transcendental.divide", "Divide both sides by the displayed nonzero coefficient to isolate the function.", "", nullptr, nullptr},
+    {"candidate.log_domain", "Reject this candidate: a logarithm argument is not positive.", "", nullptr, nullptr},
+    {"view.injective", "Equate the arguments or exponents", "", nullptr, nullptr},
+    {"view.inverse", "Use the inverse function", "", nullptr, nullptr},
+    {"view.exact_power", "Recognize a common base", "", nullptr, nullptr},
+    {"view.add_amount", "Add {0} to both sides.", "e", "Suma {0} a ambos lados.", "Ajouter {0} aux deux membres."},
+    {"view.subtract_amount", "Subtract {0} from both sides.", "e", "Resta {0} de ambos lados.", "Soustraire {0} des deux membres."},
+    {"view.divide_amount", "Divide both sides by {0}.", "e", "Divide ambos lados entre {0}.", "Diviser les deux membres par {0}."},
 };
 static_assert(sizeof(catalog) / sizeof(catalog[0]) == unsigned(Message::Count), "catalog coverage");
 char schemaType(ParameterKind p) {
@@ -254,7 +275,7 @@ const char *ruleId(Rule r) {
         "candidate.excluded", "terminal.isolated", "terminal.identity", "terminal.contradiction",
         "terminal.finish",    "system.swap",       "system.scale",      "system.add",
         "system.finish", "condition.range", "abs.cases", "radical.candidates", "terminal.nonnegative",
-        "candidate.original_valid", "candidate.original_invalid", "candidate.duplicate", "domain.radicand_nonnegative"};
+        "candidate.original_valid", "candidate.original_invalid", "candidate.duplicate", "domain.radicand_nonnegative", "domain.positive", "domain.base", "exponential.range", "exponential.injective", "exponential.inverse", "exponential.exact_power", "logarithm.inverse", "logarithm.injective", "terminal.positive_range"};
     return unsigned(r) < sizeof(ids) / sizeof(ids[0]) ? ids[unsigned(r)] : "unknown";
 }
 const char *messageKey(Message k) {

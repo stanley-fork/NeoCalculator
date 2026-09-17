@@ -44,7 +44,9 @@ enum class Rule : uint8_t {
     RowAdd,
     SystemFinish,
     RangeCondition, AbsCases, RadicalCandidates, NonnegativeImpossible,
-    CheckOriginal, RejectOriginal, DuplicateCandidate, RadicandDomain
+    CheckOriginal, RejectOriginal, DuplicateCandidate, RadicandDomain,
+    PositiveDomain, BaseDomain, ExpRange, ExpInjective, ExpInverse, ExpExactPower,
+    LogInverse, LogInjective, PositiveImpossible
 };
 enum class Message : uint8_t {
     Domain,
@@ -124,6 +126,11 @@ enum class Message : uint8_t {
     ViewSign, ViewAbsCases, ViewSquareBoth, ViewOriginalCheck, ViewEmptyCase,
     ViewSubcase, ViewActiveSubcase, ViewRejectedSubcase,
     ViewCandidates, ViewReadCandidates,
+    LogDomain, BaseValid, ExpRange, ExpInjective, ExpInverse, ExpBaseInverse,
+    ExpExactPower, LogInverse, LogBaseInverse, LogInjective, PositiveImpossible,
+    TransAdd, TransSubtract, TransDivide, LogDomainFails,
+    ViewInjective, ViewInverse, ViewExactPower,
+    ViewAddAmount, ViewSubtractAmount, ViewDivideAmount,
     Count
 };
 enum class ParameterKind : uint8_t { Expression, Variable, Row, Integer };
@@ -149,8 +156,8 @@ struct Path {
     uint8_t equation = 0, side = 0;
     Vector<uint8_t> children;
 };
-enum class ConditionKind : uint8_t { Nonzero, Nonnegative, Positive };
-enum class ConditionRole : uint8_t { Denominator, Radicand, IsolatedRange };
+enum class ConditionKind : uint8_t { Nonzero, Nonnegative, Positive, NotOne };
+enum class ConditionRole : uint8_t { Denominator, Radicand, IsolatedRange, LogArgument, ExponentialBase, LogarithmBase, ExponentialTarget };
 struct Condition {
     std::string nonzero;
     Path source;

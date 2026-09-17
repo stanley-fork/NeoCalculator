@@ -805,7 +805,7 @@ bool EquationsApp::debugAssert(const std::string& expected) {
             };
             const auto page=teachingPageAt(_derivation,_stepDetail,_teachingPage);
             const char* kinds[]={"start","transition","chain","coefficients","discriminant","quadratic_formula","roots","final"};
-            const char* formulas[]={"equation","authored","conditions","standard_quadratic","coefficients","discriminant_definition","discriminant_values","general_formula","substituted_formula","operand","row_operation","coefficient_equation","solution_set"};
+            const char* formulas[]={"equation","authored","conditions","standard_quadratic","coefficients","discriminant_definition","discriminant_values","general_formula","substituted_formula","operand","row_operation","coefficient_equation","solution_set","balanced_operation"};
             std::ostringstream json;
             json<<"{\"page\":"<<_teachingPage<<",\"count\":"<<teachingPageCount(_derivation,_stepDetail)
                 <<",\"guided\":"<<(_stepDetail?"true":"false")<<",\"step\":"<<_stepIndex<<",\"lastStep\":"<<page.last

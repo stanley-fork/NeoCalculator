@@ -60,6 +60,7 @@
 #include "math/AngleModeRuntime.h"
 
 namespace giac {
+extern const unary_function_ptr * const at_logb;
 // Not exposed by this snapshot's headers; defined in the lexer TU (same
 // forward declarations GiacBridge.cpp has always used).
 void check_browser_functions();
