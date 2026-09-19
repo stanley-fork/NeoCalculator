@@ -3,7 +3,7 @@
 enum class TransKind { None, Exp, Power, Ln, Log10, LogBase };
 bool transDisplayNeeded(const gen& g,unsigned depth) {
     if(depth>Limits::depth)throw LimitReached{__LINE__};
-    if(transAtom(g))return true;
+    if(transAtom(g)||trigAtom(g)||(g.type==giac::_SYMB&&(g._SYMBptr->sommet==giac::at_asin||g._SYMBptr->sommet==giac::at_acos||g._SYMBptr->sommet==giac::at_atan)))return true;
     if(g.type==giac::_SYMB)return transDisplayNeeded(g._SYMBptr->feuille,depth+1);
     if(g.type==giac::_VECT)for(const auto& c:*g._VECTptr)if(transDisplayNeeded(c,depth+1))return true;
     return false;

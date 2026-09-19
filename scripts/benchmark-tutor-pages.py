@@ -14,6 +14,8 @@ for name in ['abs-linear','radical-extraneous','radical-isolate']:
  CASES[name]=teaching.CASES[name]
 for name in ['exp-common-base','log-domain','log-isolate']:
  CASES[name]=teaching.CASES[name]
+for name in ['trig-sine','trig-affine','trig-tangent','trig-unfamiliar']:
+ CASES[name]=teaching.CASES[name]
 def main():
  p=argparse.ArgumentParser();p.add_argument('--bin',required=True);p.add_argument('--out',required=True);p.add_argument('--samples',type=int,default=30);p.add_argument('--warmup',type=int,default=5);p.add_argument('--cases',nargs='+',choices=list(CASES));p.add_argument('--expect-no-polynomial-scan',action='store_true');a=p.parse_args()
  out=Path(a.out).resolve();out.mkdir(parents=True,exist_ok=True);env=os.environ.copy();env['PATH']='C:/SDL2/x86_64-w64-mingw32/bin;C:/mingw64/bin;'+env['PATH']

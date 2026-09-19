@@ -1,0 +1,19 @@
+{"cases":[
+ {"id":"exact-pi-offset","equation":"sin(2*x-pi/3)=1/2","function":"sin","target":"1/2"},
+ {"id":"sine-unfamiliar","equation":"sin(3*x-1)=1/3","function":"sin","target":"1/3"},
+ {"id":"cos-negative","equation":"cos(-7*x/3+2/5)=-1/2","function":"cos","target":"-1/2"},
+ {"id":"tan-rational","equation":"tan((x-2)/3)=7/5","function":"tan","target":"7/5"},
+ {"id":"sine-deg-unfamiliar","equation":"sin(3*x-1)=1/3","degrees":true,"function":"sin","target":"1/3"},
+ {"id":"sine-endpoint","equation":"sin(-x)=-1","function":"sin","target":"-1"},
+ {"id":"cos-endpoint","equation":"cos(x)=-1","function":"cos","target":"-1"},
+ {"id":"reversed","equation":"1/2=sin(2*(x-1))","function":"sin","target":"1/2"},
+ {"id":"degree-tan","equation":"tan(3*x)=1","degrees":true,"function":"tan","target":"1"},
+ {"id":"no-range","equation":"sin(x)=5/4","function":"sin","target":"5/4"},
+ {"id":"nested","equation":"sin(cos(x))=0","unsupported":true},
+ {"id":"two-terms","equation":"sin(x)+cos(x)=0","unsupported":true},
+ {"id":"same-function","equation":"sin(x)=sin(2*x)","unsupported":true},
+ {"id":"inverse","equation":"asin(x)=0","unsupported":true},
+ {"id":"pole-outside","equation":"tan(x)/x=1","unsupported":true},
+ {"id":"nonaffine","equation":"sin(x^2)=0","unsupported":true},
+ {"id":"complex","equation":"sin(x)=1/2","complex":true,"unsupported":true}
+]}

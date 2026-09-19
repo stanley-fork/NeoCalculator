@@ -9466,7 +9466,8 @@ double my_tan(double arg){
   // static const define_alias_gen(cst_two_pi_V,_VECT,_SEQ__VECT,&cst_two_pi_refv);
   const define_alias_ref_symbolic( cst_two_pi_symb ,alias_at_prod,_VECT,_SEQ__VECT,&cst_two_pi_refv);
   const define_alias_gen(alias_cst_two_pi,_SYMB,0,&cst_two_pi_symb);
-  static const gen cst_two_pi_storage(2*cst_pi);
+  // NumOS 02C: avoid cross-TU cst_pi dynamic initialization order.
+  static const gen cst_two_pi_storage(2*gen(_IDNT_pi()));
   const gen & cst_two_pi = cst_two_pi_storage;
 
   const define_alias_ref_symbolic( inv_2_symb,alias_at_inv,_INT_,0,2);
@@ -9489,7 +9490,7 @@ double my_tan(double arg){
 
   const define_alias_ref_symbolic( cst_pi_over_2_symb ,alias_at_prod,_VECT,_SEQ__VECT,&cst_pi_over_2_refv);
   const define_alias_gen(alias_cst_pi_over_2,_SYMB,0,&cst_pi_over_2_symb);
-  static const gen cst_pi_over_2_storage(cst_pi*gen_inv_2);
+  static const gen cst_pi_over_2_storage(gen(_IDNT_pi())*gen_inv_2);
   const gen & cst_pi_over_2 = cst_pi_over_2_storage;
 
   const define_alias_ref_symbolic( plus_inf_symb ,alias_at_plus,_IDNT,0,&ref_infinity);
@@ -9656,7 +9657,7 @@ double my_tan(double arg){
 
   const define_alias_ref_symbolic( inv_pi_symb,alias_at_inv,_IDNT,0,&ref_pi);
   const define_alias_gen(alias_inv_pi,_SYMB,0,&inv_pi_symb);
-  static const gen cst_inv_pi_storage(symb_inv(cst_pi));
+  static const gen cst_inv_pi_storage(symb_inv(gen(_IDNT_pi())));
   const gen & cst_inv_pi = cst_inv_pi_storage;
 
   const define_alias_ref_symbolic( inv_180_symb,alias_at_inv,_INT_,0,180);
@@ -9668,13 +9669,16 @@ double my_tan(double arg){
   const define_alias_ref_vecteur2(rad2deg_e_refv,alias_rad2deg_e_tab);
   const define_alias_ref_symbolic( rad2deg_e_symb ,(size_t)&_prod,_VECT,_SEQ__VECT,&rad2deg_e_refv);
   const define_alias_gen(alias_rad2deg_e,_SYMB,0,&rad2deg_e_symb);
-  const gen & rad2deg_e = *(const gen *)&alias_rad2deg_e;
+  // Owned symbolic values, not alias layouts containing function addresses.
+  static const gen rad2deg_e_storage(symbolic(at_prod,makevecteur(180,cst_inv_pi)));
+  const gen & rad2deg_e = rad2deg_e_storage;
 
   const define_tab2_alias_gen(alias_deg2rad_e_tab,_IDNT,0,&ref_pi,_SYMB,0,&inv_180_symb);
   const define_alias_ref_vecteur2(deg2rad_e_refv,alias_deg2rad_e_tab);
   const define_alias_ref_symbolic( deg2rad_e_symb ,(size_t)&__prod,_VECT,_SEQ__VECT,&deg2rad_e_refv);
   const define_alias_gen(alias_deg2rad_e,_SYMB,0,&deg2rad_e_symb);
-  const gen & deg2rad_e = *(const gen *)&alias_deg2rad_e;
+  static const gen deg2rad_e_storage(symbolic(at_prod,makevecteur(gen(_IDNT_pi()),symb_inv(180))));
+  const gen & deg2rad_e = deg2rad_e_storage;
 
   //grad
   const define_tab2_alias_gen(alias_rad2grad_e_tab, _INT_, 0, 200, _SYMB, 0, &inv_pi_symb);

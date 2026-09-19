@@ -238,6 +238,28 @@ constexpr CatalogEntry catalog[] = {
     {"view.add_amount", "Add {0} to both sides.", "e", "Suma {0} a ambos lados.", "Ajouter {0} aux deux membres."},
     {"view.subtract_amount", "Subtract {0} from both sides.", "e", "Resta {0} de ambos lados.", "Soustraire {0} des deux membres."},
     {"view.divide_amount", "Divide both sides by {0}.", "e", "Divide ambos lados entre {0}.", "Diviser les deux membres par {0}."},
+    {"trig.range", "Sine and cosine values lie between -1 and 1. The target is inside this range.", "", nullptr, nullptr},
+    {"trig.principal", "Find the principal inverse angle. This selects the reference angle in the standard real inverse range.", "", nullptr, nullptr},
+    {"trig.sine_families", "Sine has the same value at supplementary angles and repeats every full turn. Include both families, with any integer k.", "", nullptr, nullptr},
+    {"trig.cosine_families", "Cosine has the same value at opposite angles and repeats every full turn. Include both families, with any integer k.", "", nullptr, nullptr},
+    {"trig.tangent_families", "Tangent repeats every half turn. Its principal inverse lies strictly between the poles, so this family is defined for every integer k.", "", nullptr, nullptr},
+    {"family.subtract", "Balance every family relation to remove the constant. The period is unchanged.", "", nullptr, nullptr},
+    {"family.divide", "Divide the whole relation by the nonzero coefficient, including both the offset and the period.", "", nullptr, nullptr},
+    {"family.normalize", "A negative period can be reversed because k ranges over all integers. Merge families only when their offsets differ by an exact integer number of periods.", "", nullptr, nullptr},
+    {"family.finish", "These periodic families contain all real solutions. Every integer k is allowed; the complete families satisfy the original equation.", "", nullptr, nullptr},
+    {"trig.impossible", "Sine and cosine always lie between -1 and 1 for real angles. This target is outside that range, so there is no real solution.", "", nullptr, nullptr},
+    {"view.periodic", "Periodic solution families", "", nullptr, nullptr},
+    {"view.integer", "k is any integer.", "", "k es cualquier entero.", "k est un entier quelconque."},
+    {"view.family_number", "Family {0}", "i", nullptr, nullptr},
+    {"view.principal", "Principal angle", "", nullptr, nullptr},
+    {"view.range", "Check the range", "", nullptr, nullptr},
+    {"view.representatives", "The ordinary result lists representatives. These checked families include every period.", "", nullptr, nullptr},
+
+    {"trig.tangent_domain", "Tangent accepts every finite real target. Its argument must avoid the poles where cosine is zero.", "", nullptr, nullptr},
+    {"view.degree_convention", "Angles are in degrees. An inverse marked rad is evaluated in radians before the exact degree conversion.", "", "Los angulos estan en grados; rad indica una inversa en radianes antes de convertir.", "Les angles sont en degres ; rad indique une inverse en radians avant conversion."},
+
+    {"view.representatives_title", "Giac representatives", "", "Representantes de Giac", "Representants de Giac"},
+
 };
 static_assert(sizeof(catalog) / sizeof(catalog[0]) == unsigned(Message::Count), "catalog coverage");
 char schemaType(ParameterKind p) {
@@ -275,7 +297,7 @@ const char *ruleId(Rule r) {
         "candidate.excluded", "terminal.isolated", "terminal.identity", "terminal.contradiction",
         "terminal.finish",    "system.swap",       "system.scale",      "system.add",
         "system.finish", "condition.range", "abs.cases", "radical.candidates", "terminal.nonnegative",
-        "candidate.original_valid", "candidate.original_invalid", "candidate.duplicate", "domain.radicand_nonnegative", "domain.positive", "domain.base", "exponential.range", "exponential.injective", "exponential.inverse", "exponential.exact_power", "logarithm.inverse", "logarithm.injective", "terminal.positive_range"};
+        "candidate.original_valid", "candidate.original_invalid", "candidate.duplicate", "domain.radicand_nonnegative", "domain.positive", "domain.base", "exponential.range", "exponential.injective", "exponential.inverse", "exponential.exact_power", "logarithm.inverse", "logarithm.injective", "terminal.positive_range", "trig.range", "trig.principal", "trig.families", "family.shift", "family.divide", "family.normalize", "family.finish", "trig.impossible"};
     return unsigned(r) < sizeof(ids) / sizeof(ids[0]) ? ids[unsigned(r)] : "unknown";
 }
 const char *messageKey(Message k) {
@@ -363,6 +385,14 @@ bool sameCondition(const Condition& a,const Condition& b) {
         a.kind==b.kind && a.role==b.role && a.sourceState==b.sourceState && a.verification==b.verification &&
         bool(a.expression)==bool(b.expression) && (!a.expression || equalTree(*a.expression,*b.expression));
 }
+bool sameFamilies(const Vector<PeriodicFamily>& a,const Vector<PeriodicFamily>& b) {
+    if(a.size()!=b.size())return false;
+    for(size_t i=0;i<a.size();++i){const auto& x=a[i];const auto& y=b[i];
+        if(x.variable!=y.variable||x.lhs!=y.lhs||x.offset!=y.offset||x.period!=y.period||
+           x.binderScope!=y.binderScope||x.binderId!=y.binderId||x.theoremStep!=y.theoremStep||
+           x.theoremBranch!=y.theoremBranch||x.domain!=y.domain||x.degrees!=y.degrees||x.originalCheck!=y.originalCheck)return false;
+    }return true;
+}
 uint64_t fingerprint(const State &s) {
     uint64_t h = 1469598103934665603ull;
     hashBytes(h, std::to_string(unsigned(s.conclusion)));
@@ -376,6 +406,11 @@ uint64_t fingerprint(const State &s) {
             hashBytes(h, e.lhs);
             hashBytes(h, e.rhs);
         }
+    }
+    if(s.periodicStage)hashBytes(h,std::to_string(s.periodicStage));
+    for(const auto& f:s.families){
+        for(const auto* text:{&f.variable,&f.lhs,&f.offset,&f.period})hashBytes(h,*text);
+        for(auto n:{f.binderScope,uint64_t(f.binderId),uint64_t(f.theoremStep),uint64_t(f.theoremBranch),uint64_t(f.domain),uint64_t(f.degrees),uint64_t(f.originalCheck)})hashBytes(h,std::to_string(n));
     }
     for (const auto &c : s.conditions) {
         hashBytes(h, c.nonzero);
@@ -431,6 +466,8 @@ size_t retainedBytes(const Derivation &d) {
     for (const auto &b : d.input.contextValues)
         n += b.variable.capacity() + b.value.capacity() + 2;
     for (const auto &s : d.states) {
+        n += s.families.capacity()*sizeof(PeriodicFamily);
+        for(const auto& f:s.families)n+=f.variable.capacity()+f.lhs.capacity()+f.offset.capacity()+f.period.capacity()+4;
         n += s.branches.capacity() * sizeof(Branch) + s.conditions.capacity() * sizeof(Condition);
         for (const auto &b : s.branches)
             eqs(b.equations);
@@ -554,6 +591,14 @@ std::string replayJson(const Derivation &d, Locale locale) {
                  <<",\"verification\":"<<unsigned(c.verification)<<",\"expression\":"<<quote(c.nonzero)<<'}';
             }
             o<<']';
+        }
+        if(s.periodicStage){
+            o<<",\"periodicStage\":"<<unsigned(s.periodicStage)<<",\"families\":[";
+            for(size_t j=0;j<s.families.size();++j){if(j)o<<',';const auto& f=s.families[j];
+                o<<"{\"variable\":"<<quote(f.variable)<<",\"lhs\":"<<quote(f.lhs)<<",\"offset\":"<<quote(f.offset)<<",\"period\":"<<quote(f.period)
+                 <<",\"binderScope\":"<<f.binderScope<<",\"binderId\":"<<f.binderId<<",\"domain\":"<<unsigned(f.domain)<<",\"degrees\":"<<f.degrees
+                 <<",\"theoremStep\":"<<f.theoremStep<<",\"theoremBranch\":"<<unsigned(f.theoremBranch)<<",\"originalCheck\":"<<unsigned(f.originalCheck)<<'}';
+            }o<<']';
         }
         o << ",\"branches\":[";
         for (size_t j = 0; j < s.branches.size(); ++j) {

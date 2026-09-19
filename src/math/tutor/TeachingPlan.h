@@ -36,7 +36,7 @@ inline std::string teachingOperationText(const Step& s, Locale locale) {
 }
 inline bool terminalRule(Rule rule) {
     return rule == Rule::AlreadySolved || rule == Rule::Identity ||
-           rule == Rule::Contradiction || rule == Rule::Finish || rule == Rule::SystemFinish || rule == Rule::NonnegativeImpossible || rule == Rule::PositiveImpossible;
+           rule == Rule::Contradiction || rule == Rule::Finish || rule == Rule::SystemFinish || rule == Rule::NonnegativeImpossible || rule == Rule::PositiveImpossible || rule == Rule::FamilyFinish || rule == Rule::TrigImpossible;
 }
 
 inline bool quadraticHasUnchangedFinish(const Derivation& d, size_t index) {
@@ -81,6 +81,8 @@ template<class Visit> inline unsigned visitTeachingPages(const Derivation& d, bo
     for (size_t i = 0; i < d.steps.size(); ++i) {
         const auto& step = d.steps[i];
         if (step.verification != Verdict::Verified || step.after >= d.states.size()) break;
+        if(step.rule==Rule::FamilyNormalize && step.before<d.states.size() &&
+           sameFamilies(d.states[step.before].families,d.states[step.after].families))continue;
         if(step.rule==Rule::BaseDomain && i+1<d.steps.size()) {
             const auto& next=d.steps[i+1];
             if(next.rule==Rule::BaseDomain && next.verification==Verdict::Verified &&

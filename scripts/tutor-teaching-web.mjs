@@ -27,10 +27,11 @@ try{
   await page.goto(origin+'/index.html?persistence=disabled');
   await page.waitForFunction(()=>window.numos?.isReady(),null,{timeout:30000});
   canvas=page.locator('numos-emulator').locator('canvas');const box=await canvas.boundingBox();
+  let focusApp;
   if(process.argv.includes('--nonlinear')) {
     // Select the real policy through the actual Settings UI, just as a user
     // does. Complex-mode refusal is tested separately by the native checker.
-    const focusApp=async id=>{
+    focusApp=async id=>{
       for(let i=0;i<24;++i) {
         const s=await page.evaluate(()=>window.numos.diagnosticState());
         if(s.menuFocus===id)break;
@@ -97,12 +98,19 @@ try{
       ['log-isolate',[43,51,17,16,37,35,78,46],1,'exp(2)'],
       ['log-injective',[51,17,16,78,51,34,16],1,'5'],
       ['log-base',[53,42,16,17,16,78,43],1,'8']);
+    if(process.argv.includes('--trig'))fixtures.push(
+      ['trig-sine',[38,17,16,78,41,30,42,16],null,null],
+      ['trig-affine',[38,42,17,16,78,41,30,42,16],null,null],
+      ['trig-cosine',[39,17,16,78,41,30,42,16],null,null],
+      ['trig-tangent',[40,43,17,16,78,41],null,null],
+      ['trig-impossible',[38,17,16,78,42],0,'']);
     for(const [name,keys,count,first] of fixtures) {
       for(const key of [70,14,14,50,10,...keys,50,15,15,50])await press(key);
       await page.waitForFunction(expected=>{
         const e=window.numos.diagnosticState().equations;
-        return e.tutorStatus==='complete' && e.solutionCount===expected.count &&
-          (Array.isArray(expected.first)?expected.first.includes(e.x0Exact):e.x0Exact===expected.first);
+        return e.tutorStatus==='complete' && (expected.count===null || e.solutionCount===expected.count) &&
+          (expected.first===null ||
+          (Array.isArray(expected.first)?expected.first.includes(e.x0Exact):e.x0Exact===expected.first));
       },{count,first},{timeout:20000});
       const solved=await page.evaluate(()=>window.numos.diagnosticState());
       await capture(name+'-result');await press(72);
@@ -119,6 +127,23 @@ try{
       assert.equal(reopened.equations.tutorBuilds,solved.equations.tutorBuilds);
       assert.equal(reopened.giac.structuredSolves,solved.giac.structuredSolves);
       nonlinear.push({name,solved,final,reopened});await press(70);
+    }
+    if(process.argv.includes('--trig')) {
+      await press(69);await delay(400);await focusApp(10);
+      await page.waitForFunction(()=>window.numos.diagnosticState().app==='Settings');
+      for(let i=0;i<5;++i)await press(14);
+      await page.keyboard.press('Enter'); // Settings consumes ENTER, not Equations' EXE alias.
+      await page.waitForFunction(()=>window.numos.diagnosticState().storage.angleMode==='deg');
+      await press(69);await delay(400);await focusApp(2);await delay(300);
+      for(const code of [50,50,38,42,17,16,78,41,30,42,16,50,15,15,50])await press(code);
+      await page.waitForFunction(()=>window.numos.diagnosticState().equations.tutorStatus==='complete');
+      const solved=await page.evaluate(()=>window.numos.diagnosticState());
+      assert.equal(solved.storage.angleMode,'deg');await press(72);
+      for(let i=0;i<solved.equations.teachingPages;++i){await fullPage('trig-affine-degree-'+i);if(i+1<solved.equations.teachingPages)await press(16);}
+      await press(70);await press(72);
+      const reopened=await page.evaluate(()=>window.numos.diagnosticState());
+      assert.equal(reopened.equations.tutorBuilds,solved.equations.tutorBuilds);
+      nonlinear.push({name:'trig-affine-degree',solved,reopened});
     }
   }
   await press(69);

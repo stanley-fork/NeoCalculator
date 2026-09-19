@@ -37,7 +37,7 @@ int contextReview(){
     for(unsigned i=0;i<36;++i){
         Snapshot s;s.inputEpoch=i+1;s.degrees=true;s.variables={"x"};s.complex=i%6==2;
         const Equation fixtures[]={{"A*x","10"},{"sqrt(x)","2"},{"x^2+1","0"},
-                                   {"exp(A*x)","1"},{"ln(x-1)","2"},{"sin(x)","0"}};
+                                   {"exp(A*x)","1"},{"ln(x-1)","2"},{"sin(x)+cos(x)","0"}};
         s.authored={fixtures[i%6]};
         auto answer=engine.solveStructured({s.authored[0].lhs,s.authored[0].rhs},"x",s.complex?SolveDomainPolicy::RealAndComplex:SolveDomainPolicy::RealOnly);
         auto d=engine.explainEquations(s,answer);

@@ -63,9 +63,9 @@ def cases(seed):
         yield {'id': f'seed-system3-{i}', 'equations': equations, 'tuple': list(map(str, values))}
     for i, equation in enumerate(['sqrt(x+2)=x', 'ln(x)=1', 'abs(x)=2', 'exp(x)=3', 'sin(x)=0', 'x^3=7']):
         # 02A and 02B upgrade only their explicit historical refusal fixtures.
-        yield {'id': f'extension-{i}', 'equations': [equation], 'unsupported': i not in (0, 1, 2, 3),
+        yield {'id': f'extension-{i}', 'equations': [equation], 'unsupported': i not in (0, 1, 2, 3, 4),
                **({'roots': ['2']} if i == 0 else {'roots': ['-2', '2']} if i == 2 else
-                  {'exactRoots': ['exp(1)']} if i == 1 else {'exactRoots': ['ln(3)']} if i == 3 else {})}
+                  {'exactRoots': ['exp(1)']} if i == 1 else {'exactRoots': ['ln(3)']} if i == 3 else {'periodic': True} if i == 4 else {})}
 
 
 def check(case, d):
@@ -73,7 +73,8 @@ def check(case, d):
         assert d['status'] == 0, d['diagnostic']
         return
     assert d['status'] == 2, d['diagnostic']
-    assert all(d[k] == 1 for k in ['validity', 'completeness', 'candidates', 'reconciliation'])
+    assert all(d[k] == 1 for k in ['validity', 'completeness', 'candidates'])
+    assert d['reconciliation'] == (0 if case.get('periodic') else 1)
     assert d['authored'] == [e.split('=') for e in case['equations']]
     assert len(d['states']) == len(d['steps']) + 1
     assert d['bytes'] <= 65536 and d['peakVectorHeapBytes'] <= 131072
@@ -84,7 +85,7 @@ def check(case, d):
         assert step['prerequisites'] == list(range(len(before['conditions'])))
         if step['rule'] not in ('domain.nonzero', 'domain.radicand_nonnegative', 'condition.range', 'domain.positive', 'domain.base', 'exponential.range'): assert before['conditions'] == after['conditions']
         if step['relation'] == 0:
-            assert before['branches'] != after['branches'] and after['fingerprint'] not in seen
+            assert (before['branches'] != after['branches'] or before.get('families') != after.get('families')) and after['fingerprint'] not in seen
         seen.add(before['fingerprint'])
         assert all(term not in step['text'].lower() for term in ['processing', 'applying algorithm', 'subtract -'])
         assert step['text'] and step['key'] != 'unknown'

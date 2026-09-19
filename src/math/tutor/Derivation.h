@@ -46,7 +46,9 @@ enum class Rule : uint8_t {
     RangeCondition, AbsCases, RadicalCandidates, NonnegativeImpossible,
     CheckOriginal, RejectOriginal, DuplicateCandidate, RadicandDomain,
     PositiveDomain, BaseDomain, ExpRange, ExpInjective, ExpInverse, ExpExactPower,
-    LogInverse, LogInjective, PositiveImpossible
+    LogInverse, LogInjective, PositiveImpossible,
+    TrigRange, TrigPrincipal, TrigFamilies, FamilyShift, FamilyDivide,
+    FamilyNormalize, FamilyFinish, TrigImpossible
 };
 enum class Message : uint8_t {
     Domain,
@@ -131,6 +133,10 @@ enum class Message : uint8_t {
     TransAdd, TransSubtract, TransDivide, LogDomainFails,
     ViewInjective, ViewInverse, ViewExactPower,
     ViewAddAmount, ViewSubtractAmount, ViewDivideAmount,
+    TrigRange, TrigPrincipal, SineFamilies, CosineFamilies, TangentFamilies,
+    FamilyShift, FamilyDivide, FamilyNormalize, FamilyFinish, TrigImpossible,
+    ViewPeriodic, ViewInteger, ViewFamilyNumber, ViewPrincipal, ViewRange, ViewRepresentatives,
+    TangentDomain, ViewDegreeConvention, ViewRepresentativesTitle,
     Count
 };
 enum class ParameterKind : uint8_t { Expression, Variable, Row, Integer };
@@ -157,7 +163,7 @@ struct Path {
     Vector<uint8_t> children;
 };
 enum class ConditionKind : uint8_t { Nonzero, Nonnegative, Positive, NotOne };
-enum class ConditionRole : uint8_t { Denominator, Radicand, IsolatedRange, LogArgument, ExponentialBase, LogarithmBase, ExponentialTarget };
+enum class ConditionRole : uint8_t { Denominator, Radicand, IsolatedRange, LogArgument, ExponentialBase, LogarithmBase, ExponentialTarget, TangentPole };
 struct Condition {
     std::string nonzero;
     Path source;
@@ -178,10 +184,25 @@ struct Branch {
     uint8_t origin = 0;
     Verdict originalCheck = Verdict::Unknown;
 };
-enum class Conclusion : uint8_t { None, Finite, Empty, Identity, Family };
+// The binder has local scope identified by the complete snapshot fingerprint.
+// No parameter spelling or Giac identifier occurs in the semantic family.
+enum class IntegerDomain : uint8_t { AllIntegers };
+struct PeriodicFamily {
+    std::string variable, lhs, offset, period;
+    uint64_t binderScope = 0;
+    uint16_t binderId = 1, theoremStep = 0;
+    uint8_t theoremBranch = 0;
+    IntegerDomain domain = IntegerDomain::AllIntegers;
+    bool degrees = false;
+    Verdict originalCheck = Verdict::Unknown;
+};
+bool sameFamilies(const Vector<PeriodicFamily>& a, const Vector<PeriodicFamily>& b);
+enum class Conclusion : uint8_t { None, Finite, Empty, Identity, Family, Periodic };
 struct State {
     Vector<Branch> branches;
     Vector<Condition> conditions;
+    Vector<PeriodicFamily> families; // at most two; never finite root samples
+    uint8_t periodicStage = 0;
     Conclusion conclusion = Conclusion::None;
     uint64_t fingerprint = 0;
 };

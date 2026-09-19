@@ -132,3 +132,23 @@ git log --follow -- lib/giac/src/<file>
 Directory-wide diffs include upstream files intentionally omitted from the
 embedded subset. Compare shared paths or blob hashes when reproducing the
 126-of-144 import result.
+
+## TUTOR-ENGINE-02C: exact trig constants and degree conversions
+
+The pinned `kusual.cc` static `cst_two_pi`, `cst_pi_over_2` and
+`cst_inv_pi` owned values referenced the dynamically initialized `cst_pi`
+in another translation unit. In the tested native link order, the first two
+were initialized from zero: `acos(1/2)` became `-pi/6`, and periodic solve
+lost full-turn terms. Build those three values directly from the existing
+function-local `_IDNT_pi()` identifier, avoiding cross-TU initialization order.
+
+The same embedded branch retained alias-layout casts for `rad2deg_e` and
+`deg2rad_e`, including raw function addresses. The direct public DEG solve
+probe crashed. Replace just those two references with owned symbolic products,
+matching the already-established owned-value portability correction in this
+vendor snapshot. No solve algorithm or tutor answer injection is added.
+
+Reproducer: `tests/host/tutor_trig_probe.cpp`; pre/post evidence under ignored
+`out/tutor-engine-02c/representation-*.log`. Post-fix public and adapter paths
+agree on pi/3 for acos(1/2), 60 in DEG; all-period public solutions contain the
+appropriate 2*pi/360 or pi/180 terms. GPL-3.0-or-later provenance is unchanged.

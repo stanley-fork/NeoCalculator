@@ -3,12 +3,14 @@
 # Persistent/one-shot page allocation failures; production transactional view.
 from pathlib import Path
 import argparse,importlib.util,os,re,subprocess,json,time
-root=Path(__file__).resolve().parents[1];os.chdir(root);out=root/'out/tutor-engine-02b/ui-faults';out.mkdir(parents=True,exist_ok=True);ap=argparse.ArgumentParser();ap.add_argument('--bin',required=True);ap.add_argument('--limit',type=int,default=32);ap.add_argument('--quick',action='store_true');ap.add_argument('--tag',default='candidate-faults');ap.add_argument('--case',choices=['exponential','logarithm','logbase','exp-isolate','log-isolate'],required=True);args=ap.parse_args();target=out/args.tag;target.mkdir(exist_ok=True)
+root=Path(__file__).resolve().parents[1];os.chdir(root);out=root/'out/tutor-engine-02b/ui-faults';out.mkdir(parents=True,exist_ok=True);ap=argparse.ArgumentParser();ap.add_argument('--bin',required=True);ap.add_argument('--limit',type=int,default=32);ap.add_argument('--quick',action='store_true');ap.add_argument('--tag',default='candidate-faults');ap.add_argument('--case',choices=['exponential','logarithm','logbase','exp-isolate','log-isolate','trig-sine','trig-negative','trig-tangent','trig-degree','trig-impossible'],required=True);args=ap.parse_args();target=out/args.tag;target.mkdir(exist_ok=True)
 spec=importlib.util.spec_from_file_location('eq',root/'scripts/test-equations-rebuild.py');eq=importlib.util.module_from_spec(spec);spec.loader.exec_module(eq)
 env=dict(os.environ,NUMOS_EQUATIONS_BOUNDS='1');dll=eq.helper.sdl2_dll_dir(args.bin)
 if dll:env['PATH']=dll+os.pathsep+env.get('PATH','')
 cases={'exponential':eq.single('2 ^ x RIGHT = 8'),'logarithm':eq.single('ln x - 1 RIGHT = 2'),'logbase':eq.single('logbase 2 RIGHT x RIGHT = 3')}
 cases.update({'exp-isolate':eq.single('2 SHIFT ln x RIGHT + 1 = 7'),'log-isolate':eq.single('3 ln x RIGHT - 6 = 0')})
+cases.update({'trig-sine':eq.single('sin 3 x - 1 RIGHT = 1 / 3 RIGHT'),'trig-negative':eq.single('cos 0 - 2 x RIGHT = 1'),'trig-tangent':eq.single('tan 3 x RIGHT = 1'),'trig-degree':'set_angle_mode deg\n'+eq.single('sin 2 x RIGHT = 1 / 3 RIGHT')})
+cases['trig-impossible']=eq.single('sin x RIGHT = 2')
 cases={args.case:cases[args.case]}
 
 def run(name,script,extra=None):

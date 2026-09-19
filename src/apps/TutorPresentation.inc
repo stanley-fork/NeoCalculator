@@ -100,6 +100,29 @@ NodePtr typedTerm(const std::string& source, unsigned& calls) {
     if (!result) throw std::bad_alloc();
     return result;
 }
+// Internal exact inverse scalars are RAD even in a degree-valued family.
+// Mark only those function nodes; never parse or change a localized sentence.
+void labelRadianInverse(MathNode* node,unsigned depth=0) {
+    if(!node||depth>Limits::depth+4)return;
+    if(node->type()==NodeType::Row){auto* row=static_cast<NodeRow*>(node);
+        for(int i=0;i<row->childCount();++i){auto* child=row->child(i);
+            if(child->type()==NodeType::Function){auto kind=static_cast<NodeFunction*>(child)->funcKind();
+                if(kind==FuncKind::ArcSin||kind==FuncKind::ArcCos||kind==FuncKind::ArcTan){
+                    auto copy=cloneNode(child);if(!copy)throw std::bad_alloc();
+                    row->replaceChild(i,makeSubscript(std::move(copy),makeSymbol("rad")));continue;
+                }
+            }labelRadianInverse(child,depth+1);
+        }
+    }else for(int i=0;i<node->childCount();++i)labelRadianInverse(node->child(i),depth+1);
+}
+NodePtr periodicTerm(const std::string& source,bool degrees,unsigned& calls){
+    auto node=typedTerm(source,calls);if(degrees)labelRadianInverse(node.get());return node;
+}
+class IntegerMembership final : public NodeSymbol {
+public:
+    IntegerMembership():NodeSymbol("\xE2\x88\x88"){}
+    MathClass mathClass() const override{return MathClass::REL;}
+};
 NodePtr symbol(const char* value) { return makeSymbol(value); }
 NodePtr variable(const std::string& value) {
     return value.size() == 1 ? makeVariable(value[0]) : makeSymbol(value);
@@ -156,6 +179,43 @@ NodePtr build(const Derivation& d, FormulaRef ref, unsigned& calls) {
             row->appendChild(relation(std::move(term), makeNumber(condition.kind==ConditionKind::NotOne?"1":"0"), condition.kind==ConditionKind::Nonnegative?OpKind::Ge:condition.kind==ConditionKind::Positive?OpKind::Gt:OpKind::Ne));
         }
         return list;
+    }
+    if(ref.kind==FormulaKind::IntegerParameter)
+        return rowOf(makeSymbol("k"),NodePtr(new IntegerMembership()),makeSymbol("\xE2\x84\xA4"));
+    if(ref.kind==FormulaKind::TrigPrincipal)
+        return relation(makeSymbol("\xCE\xB1"),periodicTerm(step.auxiliaries.at(0),d.input.degrees,calls));
+    if(ref.kind==FormulaKind::TrigRange) {
+        if(step.rule==Rule::TrigImpossible) {
+            // WHY: display the verified failed bound, never a false chained
+            // inequality such as -1 <= 2 <= 1. Admission/replay established
+            // that this canonical exact rational lies outside [-1,1].
+            const bool below=!step.operand.empty()&&step.operand.front()=='-';
+            return relation(typedTerm(step.operand,calls),typedTerm(below?"-1":"1",calls),below?OpKind::Lt:OpKind::Gt);
+        }
+        auto row=rowOf(makeNumber("-1"),makeRelation(OpKind::Le),typedTerm(step.operand,calls));
+        static_cast<NodeRow*>(row.get())->appendChild(makeRelation(OpKind::Le));
+        static_cast<NodeRow*>(row.get())->appendChild(makeNumber("1"));return row;
+    }
+    if(ref.kind==FormulaKind::PeriodicFamily||ref.kind==FormulaKind::FamilyOperation) {
+        if(ref.state>=d.states.size()||ref.branch>=d.states[ref.state].families.size())return nullptr;
+        const auto& f=d.states[ref.state].families[ref.branch];
+        if(f.binderScope!=fingerprint(d.input)||f.binderId!=1||f.domain!=IntegerDomain::AllIntegers||f.degrees!=d.input.degrees)return nullptr;
+        auto left=typedTerm(f.lhs,calls);
+        auto term=rowOf(periodicTerm(f.period,f.degrees,calls),makeSymbol("k"));
+        auto right=f.offset=="0"?std::move(term):rowOf(periodicTerm(f.offset,f.degrees,calls),makeOperator(OpKind::Add),std::move(term));
+        if(ref.kind==FormulaKind::FamilyOperation) {
+            if(ref.state!=step.before)return nullptr;
+            if(step.rule==Rule::FamilyDivide){
+                left=makeFraction(std::move(left),typedTerm(step.operand,calls));
+                right=makeFraction(std::move(right),typedTerm(step.operand,calls));
+            }else if(step.rule==Rule::FamilyShift){
+                const bool negative=!step.operand.empty()&&step.operand.front()=='-';
+                const auto amount=negative?"-("+step.operand+")":step.operand;
+                left=rowOf(std::move(left),makeOperator(negative?OpKind::Add:OpKind::Sub),factor(typedTerm(amount,calls)));
+                right=rowOf(std::move(right),makeOperator(negative?OpKind::Add:OpKind::Sub),factor(typedTerm(amount,calls)));
+            }else return nullptr;
+        }
+        return relation(std::move(left),std::move(right));
     }
     if (ref.kind == FormulaKind::Operand) {
         const bool subtract = (std::string_view(messageKey(step.explanation)).find("equation.subtract") == 0 || step.explanation==Message::AbsSubtract || step.explanation==Message::RadicalSubtract || step.explanation==Message::TransSubtract);

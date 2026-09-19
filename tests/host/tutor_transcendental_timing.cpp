@@ -9,7 +9,9 @@ int main(){using namespace numos;using namespace numos::tutor;
     auto& engine=GiacEngine::instance();if(!engine.begin())return 1;
     for(const auto& equation:std::initializer_list<Equation>{{"x","1"},{"2*x^2+3*x-4","0"},
             {"abs(2*x-3)","5"},{"sqrt(x+1)","x-1"},{"exp(2*x-1)","exp(3)"},
-            {"2^x","8"},{"ln(x-1)","2"},{"logb(x,2)","3"}}){
+            {"2^x","8"},{"ln(x-1)","2"},{"logb(x,2)","3"},
+            {"sin(x)","1/2"},{"sin(2*x)","1/2"},{"cos(x)","1/2"},
+            {"tan(3*x)","1"},{"sin(3*x-1)","1/3"}}){
         Snapshot input;input.authored={equation};input.variables={"x"};input.inputEpoch=1;
         for(unsigned sample=0;sample<36;++sample){
             const auto start=Clock::now();

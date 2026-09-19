@@ -22,6 +22,7 @@ def main():
     p.add_argument('--bin', required=True)
     p.add_argument('--out', type=Path, required=True)
     p.add_argument('--transcendental', action='store_true')
+    p.add_argument('--trig', action='store_true')
     args=p.parse_args()
     os.chdir(ROOT)
     args.out.mkdir(parents=True, exist_ok=True)
@@ -35,6 +36,11 @@ def main():
     if args.transcendental:
         starts=[starts[0],starts[1],eq.single('2 x ^ 2 RIGHT + 3 x - 4 = 0'),
                 eq.single('2 ^ x + 0 RIGHT = 8'),eq.single('ln x - 1 RIGHT = 2')]
+    if args.trig:
+        starts=[eq.single('2 x ^ 2 RIGHT + 3 x - 4 = 0'),starts[1],eq.single('ln x - 1 RIGHT = 2'),
+                eq.single('sin x RIGHT = 1 / 2 RIGHT'),eq.single('cos x RIGHT = 1 / 2 RIGHT'),
+                eq.single('tan 3 x RIGHT = 1'),eq.single('sin 2 x RIGHT = 1 / 2 RIGHT')]
+        starts=[('set_angle_mode deg\n' if i==6 else 'set_angle_mode rad\n')+s for i,s in enumerate(starts)]
     env=dict(os.environ,NUMOS_EQUATIONS_BOUNDS='1')
     dll=eq.helper.sdl2_dll_dir(args.bin)
     if dll:env['PATH']=dll+os.pathsep+env.get('PATH','')
@@ -63,6 +69,10 @@ def main():
         # Cancel a changed draft: the committed trace and epoch remain current.
         script+=eq.keys('BACK BACK UP UP UP UP ENTER')+'assert_equations state editing\n'
         script+=eq.keys('AC x = 7 BACK')+'assert_equations state list\nassert_equations trace builds 1\nassert_equations epochs current\ncalculus_probe\n'
+        if args.trig:
+            # A mode change makes a cached proof unavailable; navigation itself
+            # must not build a new proof. The next Solve owns regeneration.
+            script+='set_angle_mode '+('rad' if i==6 else 'deg')+'\nassert_equations trace stale\n'
         script+=eq.keys('HOME')+'wait 30\nassert_equations closed\nassert_app Menu\ncalculus_probe\n'
     text=run('mixed50',script)
     rows=[dict(p.split('=',1) for p in line.split('|')[1:]) for line in text.splitlines() if line.startswith('CALCULUS_PROBE|')]
@@ -70,11 +80,21 @@ def main():
     home=rows[5::6]
     assert all(0<int(r['pool_free'])<65536 and 0<int(r['pool_total'])<=65536 for r in rows),'fixed pool must be enabled'
     assert all(r['handles']=='0' for r in rows)
-    assert all(len({r[k] for r in home[10:]})==1 for k in ('objects','timers','pool_total','pool_free')),'post-HOME drift'
+    assert all(len({r[k] for r in home[10:]})==1 for k in ('objects','timers')),'post-HOME object drift'
+    if args.trig:
+        # lv_mem_monitor sums TLSF payload blocks, excluding block headers.
+        # The mixed RAD/DEG sequence can coalesce one additional 8-byte header.
+        # Require EXACTLY unchanged live payload and no loss of free payload;
+        # do not mistake a larger total/free pair for retained allocation.
+        assert len({int(r['pool_total'])-int(r['pool_free']) for r in home})==1,'post-HOME live payload drift'
+        free=[int(r['pool_free']) for r in home]
+        assert min(free)==free[0] and max(free)-min(free)<=8,'post-HOME free payload loss'
+    else:
+        assert all(len({r[k] for r in home[10:]})==1 for k in ('pool_total','pool_free')),'post-HOME drift'
     phases={}
-    for fixture in range(5):
+    for fixture in range(len(starts)):
         for phase in range(5):
-            group=[rows[c*6+phase] for c in range(10,50) if c%5==fixture]
+            group=[rows[c*6+phase] for c in range(10,50) if c%len(starts)==fixture]
             assert all(len({r[k] for r in group})==1 for k in ('objects','timers'))
             # TLSF alignment/size-class layout can cycle; require a bounded
             # repeated pattern, not a monotonically losing allocator history.

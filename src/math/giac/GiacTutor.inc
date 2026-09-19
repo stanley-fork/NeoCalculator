@@ -51,6 +51,7 @@ struct Algebra {
     unsigned calls = 0;
     bool presentationOnly = false;
     bool transcendentalInput = false;
+    bool trigonometricInput = false;
     int rejectedLine = 0;
     Verdict reject(int line) {
         rejectedLine = line;
@@ -172,6 +173,8 @@ bool transAtom(const gen& g) {
     return f.type==giac::_VECT && f._VECTptr->size()==2 && transExponent(f._VECTptr->back());
 }
 bool transDomainSafe(Algebra&,const gen&,const State&,unsigned,unsigned&);
+bool trigAtom(const gen&);
+bool trigSyntax(const gen&,unsigned);
 // Pure structural preflight precedes ALL expansion/evaluation. Nested powers
 // cannot turn a short source into an unbounded polynomial expansion.
 unsigned sourceShape(const gen &g, unsigned depth, unsigned &nodes) {
@@ -190,10 +193,10 @@ unsigned sourceShape(const gen &g, unsigned depth, unsigned &nodes) {
     const auto &f = g._SYMBptr->feuille;
     if (op != giac::at_plus && op != giac::at_prod && op != giac::at_neg &&
         op != giac::at_binary_minus && op != giac::at_division && op != giac::at_inv &&
-        op != giac::at_pow && op != giac::at_abs && op != giac::at_sqrt && !transAtom(g))
+        op != giac::at_pow && op != giac::at_abs && op != giac::at_sqrt && !transAtom(g) && !trigAtom(g))
         throw UnsupportedInput{__LINE__};
     unsigned degree = 0;
-    if(transAtom(g)) {
+    if(transAtom(g)||trigAtom(g)) {
         if(f.type==giac::_VECT)for(const auto& child:*f._VECTptr)sourceShape(child,depth+1,nodes);
         else sourceShape(f,depth+1,nodes);
         return 1;
@@ -229,10 +232,16 @@ bool domainSafe(Algebra &a, const gen &g, const State &state, unsigned depth, un
         return false;
     if (a.rational(g))
         return true;
+    if(trigAtom(g) || (g.type==giac::_SYMB && (g._SYMBptr->sommet==giac::at_asin||g._SYMBptr->sommet==giac::at_acos||g._SYMBptr->sommet==giac::at_atan))) {
+        // Only read-only presentation accepts these here. Proof admission and
+        // exact range checks belong to the independent periodic theorem path.
+        return a.presentationOnly && domainSafe(a,g._SYMBptr->feuille,state,depth+1,nodes);
+    }
     if(transAtom(g))return transDomainSafe(a,g,state,depth,nodes);
     if (g.type == giac::_CPLX)
         return a.rational(*g._CPLXptr) && a.rational(*(g._CPLXptr + 1));
     if (g.type == giac::_IDNT) {
+        if(a.presentationOnly && g==gen(giac::_IDNT_pi()))return true;
         auto name = a.print(g);
         if (name == "i" && a.input.complex)
             return true;
@@ -306,6 +315,7 @@ bool domainSafe(Algebra &a, const gen &g, const State &state, unsigned depth, un
 
 #include "GiacTutorNonlinear.inc"
 #include "GiacTutorTranscendental.inc"
+#include "GiacTutorTrig.inc"
 
 // Capture domain-bearing syntax before normal/eval. Only a bounded rational
 // expression grammar represented by Giac's existing AST is admitted here.
@@ -417,15 +427,18 @@ State authoredState(const Snapshot &s) {
 }
 void capture(Algebra &a, Vector<Condition> &conditions, std::vector<gen> &denominators) {
     unsigned nodes = 0;
-    bool transcendental=false;
+    bool transcendental=false, trigonometric=false;
     for (const auto &e : a.input.authored) {
         // Keep only one temporary authored parse alive, as in the old path.
         for(const auto* text:{&e.lhs,&e.rhs}) {
             const gen expression=a.parse(*text);
             sourceShape(expression, 0, nodes);
+            trigonometric=trigSyntax(expression)||trigonometric;
             transcendental=transDisplayNeeded(expression)||transcendental;
         }
     }
+    a.trigonometricInput=trigonometric;
+    if(trigonometric){captureTrig(a,conditions);return;}
     a.transcendentalInput=transcendental;
     if(transcendental&&captureTranscendental(a,conditions))return;
     validateSpecialSource(a);
@@ -652,6 +665,8 @@ Verdict verifyLifted(Algebra&,const Derivation&,const Step&);
 Verdict verifyStep(Algebra &a, const Derivation &d, const Step &s) {
     if (s.before >= d.states.size() || s.after >= d.states.size() || s.after != s.before + 1)
         return a.reject(__LINE__);
+    if(s.rule>=Rule::TrigRange)return verifyTrig(a,d,s);
+    if(d.states[s.before].periodicStage || d.states[s.after].periodicStage || !d.states[s.before].families.empty() || !d.states[s.after].families.empty())return a.reject(__LINE__);
     if(s.caseStart != UINT16_MAX) return verifyLifted(a,d,s);
     const State &before = d.states[s.before];
     const State &after = d.states[s.after];
@@ -1138,7 +1153,7 @@ struct Planner {
             const auto &e = d.states.back().branches[s.branch].equations[s.row];
             s.auxiliaries = {e.lhs, e.rhs};
         }
-        if(s.caseStart == UINT16_MAX) message(a, s, next);
+        if(s.caseStart == UINT16_MAX && s.rule<Rule::TrigRange) message(a, s, next);
         struct Rollback {
             Derivation &d;
             size_t states, steps;
@@ -1513,10 +1528,12 @@ struct Planner {
     }
     void nonlinear();
     void transcendental();
+    void trigonometric();
     void run() {
         Vector<Condition> conditions;
         std::vector<gen> denominators;
         capture(a, conditions, denominators);
+        if(a.trigonometricInput){trigonometric();return;}
         if (a.input.variables.size() > 1 && !denominators.empty())
             for (const auto &v : denominators)
                 if (!a.rational(a.normal(v)))
@@ -1576,6 +1593,7 @@ struct Planner {
 };
 #include "GiacTutorNonlinearPlanner.inc"
 #include "GiacTutorTranscendentalPlanner.inc"
+#include "GiacTutorTrigPlanner.inc"
 
 void groupPresentation(Derivation &d) {
     for (size_t i = 0; i < d.steps.size(); ++i) {
@@ -1687,7 +1705,7 @@ Verdict replay(Algebra &a, const Derivation &d) {
     }
     const auto original = authoredState(d.input);
     if (!sameBranches(original.branches, d.states[0].branches) || !d.states[0].conditions.empty() ||
-        d.states[0].conclusion != Conclusion::None)
+        d.states[0].conclusion != Conclusion::None || d.states[0].periodicStage || !d.states[0].families.empty())
         return Verdict::Rejected;
     Vector<Condition> conditions;
     std::vector<gen> den;
@@ -1709,6 +1727,16 @@ Verdict reconcile(Algebra &a, const Derivation &d, const StructuredSolveResult &
     if (!answer.ok())
         return Verdict::Unknown;
     const auto &s = d.states.back();
+    if(s.conclusion==Conclusion::Periodic) {
+        // The current ordinary adapter independently returns representatives,
+        // not a complete bound family. Do not claim set equality or inject roots.
+        if(answer.setKind!=SolutionSetKind::Solutions)return Verdict::Unknown;
+        for(const auto& group:answer.groups)for(const auto& value:group.values){
+            bool belongs=false;
+            for(const auto& family:s.families){const gen q=a.normal((a.parse(value.exactText)-a.parse(family.offset))/a.parse(family.period));belongs=belongs||q.type==giac::_INT_||q.type==giac::_ZINT;}
+            if(!belongs)return Verdict::Rejected;
+        }return Verdict::Unknown; // validity of representatives != completeness
+    }
     if (s.conclusion == Conclusion::Empty)
         return answer.setKind == SolutionSetKind::NoSolution ? Verdict::Verified
                                                              : Verdict::Rejected;

@@ -121,7 +121,7 @@ def main():
         run('delete-'+str(index),s)
     run('steps-available',single('2 * x + 4 = 0')+keys('tools')+'assert_equations_tutor_status complete\nassert_equations epochs steps\n')
     run('steps-log-available',single('ln x ) = 1')+keys('tools')+'assert_equations state steps\nassert_equations_tutor_status complete\n')
-    run('steps-unavailable',single('sin x ) = 0')+keys('tools')+'assert_equations state steps\nassert_equations_tutor_status unavailable\n')
+    run('steps-unavailable',single('sin x ) + cos x ) = 0')+keys('tools')+'assert_equations state steps\nassert_equations_tutor_status unavailable\n')
     # Physical entry goes through the generated electrical map and real resolver.
     mapping={}
     data=(ROOT/'src/input/generated/ProductionKeypadMap.generated.h').read_text(encoding='utf-8').split('kProductionKeypadMap = {{',1)[1].split('}};',1)[0]

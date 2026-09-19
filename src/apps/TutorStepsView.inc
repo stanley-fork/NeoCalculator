@@ -109,7 +109,35 @@ void EquationsApp::drawStep(bool preserveScroll) {
             return absSplit && step.caseStart!=UINT16_MAX
                 ? caseCaption(before,step.branch,true)+"\n"+words(key) : words(key);
         };
-        switch(page.kind) {
+        if(step.rule>=Rule::TrigRange) {
+            if(step.rule==Rule::FamilyShift && !step.operand.empty()){
+                const bool negative=step.operand.front()=='-';
+                const auto amount=negative?step.operand.substr(1):step.operand;
+                bool integer=!amount.empty();for(char c:amount)integer=integer&&c>='0'&&c<='9';
+                if(integer)prose=explain(negative?Message::ViewAddAmount:Message::ViewSubtractAmount,{{ParameterKind::Expression,amount}},_stepLocale)+"\n"+prose;
+            }
+            if(_derivation.input.degrees && step.rule==Rule::TrigPrincipal)prose+="\n"+words(Message::ViewDegreeConvention);
+            titleKey=step.rule==Rule::FamilyFinish?Message::ViewPeriodic:
+                step.rule==Rule::TrigImpossible?Message::ViewNoSolution:
+                step.rule==Rule::TrigPrincipal?Message::ViewPrincipal:
+                step.rule==Rule::TrigRange?Message::ViewRange:Message::ViewPeriodic;
+            if(step.rule==Rule::TrigRange||step.rule==Rule::TrigImpossible) {
+                add(ref(FormulaKind::Authored,0),words(Message::ViewOriginal));
+                if(after.conditions.empty())add(ref(FormulaKind::TrigRange));
+                else add(ref(FormulaKind::Conditions,step.after),numbered(Message::ViewRestrictions,after.conditions.size()));
+            }else if(step.rule==Rule::TrigPrincipal){
+                add(ref(FormulaKind::Authored,0),words(Message::ViewOriginal));add(ref(FormulaKind::TrigPrincipal));
+            }else {
+                if(step.rule==Rule::FamilyShift||step.rule==Rule::FamilyDivide)
+                    for(unsigned i=0;i<before.families.size();++i)add(ref(FormulaKind::FamilyOperation,step.before,i),numbered(Message::ViewFamilyNumber,i+1));
+                for(unsigned i=0;i<after.families.size();++i)add(ref(FormulaKind::PeriodicFamily,step.after,i),numbered(Message::ViewFamilyNumber,i+1));
+                if(count<4)add(ref(FormulaKind::IntegerParameter),words(Message::ViewInteger));
+                if(step.rule==Rule::FamilyFinish){
+                    prose+="\n"+words(Message::ViewRepresentatives);
+                    if(!after.conditions.empty())add(ref(FormulaKind::Conditions,step.after),numbered(Message::ViewRestrictions,after.conditions.size()));
+                }
+            }
+        }else switch(page.kind) {
         case TeachingKind::Start:
             titleKey=Message::ViewStart;prose=words(Message::ViewStartingSystem);
             for(unsigned r=0;r<_derivation.input.authored.size();++r)
@@ -229,7 +257,7 @@ void EquationsApp::drawStep(bool preserveScroll) {
         bool transcendental=false;
         for(const auto& s:_derivation.steps)if(s.rule>=Rule::PositiveDomain)transcendental=true;
         const bool showConditions=!transcendental || page.kind==TeachingKind::Final || step.rule==Rule::PositiveDomain || step.rule==Rule::BaseDomain || step.rule==Rule::ExpRange || step.rule==Rule::RejectOriginal;
-        if(showConditions && page.kind!=TeachingKind::Start && !after.conditions.empty())
+        if(step.rule<Rule::TrigRange && showConditions && page.kind!=TeachingKind::Start && !after.conditions.empty())
             add(ref(FormulaKind::Conditions,step.after),numbered(Message::ViewRestrictions,unsigned(after.conditions.size())));
 
         // Construct transactionally before changing the visible page. Authored

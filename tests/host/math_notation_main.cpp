@@ -66,6 +66,11 @@ int main() {
     const lv_font_t* fonts[]={&stix_math_18,&stix_math_12,&stix_math_8};
     for(auto* font:fonts) {
         lv_font_glyph_dsc_t stix,tex;
+        for(uint32_t cp:{0x2208u,0x2124u,0x03b1u}){
+            lv_font_glyph_dsc_t glyph{};
+            check(lv_font_get_glyph_dsc(font,&glyph,cp,0)&&!glyph.is_placeholder&&glyph.box_w&&glyph.box_h,"missing periodic math glyph");
+            std::cout<<"PERIODIC_GLYPH|codepoint="<<cp<<"|em="<<ui::nominalMathEmSizeForFont(font)<<"|ink="<<glyph.box_w<<"x"<<glyph.box_h<<"|offset="<<glyph.ofs_x<<","<<glyph.ofs_y<<'\n';
+        }
         check(lv_font_get_glyph_dsc(font,&stix,0x0394,0) && !stix.is_placeholder,"missing compiled STIX Delta");
         const auto* selected=ui::mathGlyphFont(font,0x0394);
         check(lv_font_get_glyph_dsc(selected,&tex,0x0394,0) && !tex.is_placeholder,"missing compiled TeX Delta");

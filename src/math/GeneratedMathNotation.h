@@ -12,7 +12,7 @@ namespace generatednotation {
 enum class Shape : uint8_t { Other, Number, Symbol, Group, Root, Function, Fraction };
 struct Factor { Shape shape = Shape::Other; char symbol = 0; };
 inline bool knownScalar(char c) {
-    return c == 'a' || c == 'b' || c == 'c' || c == 'x' || c == 'y' || c == 'z' ||
+    return c == 'k' || c == 'a' || c == 'b' || c == 'c' || c == 'x' || c == 'y' || c == 'z' ||
            (c >= 'A' && c <= 'F');
 }
 inline const vpam::MathNode* unwrap(const vpam::MathNode* n, unsigned depth = 0) {
@@ -62,6 +62,8 @@ inline Factor classify(const vpam::MathNode* n) {
     if (n->type() == NodeType::Constant &&
         static_cast<const NodeConstant*>(n)->constKind() == ConstKind::E)
         return {Shape::Symbol, 'e'};
+    if (n->type() == NodeType::Constant && static_cast<const NodeConstant*>(n)->constKind() == ConstKind::Pi)
+        return {Shape::Symbol, 'p'};
     if (n->type() == NodeType::Variable) {
         char c = static_cast<const NodeVariable*>(n)->name();
         return knownScalar(c) ? Factor{Shape::Symbol, c} : Factor{};

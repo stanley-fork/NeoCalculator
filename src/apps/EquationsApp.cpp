@@ -572,7 +572,9 @@ void EquationsApp::showResult() {
     const bool system=_numEquations>1;
     const bool pages=system || _giacResult.groups.size()>MAX_RESULTS;
     char title[96];
-    if(pages) std::snprintf(title,sizeof(title),"Solution %d/%u  |  %s",_page+1,unsigned(_giacResult.groups.size()),setting_complex_enabled?"Complex":"Real");
+    const bool periodic=_derivation.status==numos::tutor::Status::Complete && !_derivation.states.empty() && _derivation.states.back().conclusion==numos::tutor::Conclusion::Periodic;
+    if(periodic)std::snprintf(title,sizeof(title),"%s",numos::tutor::explain(numos::tutor::Message::ViewRepresentativesTitle,{},_stepLocale).c_str());
+    else if(pages) std::snprintf(title,sizeof(title),"Solution %d/%u  |  %s",_page+1,unsigned(_giacResult.groups.size()),setting_complex_enabled?"Complex":"Real");
     else std::snprintf(title,sizeof(title),"%u %s  |  x  |  %s",unsigned(_giacResult.groups.size()),_giacResult.groups.size()==1?"solution":"solutions",setting_complex_enabled?"Complex":"Real");
     header(title,pages && _giacResult.groups.size()>1?"VAR Next set   Arrows Scroll   BACK Equations":"Arrows Scroll   EXE Equations   TOOLBOX Steps");
     int slot=0,y=0;
@@ -805,7 +807,7 @@ bool EquationsApp::debugAssert(const std::string& expected) {
             };
             const auto page=teachingPageAt(_derivation,_stepDetail,_teachingPage);
             const char* kinds[]={"start","transition","chain","coefficients","discriminant","quadratic_formula","roots","final"};
-            const char* formulas[]={"equation","authored","conditions","standard_quadratic","coefficients","discriminant_definition","discriminant_values","general_formula","substituted_formula","operand","row_operation","coefficient_equation","solution_set","balanced_operation"};
+            const char* formulas[]={"equation","authored","conditions","standard_quadratic","coefficients","discriminant_definition","discriminant_values","general_formula","substituted_formula","operand","row_operation","coefficient_equation","solution_set","balanced_operation","periodic_family","integer_parameter","trig_principal","trig_range","family_operation"};
             std::ostringstream json;
             json<<"{\"page\":"<<_teachingPage<<",\"count\":"<<teachingPageCount(_derivation,_stepDetail)
                 <<",\"guided\":"<<(_stepDetail?"true":"false")<<",\"step\":"<<_stepIndex<<",\"lastStep\":"<<page.last
@@ -827,6 +829,8 @@ bool EquationsApp::debugAssert(const std::string& expected) {
     if(kind=="trace") {
         using namespace numos::tutor;
         if(value=="complete")return _derivation.status==Status::Complete&&_derivation.validity==Verdict::Verified&&_derivation.completeness==Verdict::Verified;
+        if(value=="hidden")return _state==State::STEPS && _stepFormulaCount==0;
+        if(value=="stale")return !numos::GiacEngine::instance().tutorSnapshotCurrent(_derivation.input,_equationEpoch,setting_complex_enabled);
         if(value=="check")return numos::GiacEngine::instance().verifyDerivation(_derivation,_derivation.input)==Verdict::Verified&&numos::GiacEngine::instance().tutorSnapshotCurrent(_derivation.input,_equationEpoch,setting_complex_enabled);
         if(value=="dump"){std::printf("[TUTOR_TRACE] %s\n",replayJson(_derivation,_stepLocale).c_str());return true;}
         int n=0;in>>n;

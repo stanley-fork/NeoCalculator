@@ -15,6 +15,19 @@ spec = importlib.util.spec_from_file_location("eq_guided_review", ROOT / "script
 eq = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(eq)
 CASES = {
+    "trig-sine": ["sin x RIGHT = 1 / 2 RIGHT"],
+    "trig-affine": ["sin 2 x RIGHT = 1 / 2 RIGHT"],
+    "trig-impossible": ["sin x RIGHT = 2"],
+    "trig-impossible-negative": ["cos x RIGHT = 0 - 2"],
+    "trig-cosine": ["cos x RIGHT = 1 / 2 RIGHT"],
+    "trig-tangent": ["tan x RIGHT = 1"],
+    "trig-tangent-affine": ["tan 3 x RIGHT = 1"],
+    "trig-unfamiliar": ["sin 3 x - 1 RIGHT = 1 / 3 RIGHT"],
+    "trig-sine-deg": ["sin x RIGHT = 1 / 2 RIGHT"],
+    "trig-cosine-deg": ["cos x RIGHT = 1 / 2 RIGHT"],
+    "trig-tangent-deg": ["tan x RIGHT = 1"],
+    "trig-affine-deg": ["sin 2 x RIGHT = 1 / 2 RIGHT"],
+    "trig-unfamiliar-deg": ["sin 3 x - 1 RIGHT = 1 / 3 RIGHT"],
     "exp-injective": ["SHIFT ln 2 x - 1 RIGHT = SHIFT ln 3 RIGHT"],
     "exp-common-base": ["2 ^ x RIGHT = 8"],
     "exp-affine-identity": ["2 ^ x + 0 RIGHT = 8"],
@@ -119,6 +132,7 @@ def check_presentation(name, mode, trace, views):
     for page in views:
         assert 0 <= page["step"] <= page["lastStep"] < len(steps), (name, "invalid page step")
         assert len(page["formulas"]) <= 4, (name, "unbounded formula widgets")
+        assert "[invalid message parameters]" not in json.dumps(page), (name, "invalid title, prose or formula caption")
         assert not any(marker in page["prose"] for marker in ("sqrt(", "^", "*", "+/-", "!=")), (name, "source math in prose")
         for formula in page["formulas"]:
             assert steps[formula["step"]]["verdict"] == 1, (name, "formula from unverified step")
@@ -139,6 +153,20 @@ def check_presentation(name, mode, trace, views):
                 typed = states[formula["state"]].get("typedConditions", [{"kind": 0} for _ in conditions])
                 for kinds, symbol in [((0, 3), "≠"), ((1,), "≥"), ((2,), ">")]:
                     assert sum(n["text"] == symbol for n in ast_nodes(formula["ast"])) == sum(c["kind"] in kinds for c in typed), (name, "condition missing structured relation")
+            elif kind in ("periodic_family", "family_operation"):
+                family = states[formula["state"]]["families"][formula["branch"]]
+                assert family["binderId"] == 1 and family["domain"] == 0
+                assert any(n["text"] == "k" for n in ast_nodes(formula["ast"]))
+                if kind == "family_operation": assert formula["state"] == steps[formula["step"]]["before"]
+            elif kind == "integer_parameter":
+                assert "k" in ast_text(formula["ast"]) and "\u2208" in ast_text(formula["ast"]) and "\u2124" in ast_text(formula["ast"])
+            elif kind == "trig_principal":
+                assert steps[formula["step"]]["rule"] == "trig.principal"
+            elif kind == "trig_range":
+                assert steps[formula["step"]]["rule"] in ("trig.range", "trig.impossible")
+                if steps[formula["step"]]["rule"] == "trig.impossible":
+                    values=[n['text'] for n in ast_nodes(formula['ast'])]
+                    assert ('>' in values or '<' in values) and '\u2264' not in values, (name,'false range inequality displayed')
             elif kind == "solution_set":
                 assert page["kind"] == "final" and states[formula["state"]]["conclusion"] == 1
                 accepted = [b for b in states[formula["state"]]["branches"] if b.get("status", 0) == 0]
@@ -195,6 +223,10 @@ def check_presentation(name, mode, trace, views):
             assert not any(f["kind"] == "operand" for f in page["formulas"]), (name, "detached operand tile")
             assert "Amount used" not in str(page["formulas"])
         if page["kind"] == "final":
+            if final["conclusion"] == 5:
+                families = [f for f in page["formulas"] if f["kind"] == "periodic_family"]
+                assert len(families) == len(final["families"]), "missing final family"
+                assert any(f["kind"] == "integer_parameter" for f in page["formulas"])
             if page["step"] != page["lastStep"]:
                 assert steps[page["step"]]["rule"] == "quadratic.formula"
                 assert steps[page["lastStep"]]["rule"] == "terminal.finish"
@@ -294,10 +326,12 @@ def main():
             start = eq.OPEN + physical("EXE", "EXE", "VAR_X", "EQUAL", "NEGATE", "NUM_3", "EXE", "DOWN", "DOWN", "EXE", "TOOLBOX")
         if name in ("complex", "quadratic-complex"):
             start = start.replace("policy real", "policy complex")
+        if name.startswith("trig-"):
+            start = "set_angle_mode " + ("deg" if name.endswith("-deg") else "rad") + "\n" + start
         modes = [("guided", "")]
-        if name in ("linear", "quadratic", "rational", "system", "linear-unfamiliar", "abs-variable", "radical-extraneous", "exp-injective", "log-domain", "exp-isolate", "log-isolate"):
+        if name in ("linear", "quadratic", "rational", "system", "linear-unfamiliar", "abs-variable", "radical-extraneous", "exp-injective", "log-domain", "exp-isolate", "log-isolate", "trig-unfamiliar", "trig-unfamiliar-deg"):
             modes.append(("summary", eq.keys("EXE")))
-        if name in ("linear", "abs-variable", "radical-extraneous", "log-domain", "exp-isolate", "log-isolate"):
+        if name in ("linear", "abs-variable", "radical-extraneous", "log-domain", "exp-isolate", "log-isolate", "trig-unfamiliar", "trig-unfamiliar-deg"):
             modes.extend([(locale, "assert_equations locale " + locale + "\n") for locale in ("es", "fr", "pseudo")])
         if name == "quadratic":
             modes.append(("pseudo", "assert_equations locale pseudo\n"))
@@ -353,6 +387,26 @@ def main():
             records.append({"case": name, "mode": mode, "page_count": count, "pages": captures, "pass": True})
             (out / "results.json").write_text(json.dumps(records, indent=2), encoding="utf-8")
             print(label, count, "pages", flush=True)
+    if not args.cases or any(n.startswith('trig-') for n in args.cases):
+        script='set_angle_mode rad\n'+eq.single(CASES['trig-sine'][0])+eq.keys('tools BACK')
+        script+='set_angle_mode deg\nassert_equations trace stale\n'+eq.keys('tools')
+        script+='assert_equations trace hidden\nassert_equations trace builds 1\n'+eq.keys('BACK BACK ENTER')
+        script+='assert_equations trace complete\nassert_equations trace builds 2\n'+eq.keys('tools')
+        script+='assert_equations trace formulas\nassert_equations trace dump\n'+eq.keys('HOME')
+        changed=run('angle-change-reopen',script)
+        assert changed['traces'][-1]['degrees'] == 1
+        # Reach both ends of a wide exact periodic family without rebuilding
+        # its proof. Use the existing VAR pan contract and unchanged viewport.
+        script='set_angle_mode deg\n'+eq.single(CASES['trig-unfamiliar-deg'][0])+eq.keys('tools RIGHT RIGHT RIGHT RIGHT RIGHT DOWN DOWN DOWN DOWN DOWN DOWN DOWN DOWN DOWN DOWN DOWN DOWN')
+        script+='assert_equations trace dump\n'
+        for i in range(33):
+            script+=(eq.keys('VAR') if i else '')+shot(f'trig-pan-{i:02}')
+        script+='assert_equations trace dump\nassert_equations trace builds 1\n'
+        panned=run('trig-wide-pan',script)
+        assert stable(panned['traces'][0])==stable(panned['traces'][1])
+        from PIL import Image
+        pixels=[Image.open(out/f'trig-pan-{i:02}.ppm').crop((0,54,320,220)).tobytes() for i in range(33)]
+        assert any(p!=pixels[0] for p in pixels[1:]) and pixels[0] in pixels[1:]
     from PIL import Image, ImageDraw
     if not args.cases or 'radical-wide' in args.cases:
         script=eq.single(CASES['radical-wide'][0])+eq.keys('tools RIGHT RIGHT RIGHT RIGHT RIGHT')
