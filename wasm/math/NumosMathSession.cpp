@@ -492,6 +492,7 @@ std::string NumosMathSession::solve(const char* lhsLines, const char* rhsLines,
         case SolutionSetKind::Solutions: setKind = "solutions"; break;
         case SolutionSetKind::NoSolution: setKind = "no_solution"; break;
         case SolutionSetKind::AllValues: setKind = "all_values"; break;
+        case SolutionSetKind::Periodic: setKind = "periodic"; break;
         case SolutionSetKind::Unsupported: break;
     }
     out << "\"result\":{\"kind\":\"solution_set\",\"setKind\":\""
@@ -508,6 +509,30 @@ std::string NumosMathSession::solve(const char* lhsLines, const char* rhsLines,
             out << '}';
         }
         out << "]}";
+    }
+    out << "],\"coverage\":\"" << (result.coverage==SolveCoverage::PeriodicComplete?"periodic_complete":
+        result.coverage==SolveCoverage::Representatives?"representatives":result.coverage==SolveCoverage::Conditional?"conditional":
+        result.coverage==SolveCoverage::Unconverted?"unconverted":"finite") << "\",\"origin\":\""
+        << (result.origin==SolveOrigin::GiacAllTrig?"giac_all_trig":"giac_solve") << "\",\"families\":[";
+    auto serializable=[](const EngineResultNode& node,auto&& self,unsigned depth)->bool {
+        if(depth>enginecontract::kMaxResultDepth||node.text.size()>kMaxDisplayBytes)return false;
+        for(const auto& child:node.children)if(!self(child,self,depth+1))return false;return true;
+    };
+    for(size_t i=0;i<result.families.size();++i){const auto& f=result.families[i];
+        if(!serializable(f.offsetValue,serializable,0)||!serializable(f.periodValue,serializable,0))
+            return errorJson("UNSUPPORTED_RESULT","Periodic result exceeds exact serialization limits");
+        if(i)out<<',';
+        out<<"{\"variable\":\""<<jsonEscape(f.variable,31)<<"\",\"offset\":";appendNodeJson(out,f.offsetValue);
+        out<<",\"period\":";appendNodeJson(out,f.periodValue);
+        // Scope is a decimal STRING: JSON's IEEE double cannot represent every
+        // uint64_t. It binds k independently of all stored scalar identifiers.
+        out<<",\"parameter\":{\"scope\":\""<<f.binderScope<<"\",\"id\":"<<f.binderId
+            <<",\"domain\":\"integers\"},\"angleMode\":\""<<(f.degrees?"degree":"radian")<<"\"}";
+    }
+    out<<"],\"restrictions\":[";
+    for(size_t i=0;i<result.restrictions.size();++i){const auto& c=result.restrictions[i];
+        if(!serializable(c.expression,serializable,0))return errorJson("UNSUPPORTED_RESULT","Periodic restriction exceeds exact serialization limits");
+        if(i)out<<',';out<<"{\"kind\":\"nonzero\",\"side\":"<<unsigned(c.side)<<",\"expression\":";appendNodeJson(out,c.expression);out<<'}';
     }
     out << "]},\"operationMs\":" << std::fixed << std::setprecision(3)
         << _lastOperationMs;

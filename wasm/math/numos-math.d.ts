@@ -38,8 +38,18 @@ export interface SolutionValue {
 
 export interface SolutionSet {
   kind: "solution_set";
-  setKind: "solutions" | "no_solution" | "all_values" | "unsupported";
+  setKind: "solutions" | "no_solution" | "all_values" | "unsupported" | "periodic";
   groups: Array<{ values: SolutionValue[] }>;
+  coverage: "finite" | "periodic_complete" | "representatives" | "conditional" | "unconverted";
+  origin: "giac_solve" | "giac_all_trig";
+  families: Array<{
+    variable: string;
+    offset: StructuredNode;
+    period: StructuredNode;
+    parameter: { scope: string; id: number; domain: "integers" };
+    angleMode: "radian" | "degree";
+  }>;
+  restrictions: Array<{ kind: "nonzero"; side: number; expression: StructuredNode }>;
 }
 
 export interface NumosMathResult<T = StructuredNode> {

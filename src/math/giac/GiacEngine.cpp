@@ -42,6 +42,7 @@
 #include "intg.h"    // _integrate: registered command semantics
 #include "unary.h"   // unary_function_ptr/_eval full types (result tree walk)
 #include "solve.h"   // has_num_coeff
+#include "numos_periodic.h"
 #include "sym2poly.h"
 #include "usual.h"
 #include "lin.h"
@@ -1642,11 +1643,24 @@ StructuredSolveResult rejectedSolveReentrant() {
     return result;
 }
 
+#include "GiacPeriodic.inc"
+
+StructuredSolveResult solveFailure(MathEngineStatus status,const char* diagnostic=nullptr) {
+    StructuredSolveResult failure;
+    failure.status=status;
+    failure.coverage=SolveCoverage::Unconverted;
+    // WHY: recovery must work while allocation failure remains armed. The
+    // status is sufficient for the existing UI if diagnostic storage fails.
+    if(diagnostic)try{failure.diagnostic=diagnostic;}
+    catch(const std::bad_alloc&){failure.status=MathEngineStatus::OutOfMemory;}
+    return failure;
+}
+
 StructuredSolveResult runStructuredSolve(
     giac::context* ctx,
     const std::vector<SolveEquation>& equations,
     const std::vector<std::string>& variableNames,
-    SolveDomainPolicy policy) {
+    SolveDomainPolicy policy, uint32_t generation) {
     StructuredSolveResult result;
     if (equations.empty() || variableNames.empty() ||
         (equations.size() == 1 && variableNames.size() != 1)) {
@@ -1679,6 +1693,8 @@ StructuredSolveResult runStructuredSolve(
         }
 
         giac::vecteur equationGens;
+        giac::gen authoredLeft,authoredRight;
+        bool containsTrig=false;
         equationGens.reserve(equations.size());
         for (const auto& equation : equations) {
             if (equation.lhs.empty() || equation.rhs.empty()) {
@@ -1688,6 +1704,8 @@ StructuredSolveResult runStructuredSolve(
             }
             giac::gen lhs(equation.lhs, ctx);
             giac::gen rhs(equation.rhs, ctx);
+            if(equations.size()==1){authoredLeft=lhs;authoredRight=rhs;}
+            containsTrig=containsTrig||periodicSyntax(lhs)||periodicSyntax(rhs);
             if (giac::is_undef(lhs) || giac::is_undef(rhs)) {
                 result.status = MathEngineStatus::ParseError;
                 result.diagnostic = capture.text();
@@ -1703,6 +1721,10 @@ StructuredSolveResult runStructuredSolve(
             }
             equationGens.push_back(giac::symb_equal(lhs, rhs));
         }
+
+        if(containsTrig)result.coverage=SolveCoverage::Representatives;
+        if(containsTrig && equations.size()==1 && variables.size()==1 && policy==SolveDomainPolicy::RealOnly &&
+           tryPeriodicSolve(ctx,authoredLeft,authoredRight,variables.front(),authoredInDegrees,generation,result))return result;
 
         const bool oldComplex = giac::complex_mode(ctx);
         const bool oldAngleRadians = giac::angle_radian(ctx);
@@ -1928,17 +1950,11 @@ StructuredSolveResult runStructuredSolve(
         result.setKind = result.groups.empty()?SolutionSetKind::NoSolution:SolutionSetKind::Solutions;
         return result;
     } catch (const std::bad_alloc&) {
-        result.status = MathEngineStatus::OutOfMemory;
-        result.setKind = SolutionSetKind::Unsupported;
-        result.diagnostic = "allocation failure inside Giac solve";
+        return solveFailure(MathEngineStatus::OutOfMemory);
     } catch (const std::exception& e) {
-        result.status = MathEngineStatus::EvaluationError;
-        result.setKind = SolutionSetKind::Unsupported;
-        result.diagnostic = e.what();
+        return solveFailure(MathEngineStatus::EvaluationError,e.what());
     } catch (...) {
-        result.status = MathEngineStatus::EvaluationError;
-        result.setKind = SolutionSetKind::Unsupported;
-        result.diagnostic = "unknown Giac solve exception";
+        return solveFailure(MathEngineStatus::EvaluationError,"unknown Giac solve exception");
     }
     return result;
 }
@@ -1959,9 +1975,37 @@ StructuredSolveResult GiacEngine::solveStructured(
         result.diagnostic = "Giac context initialization failed";
         return result;
     }
-    syncAngleMode(_state->ctx);
-    return runStructuredSolve(_state->ctx, {equation}, {variable}, policy);
+    try {
+        syncAngleMode(_state->ctx);
+        return runStructuredSolve(_state->ctx, {equation}, {variable}, policy,_generation);
+    } catch(const std::bad_alloc&) {return solveFailure(MathEngineStatus::OutOfMemory);}
 }
+
+bool GiacEngine::periodicAnswerCurrent(const StructuredSolveResult& answer) {
+    if(answer.origin!=SolveOrigin::GiacAllTrig)return true;
+    if(answer.engineGeneration!=_generation||answer.degrees!=numos::angleModeIsDeg())return false;
+    CallGuard guard(_inCall);if(!guard.entered()||!begin())return false;
+    try {
+        for(const auto& f:answer.families)if(_state->ctx->tabptr&&_state->ctx->tabptr->find(f.variable.c_str())!=_state->ctx->tabptr->end())return false;
+        for(const auto& b:answer.bindings)if(giac::gen(b.name,_state->ctx).eval(1,_state->ctx).print(_state->ctx)!=b.value)return false;}
+    catch(...){return false;}return true;
+}
+SetComparison GiacEngine::comparePeriodicSets(const std::vector<AffinePeriodicFamily>& left,
+                                             const std::vector<AffinePeriodicFamily>& right) {
+    CallGuard guard(_inCall);if(!guard.entered()||!begin())return SetComparison::Unknown;
+    try {DiagnosticCapture capture(_state->ctx);return comparePeriodic(_state->ctx,left,right);}
+    catch(...){return SetComparison::Unknown;}
+}
+#ifdef NATIVE_SIM
+void GiacEngine::debugPeriodicFault(unsigned fault){g_periodicFault=fault;}
+uint64_t GiacEngine::debugPeriodicContextState() const {
+    if(!_state||!_state->ctx)return 0;
+    auto* c=_state->ctx;
+    return uint64_t(giac::all_trig_sol(c))|uint64_t(giac::angle_radian(c))<<1|
+        uint64_t(giac::complex_mode(c))<<2|
+        uint64_t(c->quoted_global_vars?c->quoted_global_vars->size():0)<<8;
+}
+#endif
 
 StructuredSolveResult GiacEngine::solveSystemStructured(
     const std::vector<SolveEquation>& equations,
@@ -1979,7 +2023,7 @@ StructuredSolveResult GiacEngine::solveSystemStructured(
         return result;
     }
     syncAngleMode(_state->ctx);
-    return runStructuredSolve(_state->ctx, equations, solveVariables, policy);
+    return runStructuredSolve(_state->ctx, equations, solveVariables, policy,_generation);
 }
 
 #ifdef NUMOS_GIAC_HOST_HARNESS

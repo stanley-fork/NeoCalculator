@@ -229,8 +229,22 @@ enum class SolutionSetKind : uint8_t {
     Solutions,
     NoSolution,
     AllValues,
-    Unsupported
+    Unsupported,
+    Periodic
 };
+
+enum class SolveCoverage : uint8_t { Finite, PeriodicComplete, Representatives, Conditional, Unconverted };
+enum class SolveOrigin : uint8_t { GiacSolve, GiacAllTrig };
+struct StructuredPeriodicFamily : AffinePeriodicFamily {
+    EngineResultNode offsetValue, periodValue;
+};
+struct PeriodicRestriction {
+    // Presently only the authored tangent pole exclusion, expression != 0.
+    EngineResultNode expression;
+    std::string exactText;
+    uint8_t side = 0;
+};
+struct SolveBinding { std::string name, value; };
 
 struct SolveEquation {
     std::string lhs;
@@ -257,6 +271,15 @@ struct StructuredSolveResult {
     std::vector<StructuredSolutionGroup> groups;
     std::string diagnostic;
     std::string rawExactText;
+    SolveCoverage coverage = SolveCoverage::Finite;
+    SolveOrigin origin = SolveOrigin::GiacSolve;
+    std::vector<StructuredPeriodicFamily> families;
+    std::vector<PeriodicRestriction> restrictions;
+    std::vector<SolveBinding> bindings;
+    uint32_t engineGeneration = 0;
+    uint64_t binderScope = 0;
+    bool degrees = false;
+    unsigned periodicCalls = 0, periodicPayload = 0;
 
     bool ok() const { return status == MathEngineStatus::Ok; }
 };
@@ -468,9 +491,14 @@ public:
     /// Monotonic context generation, exposed as an engine-neutral diagnostic.
     /// It changes only when reset() invalidates every retained handle.
     uint32_t generation() const { return _generation; }
+    bool periodicAnswerCurrent(const StructuredSolveResult& answer);
+    SetComparison comparePeriodicSets(const std::vector<AffinePeriodicFamily>& left,
+                                      const std::vector<AffinePeriodicFamily>& right);
 
 #ifdef NATIVE_SIM
     GiacRuntimeDiagnostics runtimeDiagnostics() const;
+    void debugPeriodicFault(unsigned fault);
+    uint64_t debugPeriodicContextState() const;
 #endif
 
     GiacEngine(const GiacEngine&) = delete;

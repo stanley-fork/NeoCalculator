@@ -1728,6 +1728,16 @@ Verdict reconcile(Algebra &a, const Derivation &d, const StructuredSolveResult &
         return Verdict::Unknown;
     const auto &s = d.states.back();
     if(s.conclusion==Conclusion::Periodic) {
+        if(answer.setKind==SolutionSetKind::Periodic && answer.coverage==SolveCoverage::PeriodicComplete && answer.origin==SolveOrigin::GiacAllTrig){
+            if(answer.degrees!=d.input.degrees||answer.engineGeneration!=d.input.engineGeneration)return Verdict::Unknown;
+            try {
+                std::vector<AffinePeriodicFamily> ordinary,proved;
+                for(const auto& f:answer.families)ordinary.push_back(f);
+                for(const auto& f:s.families)proved.push_back(f);
+                const auto comparison=comparePeriodic(a.ctx,ordinary,proved);
+                return comparison==SetComparison::Equivalent?Verdict::Verified:comparison==SetComparison::Different?Verdict::Rejected:Verdict::Unknown;
+            }catch(...){return Verdict::Unknown;}
+        }
         // The current ordinary adapter independently returns representatives,
         // not a complete bound family. Do not claim set equality or inject roots.
         if(answer.setKind!=SolutionSetKind::Solutions)return Verdict::Unknown;

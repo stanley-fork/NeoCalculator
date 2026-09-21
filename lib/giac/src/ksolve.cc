@@ -65,6 +65,40 @@ namespace giac {
   // FIXME intvar_counter should be contextized
   static int intvar_counter=0;
   static int realvar_counter=0;
+  // NumOS 03A: narrowly scoped producer metadata. The ordinary null path is
+  // unchanged. GiacEngine serializes calls; this is not a thread-safe API.
+  struct numos_parameter_scope {
+    const context* ctx;
+    vecteur& parameters;
+    bool& overflow;
+    int integer_before,real_before;
+    size_t quoted_before;
+    numos_parameter_scope* previous;
+    static numos_parameter_scope* active;
+    numos_parameter_scope(const context* c,vecteur& p,bool& o)
+      :ctx(c),parameters(p),overflow(o),integer_before(intvar_counter),
+       real_before(realvar_counter),quoted_before(c->quoted_global_vars?c->quoted_global_vars->size():0),previous(active){active=this;}
+    ~numos_parameter_scope(){
+      active=previous;intvar_counter=integer_before;realvar_counter=real_before;
+      if(ctx->quoted_global_vars)ctx->quoted_global_vars->resize(quoted_before);
+    }
+    static void observe(const gen& parameter,const context* ctx){
+      auto* s=active;if(!s||s->ctx!=ctx)return;
+      if(s->parameters.size()>=2){s->overflow=true;return;}
+      s->parameters.push_back(parameter);
+      if(ctx->quoted_global_vars)ctx->quoted_global_vars->push_back(parameter);
+    }
+  };
+  numos_parameter_scope* numos_parameter_scope::active=0;
+  gen numos_periodic_solve(const gen& args,vecteur& parameters,bool& overflow,const context* ctx){
+    numos_parameter_scope scope(ctx,parameters,overflow);
+    // Avoid the legacy signed-counter increment overflow. No solver work and
+    // no counter mutation on this unsupported producer state.
+    if(intvar_counter>2147483643 || intvar_counter==(-2147483647-1)){
+      overflow=true;return undef;
+    }
+    return _solve(args,ctx);
+  }
   string print_intvar_counter(GIAC_CONTEXT){
     if (intvar_counter<0)
       return print_INT_(-intvar_counter);
@@ -160,6 +194,7 @@ namespace giac {
     if (!(isolate_mode & 2))
       return makevecteur(asine,one_half_tour(contextptr)-asine);
     identificateur x(string("n_")+print_intvar_counter(contextptr));
+    numos_parameter_scope::observe(x,contextptr);
     if (is_zero(e,contextptr))
       return asine+(x)*one_half_tour(contextptr);
     return makevecteur(asine+(x)*one_tour(contextptr),one_half_tour(contextptr)-asine+(x)*one_tour(contextptr));
@@ -169,6 +204,7 @@ namespace giac {
     if (!(isolate_mode & 2))
       return makevecteur(acose,-acose);
     identificateur x(string("n_")+print_intvar_counter(contextptr));
+    numos_parameter_scope::observe(x,contextptr);
     if (is_zero(e,contextptr))
       return acose+(x)*one_half_tour(contextptr);
     return makevecteur(acose+(x)*one_tour(contextptr),-acose+(x)*one_tour(contextptr));
@@ -177,6 +213,7 @@ namespace giac {
     if (!(isolate_mode & 2))
       return atan(e,contextptr);
     identificateur x(string("n_")+print_intvar_counter(contextptr));
+    numos_parameter_scope::observe(x,contextptr);
     return atan(e,contextptr)+(x)*one_half_tour(contextptr);
   }
   static gen isolate_asin(const gen & e,int isolate_mode,GIAC_CONTEXT){

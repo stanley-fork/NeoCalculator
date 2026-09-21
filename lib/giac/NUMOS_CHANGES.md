@@ -152,3 +152,28 @@ Reproducer: `tests/host/tutor_trig_probe.cpp`; pre/post evidence under ignored
 `out/tutor-engine-02c/representation-*.log`. Post-fix public and adapter paths
 agree on pi/3 for acos(1/2), 60 in DEG; all-period public solutions contain the
 appropriate 2*pi/360 or pi/180 terms. GPL-3.0-or-later provenance is unchanged.
+
+## TUTOR-ENGINE-03A: scoped periodic parameter provenance
+
+`numos_periodic_solve` wraps the existing public `_solve` entry. Only during
+that call, the three real sine/cosine/tangent isolation producers report the
+fresh identifier that they construct as their integer parameter. The wrapper
+quotes it before use (without assigning or purging user values) and restores
+the prior quoted-variable list and both legacy global solve counters on every
+exit, including C++ unwinding. A near-overflow counter declines the request.
+Ordinary unwrapped Giac operations have no observer and retain their behavior.
+
+The integer domain comes from these specific producers' all-solution formulas,
+not the spelling `n_N`: this port has no typed integer annotation on the returned
+identifier. No solve algorithm, inverse value, period, or branch construction
+is changed. NumOS admits only one real sin/cos/tan with a nonconstant affine
+argument and an authored, domain-safe rational constant target, then checks
+that every output is affine in the recorded parameter. Parity/non-affine or
+unobserved parameter output declines complete conversion.
+
+The wrapper is serialized by the existing GiacEngine call guard, not a new
+context or a thread-safe vendor API. `all_trig_sol`, angle and complex flags
+are scoped separately by the engine. `tests/host/giac_periodic_probe.cpp` and
+`tests/host/periodic_results_checks.cpp` cover the producer, collisions,
+restoration, complete branch conversion and exact set comparison. No external
+source was imported; GPL-3.0-or-later provenance is unchanged.

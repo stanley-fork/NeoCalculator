@@ -451,6 +451,9 @@ void EquationsApp::handleKey(const KeyEvent& ev) {
             } else if(ev.code==KeyCode::AC || ev.code==KeyCode::DEL) navigateBack();
             break;
         case State::RESULT:
+            if((navigation(ev.code)||ev.code==KeyCode::VAR) && _giacResult.origin==numos::SolveOrigin::GiacAllTrig &&
+               (_giacResult.engineGeneration!=numos::GiacEngine::instance().generation()||
+                _giacResult.degrees!=numos::angleModeIsDeg()||setting_complex_enabled)) {showResult();break;}
             if(navigation(ev.code)) {
                 if(ev.code==KeyCode::UP || ev.code==KeyCode::DOWN) lv_obj_scroll_by(_body,0,ev.code==KeyCode::UP?28:-28,LV_ANIM_OFF);
                 else for(auto& canvas:_canvas) if(canvas.obj()) canvas.scrollBounded(ev.code==KeyCode::LEFT?24:-24);
@@ -528,6 +531,10 @@ void EquationsApp::showResult() {
             text(_body,limited.c_str(),8,8,284);
         } else text(_body,message.c_str(),8,8,284);
     };
+    if(_giacResult.origin==numos::SolveOrigin::GiacAllTrig &&
+       (!numos::GiacEngine::instance().periodicAnswerCurrent(_giacResult)||setting_complex_enabled)) {
+        info("Solve again",numos::tutor::explain(numos::tutor::Message::ViewSolveFirst,{},_stepLocale));return;
+    }
     if(!_giacResult.ok()) {
         info(_giacResult.status==numos::MathEngineStatus::ParseError?"Invalid equation":
              _giacResult.status==numos::MathEngineStatus::Unsupported?"Unresolved / unsupported":
@@ -535,6 +542,28 @@ void EquationsApp::showResult() {
         return;
     }
     _resultKind=ResultKind::Structured;
+    if(_giacResult.setKind==numos::SolutionSetKind::Periodic) {
+        using namespace numos::tutor;
+        // Prepare all owned math before publishing any answer formula. No Giac
+        // conversion or hidden page tree is needed for these already owned nodes.
+        try {
+            std::array<NodePtr,4> prepared;unsigned count=0;
+            if(_giacResult.families.empty()||_giacResult.families.size()>2)throw std::bad_alloc();
+            for(const auto& family:_giacResult.families){prepared[count]=tutorview::ordinaryPeriodic(family);if(!prepared[count++])throw std::bad_alloc();}
+            prepared[count++]=tutorview::integerParameter();
+            for(const auto& c:_giacResult.restrictions){if(count>=prepared.size())throw std::bad_alloc();auto expression=tutorview::converted(c.expression);if(!expression)throw std::bad_alloc();prepared[count++]=tutorview::relation(std::move(expression),makeNumber("0"),OpKind::Ne);}
+            header(explain(Message::ViewPeriodicResults,{},_stepLocale).c_str(),"Arrows Scroll/Pan   BACK Equations   TOOLBOX Steps");
+            int y=0;for(unsigned i=0;i<count;++i){if(i&&i<_giacResult.families.size()){text(_body,explain(Message::ViewOr,{},_stepLocale).c_str(),8,y,280);y+=22;}
+                _viewNodes[i]=std::move(prepared[i]);y+=formula(int(i),static_cast<NodeRow*>(_viewNodes[i].get()),y,nullptr);}
+        } catch(...) {
+            clearView();header("Result","BACK Equations   HOME");
+            lv_label_set_text_static(_title,"Presentation unavailable");
+            // WHY: the fault may still be active. Reuse the catalog's static
+            // fallback without constructing an allocating std::string.
+            text(_body,messageFallback(Message::ViewUnavailable),8,8,284);
+        }
+        return;
+    }
     if(_giacResult.setKind==numos::SolutionSetKind::NoSolution) {
         info("No solutions",setting_complex_enabled?"No solutions in the complex domain.":"No solutions in the real domain."); return;
     }
@@ -572,7 +601,7 @@ void EquationsApp::showResult() {
     const bool system=_numEquations>1;
     const bool pages=system || _giacResult.groups.size()>MAX_RESULTS;
     char title[96];
-    const bool periodic=_derivation.status==numos::tutor::Status::Complete && !_derivation.states.empty() && _derivation.states.back().conclusion==numos::tutor::Conclusion::Periodic;
+    const bool periodic=_giacResult.coverage==numos::SolveCoverage::Representatives;
     if(periodic)std::snprintf(title,sizeof(title),"%s",numos::tutor::explain(numos::tutor::Message::ViewRepresentativesTitle,{},_stepLocale).c_str());
     else if(pages) std::snprintf(title,sizeof(title),"Solution %d/%u  |  %s",_page+1,unsigned(_giacResult.groups.size()),setting_complex_enabled?"Complex":"Real");
     else std::snprintf(title,sizeof(title),"%u %s  |  x  |  %s",unsigned(_giacResult.groups.size()),_giacResult.groups.size()==1?"solution":"solutions",setting_complex_enabled?"Complex":"Real");
@@ -771,8 +800,30 @@ bool EquationsApp::splitAtEquals(NodeRow* row,
 #ifdef NATIVE_SIM
 bool EquationsApp::debugAssert(const std::string& expected) {
     std::istringstream in(expected); std::string kind,value; in>>kind>>value;
-    if(kind=="closed") return !_screen && !_editRow && !_numEquations && _giacResult.groups.empty() && !_canvas[0].obj();
+    if(kind=="closed") return !_screen && !_editRow && !_numEquations && _giacResult.groups.empty() && _giacResult.families.empty() && _giacResult.restrictions.empty() && _giacResult.bindings.empty() && !_canvas[0].obj();
     if(!_screen) return false;
+    if(kind=="periodic") {
+        if(value=="current")return numos::GiacEngine::instance().periodicAnswerCurrent(_giacResult);
+        if(value=="stale")return !numos::GiacEngine::instance().periodicAnswerCurrent(_giacResult);
+        if(value=="equivalent")return _giacResult.coverage==numos::SolveCoverage::PeriodicComplete&&_derivation.reconciliation==numos::tutor::Verdict::Verified;
+        if(value=="count"){unsigned n=0;in>>n;return _giacResult.setKind==numos::SolutionSetKind::Periodic&&_giacResult.families.size()==n;}
+        if(value=="dump"){
+            auto quote=[](const std::string& s){std::string r="\"";for(char c:s){if(c=='\n')r+="\\n";else if(c=='\r')r+="\\r";else{if(c=='\"'||c=='\\')r+='\\';r+=c;}}return r+'\"';};
+            lv_obj_update_layout(_body);
+            std::ostringstream json;json<<"{\"scope\":"<<unsigned(_giacResult.coverage)<<",\"origin\":"<<unsigned(_giacResult.origin)
+                <<",\"degrees\":"<<(_giacResult.degrees?"true":"false")<<",\"binderScope\":"<<_giacResult.binderScope
+                <<",\"title\":"<<quote(lv_label_get_text(_title))<<",\"payload\":"<<_giacResult.periodicPayload
+                <<",\"calls\":"<<_giacResult.periodicCalls<<",\"scrollY\":"<<lv_obj_get_scroll_y(_body)
+                <<",\"maxScroll\":"<<std::max(0,int(lv_obj_get_scroll_y(_body)+lv_obj_get_scroll_bottom(_body)))<<",\"families\":[";
+            for(size_t i=0;i<_giacResult.families.size();++i){const auto& f=_giacResult.families[i];if(i)json<<',';
+                json<<"{\"variable\":"<<quote(f.variable)<<",\"offset\":"<<quote(f.offset)<<",\"period\":"<<quote(f.period)
+                    <<",\"binderScope\":"<<f.binderScope<<",\"binderId\":"<<f.binderId<<",\"domain\":"<<unsigned(f.domain)<<'}';}
+            json<<"],\"formulas\":[";bool comma=false;
+            for(const auto& node:_viewNodes)if(node){if(comma)json<<',';comma=true;json<<quote(dumpTree(node.get()));}
+            json<<"]}";std::printf("[PERIODIC_RESULT] %s\n",json.str().c_str());return true;
+        }
+        return false;
+    }
     if(kind=="view") {
         using namespace numos::tutor;
         if(_state!=State::STEPS||!_stepProse)return false;
@@ -851,7 +902,7 @@ bool EquationsApp::debugAssert(const std::string& expected) {
         else if(value=="fr")_stepLocale=numos::tutor::Locale::French;
         else if(value=="pseudo")_stepLocale=numos::tutor::Locale::Pseudo;
         else return false;
-        if(_state==State::STEPS)drawStep(true);return true;
+        if(_state==State::STEPS)drawStep(true);else if(_state==State::RESULT)showResult();return true;
     }
     if(kind=="state") {
         const char* names[]={"list","template","editing","solving","result","steps"};
@@ -860,7 +911,7 @@ bool EquationsApp::debugAssert(const std::string& expected) {
     if(kind=="count") return value==std::to_string(_numEquations);
     if(kind=="focus") return value==std::to_string(_listFocus) && _rows[_listFocus] && !lv_obj_has_flag(_rows[_listFocus],LV_OBJ_FLAG_HIDDEN);
     if(kind=="epochs") {
-        if(value=="invalid") return !_solveEpoch && !_stepsEpoch && _giacResult.groups.empty() && _resultKind==ResultKind::None;
+        if(value=="invalid") return !_solveEpoch && !_stepsEpoch && _giacResult.groups.empty() && _giacResult.families.empty() && _resultKind==ResultKind::None;
         if(value=="current") return _solveEpoch && _solveEpoch==_equationEpoch;
         if(value=="steps") return _stepsEpoch && _stepsEpoch==_solveEpoch && _solveEpoch==_equationEpoch;
         return false;

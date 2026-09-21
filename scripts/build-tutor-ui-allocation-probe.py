@@ -8,6 +8,7 @@ parser.add_argument('--source',default='C:/.codex-cache/numos-teaching-ux-baseli
 parser.add_argument('--build',default='C:/.piobuild/numOS/tutor-teaching-baseline-build/emulator_pc')
 parser.add_argument('--label',default='baseline')
 parser.add_argument('--database')
+parser.add_argument('--results',action='store_true',help='Instrument periodic Results preparation instead of Steps')
 parser.add_argument('--out',required=True)
 parser.add_argument('--scratch',required=True)
 options=parser.parse_args()
@@ -21,7 +22,11 @@ source=(baseline/'src/apps/EquationsApp.cpp').read_text(encoding='utf-8')
 source='#include "ui-allocation-probe.h"\n'+source
 needle='void EquationsApp::drawStep() {'
 injected='\n    uiprobe::begin(); auto memoryReviewGuard=uiprobe::guard([&]{unsigned total=0;for(const auto& root:_viewNodes)total+=uiprobe::nodes(root.get());uiprobe::finish(total);});'
-if needle in source:source=source.replace(needle,needle+injected,1)
+if options.results:
+ needle='if(_giacResult.setKind==numos::SolutionSetKind::Periodic) {'
+ assert source.count(needle)==1
+ source=source.replace(needle,needle+injected,1)
+elif needle in source:source=source.replace(needle,needle+injected,1)
 else:
  inc=(baseline/'src/apps/TutorStepsView.inc').read_text(encoding='utf-8')
  needle='void EquationsApp::drawStep(bool preserveScroll) {'

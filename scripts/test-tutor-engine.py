@@ -74,7 +74,9 @@ def check(case, d):
         return
     assert d['status'] == 2, d['diagnostic']
     assert all(d[k] == 1 for k in ['validity', 'completeness', 'candidates'])
-    assert d['reconciliation'] == (0 if case.get('periodic') else 1)
+    # 03A: extension-4 (sin(x)=0) now has an independently Giac-origin
+    # complete union. Exact residue comparison proves equality with the tutor.
+    assert d['reconciliation'] == 1
     assert d['authored'] == [e.split('=') for e in case['equations']]
     assert len(d['states']) == len(d['steps']) + 1
     assert d['bytes'] <= 65536 and d['peakVectorHeapBytes'] <= 131072

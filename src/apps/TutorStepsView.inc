@@ -133,7 +133,8 @@ void EquationsApp::drawStep(bool preserveScroll) {
                 for(unsigned i=0;i<after.families.size();++i)add(ref(FormulaKind::PeriodicFamily,step.after,i),numbered(Message::ViewFamilyNumber,i+1));
                 if(count<4)add(ref(FormulaKind::IntegerParameter),words(Message::ViewInteger));
                 if(step.rule==Rule::FamilyFinish){
-                    prose+="\n"+words(Message::ViewRepresentatives);
+                    const bool completeAnswer=_giacResult.coverage==numos::SolveCoverage::PeriodicComplete;
+                    prose+="\n"+words(completeAnswer?(_derivation.reconciliation==Verdict::Verified?Message::ViewPeriodicAgreement:Message::ViewPeriodicIndependent):Message::ViewRepresentatives);
                     if(!after.conditions.empty())add(ref(FormulaKind::Conditions,step.after),numbered(Message::ViewRestrictions,after.conditions.size()));
                 }
             }

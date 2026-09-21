@@ -95,6 +95,13 @@ async function run(browserName, browserType) {
     const noSolution = await math.solve("x^2+1=0", "x");
     const identity = await math.solve("x=x", "x");
     const parameter = await math.solve("a*x=1", "x");
+    const periodic = await math.solve("sin(2*x)=1/2", "x");
+    const periodicZero = await math.solve("sin(x)=0", "x");
+    const periodicPole = await math.solve("tan(3*x)=1", "x");
+    const periodicRestricted = await math.solve("sin(x)=0*x/x", "x");
+    await math.setAngleMode("degree");
+    const periodicDegree = await math.solve("sin(2*x)=1/2", "x");
+    await math.setAngleMode("radian");
 
     await math.setVariable("A", "1/3");
     const variableRead = await math.evaluate("A+1");
@@ -193,7 +200,7 @@ async function run(browserName, browserType) {
       browserName, timings, f7, twoPlusTwo, large, rational, radical, simplified,
       complex, infinity, undefinedValue, list, matrix, piecewise, derivative,
       degreeDerivative, integral, unevaluated, linear, polynomial, system,
-      noSolution, identity, parameter, variableRead, variableDiagnostics,
+      noSolution, identity, parameter, periodic, periodicZero, periodicPole, periodicRestricted, periodicDegree, variableRead, variableDiagnostics,
       isolatedA, removed, scalar, batchLength: batch.length, gap, trigDegree,
       staleCode,
       disposedCode, circle, grid, bounds, beforeCancel, cancelled, afterCancel,
@@ -226,6 +233,24 @@ async function run(browserName, browserType) {
   assert.equal(result.system.result.groups[0].values.length, 2);
   assert.equal(result.noSolution.result.setKind, "no_solution");
   assert.equal(result.identity.result.setKind, "all_values");
+  assert.equal(result.periodic.result.setKind, "periodic");
+  assert.equal(result.periodic.result.coverage, "periodic_complete");
+  assert.equal(result.periodic.result.origin, "giac_all_trig");
+  assert.equal(result.periodic.result.families.length, 2);
+  assert.equal(result.periodicZero.result.families.length, 1);
+  assert.equal(result.periodicPole.result.restrictions[0].kind, "nonzero");
+  assert.notEqual(result.periodicRestricted.result.coverage, "periodic_complete");
+  for (const family of result.periodic.result.families) {
+    assert.equal(family.parameter.domain, "integers");
+    assert.equal(typeof family.parameter.scope, "string");
+    assert.notEqual(family.parameter.scope, "0");
+    assert.equal(family.angleMode, "radian");
+  }
+  for (const family of result.periodicDegree.result.families) {
+    assert.equal(family.period.kind, "integer");
+    assert.equal(family.period.value, "180");
+    assert.equal(family.angleMode, "degree");
+  }
   assert.equal(result.variableRead.displayText, "4/3");
   assert.equal(result.variableDiagnostics.diagnostics.variables[0].exact, "1/3");
   assert.equal(result.isolatedA.result.kind, "symbol");

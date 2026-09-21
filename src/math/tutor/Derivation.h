@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 #include "TraceAllocator.h"
+#include "../PeriodicMath.h"
 #include <array>
 #include <cstdint>
 #include <string>
@@ -137,6 +138,7 @@ enum class Message : uint8_t {
     FamilyShift, FamilyDivide, FamilyNormalize, FamilyFinish, TrigImpossible,
     ViewPeriodic, ViewInteger, ViewFamilyNumber, ViewPrincipal, ViewRange, ViewRepresentatives,
     TangentDomain, ViewDegreeConvention, ViewRepresentativesTitle,
+    ViewPeriodicAgreement, ViewPeriodicIndependent, ViewPeriodicResults, ViewOr,
     Count
 };
 enum class ParameterKind : uint8_t { Expression, Variable, Row, Integer };
@@ -186,14 +188,10 @@ struct Branch {
 };
 // The binder has local scope identified by the complete snapshot fingerprint.
 // No parameter spelling or Giac identifier occurs in the semantic family.
-enum class IntegerDomain : uint8_t { AllIntegers };
-struct PeriodicFamily {
-    std::string variable, lhs, offset, period;
-    uint64_t binderScope = 0;
-    uint16_t binderId = 1, theoremStep = 0;
+using IntegerDomain = numos::IntegerDomain;
+struct PeriodicFamily : numos::AffinePeriodicFamily {
+    uint16_t theoremStep = 0;
     uint8_t theoremBranch = 0;
-    IntegerDomain domain = IntegerDomain::AllIntegers;
-    bool degrees = false;
     Verdict originalCheck = Verdict::Unknown;
 };
 bool sameFamilies(const Vector<PeriodicFamily>& a, const Vector<PeriodicFamily>& b);

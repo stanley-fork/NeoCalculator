@@ -32,12 +32,20 @@ int main(){using namespace numos;using namespace numos::tutor;
         }
         for(unsigned sample=0;sample<80;++sample) {
             failAt=sample<16?sample+1:1+(total-1)*(sample-16)/63;
-            attempts=failures=0;const auto live=traceAllocations.live;bool escaped=false;Status status=Status::Unsupported;
-            try {armed=true;{auto d=engine.explainEquations(input,answer);status=d.status;}armed=false;}
+            attempts=failures=0;const auto live=traceAllocations.live;bool escaped=false,comparisonUnavailable=false;Status status=Status::Unsupported;
+            try {armed=true;{auto d=engine.explainEquations(input,answer);status=d.status;
+                // 03A keeps an independently complete theorem usable when only
+                // ordinary-set comparison runs out of memory. Never upgrade an
+                // unknown/failed proof or a comparison to Verified.
+                comparisonUnavailable=answer.coverage==SolveCoverage::PeriodicComplete&&
+                    d.status==Status::Complete&&d.validity==Verdict::Verified&&
+                    d.completeness==Verdict::Verified&&d.candidates==Verdict::Verified&&
+                    d.reconciliation==Verdict::Unknown;
+            }armed=false;}
             catch(...){armed=false;escaped=true;}
             const auto restored=traceAllocations.live==live;
             auto healthy=engine.explainEquations(input,answer);
-            const bool pass=!escaped && failures>0 && status!=Status::Complete && restored && healthy.status==Status::Complete;
+            const bool pass=!escaped && failures>0 && (status!=Status::Complete||comparisonUnavailable) && restored && healthy.status==Status::Complete;
             std::printf("FAULT|lhs=%s|at=%zu|of=%zu|failures=%zu|status=%u|escaped=%u|vectors_restored=%u|recovered=%u\n",eq.lhs.c_str(),failAt,total,failures,unsigned(status),unsigned(escaped),unsigned(restored),unsigned(healthy.status==Status::Complete));
             ++tested;bad+=!pass;
         }

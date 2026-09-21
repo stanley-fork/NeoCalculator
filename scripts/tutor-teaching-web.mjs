@@ -113,6 +113,13 @@ try{
           (Array.isArray(expected.first)?expected.first.includes(e.x0Exact):e.x0Exact===expected.first));
       },{count,first},{timeout:20000});
       const solved=await page.evaluate(()=>window.numos.diagnosticState());
+      if(process.argv.includes('--periodic') && name.startsWith('trig-')) {
+        assert.equal(solved.equations.answerOrigin,1,'ordinary public Giac producer');
+        assert.equal(solved.equations.answerCoverage,1,'all branches converted');
+        assert.equal(solved.equations.reconciliation,1,'exact set equality');
+        assert.equal(solved.equations.periodicFamilies,name==='trig-impossible'?0:name==='trig-tangent'?1:2);
+        await fullPage(name+'-periodic-results');
+      }
       await capture(name+'-result');await press(72);
       for(let i=0;i<solved.equations.teachingPages;++i) {
         const state=await page.evaluate(()=>window.numos.diagnosticState().equations);

@@ -52,6 +52,10 @@ public:
     unsigned debugTeachingPages() const { return numos::tutor::teachingPageCount(_derivation,_stepDetail); }
     unsigned debugTeachingPage() const { return _teachingPage; }
     unsigned debugTutorBuilds() const { return _tutorBuilds; }
+    unsigned debugPeriodicFamilies() const { return unsigned(_giacResult.families.size()); }
+    unsigned debugAnswerCoverage() const { return unsigned(_giacResult.coverage); }
+    unsigned debugAnswerOrigin() const { return unsigned(_giacResult.origin); }
+    unsigned debugReconciliation() const { return unsigned(_derivation.reconciliation); }
     unsigned debugTeachingFormulas() const { return _stepFormulaCount; }
     bool debugAssert(const std::string& expected);
 #endif

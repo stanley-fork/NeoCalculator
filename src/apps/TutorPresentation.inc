@@ -123,6 +123,16 @@ public:
     IntegerMembership():NodeSymbol("\xE2\x88\x88"){}
     MathClass mathClass() const override{return MathClass::REL;}
 };
+NodePtr integerParameter(){return rowOf(makeSymbol("k"),NodePtr(new IntegerMembership()),makeSymbol("\xE2\x84\xA4"));}
+NodePtr ordinaryPeriodic(const StructuredPeriodicFamily& family){
+    if(!family.binderScope||!family.binderId||family.domain!=IntegerDomain::AllIntegers)return nullptr;
+    auto offset=converted(family.offsetValue),period=converted(family.periodValue);
+    if(!offset||!period)return nullptr;
+    if(family.degrees){labelRadianInverse(offset.get());labelRadianInverse(period.get());}
+    auto term=rowOf(std::move(period),makeSymbol("k"));
+    auto right=family.offset=="0"?std::move(term):rowOf(std::move(offset),makeOperator(OpKind::Add),std::move(term));
+    return rowOf(family.variable.size()==1?makeVariable(family.variable[0]):makeSymbol(family.variable),makeRelation(OpKind::Eq),std::move(right));
+}
 NodePtr symbol(const char* value) { return makeSymbol(value); }
 NodePtr variable(const std::string& value) {
     return value.size() == 1 ? makeVariable(value[0]) : makeSymbol(value);
@@ -181,7 +191,7 @@ NodePtr build(const Derivation& d, FormulaRef ref, unsigned& calls) {
         return list;
     }
     if(ref.kind==FormulaKind::IntegerParameter)
-        return rowOf(makeSymbol("k"),NodePtr(new IntegerMembership()),makeSymbol("\xE2\x84\xA4"));
+        return integerParameter();
     if(ref.kind==FormulaKind::TrigPrincipal)
         return relation(makeSymbol("\xCE\xB1"),periodicTerm(step.auxiliaries.at(0),d.input.degrees,calls));
     if(ref.kind==FormulaKind::TrigRange) {

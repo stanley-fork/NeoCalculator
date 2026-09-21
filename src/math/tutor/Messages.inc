@@ -259,6 +259,10 @@ constexpr CatalogEntry catalog[] = {
     {"view.degree_convention", "Angles are in degrees. An inverse marked rad is evaluated in radians before the exact degree conversion.", "", "Los angulos estan en grados; rad indica una inversa en radianes antes de convertir.", "Les angles sont en degres ; rad indique une inverse en radians avant conversion."},
 
     {"view.representatives_title", "Giac representatives", "", "Representantes de Giac", "Representants de Giac"},
+    {"view.periodic_agreement", "Giac independently returned the same complete solution set.", "", "Giac obtuvo independientemente el mismo conjunto completo.", "Giac a obtenu independamment le meme ensemble complet."},
+    {"view.periodic_independent", "Results contains Giac's independent periodic answer. Exact set comparison is not established.", "", nullptr, nullptr},
+    {"view.periodic_results", "Periodic solutions", "", "Soluciones periodicas", "Solutions periodiques"},
+    {"view.or", "or", "", "o", "ou"},
 
 };
 static_assert(sizeof(catalog) / sizeof(catalog[0]) == unsigned(Message::Count), "catalog coverage");
