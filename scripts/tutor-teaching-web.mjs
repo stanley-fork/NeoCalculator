@@ -46,6 +46,13 @@ try{
     await page.evaluate(()=>window.numos.pressLogicalKey(15));await delay(80);
     await page.keyboard.press('Enter');
     await page.waitForFunction(()=>window.numos.diagnosticState().storage.complexEnabled===false);
+    if(process.argv.includes('--spanish')) {
+      for(let i=0;i<3;++i){await page.evaluate(()=>window.numos.pressLogicalKey(15));await delay(80);}
+      await page.keyboard.press('Enter');await delay(300);
+      const uri=await canvas.evaluate(c=>c.toDataURL('image/png'));
+      await writeFile(resolve(folder,'settings-spanish.png'),Buffer.from(uri.split(',')[1],'base64'));
+    }
+
     await page.evaluate(()=>window.numos.pressLogicalKey(69));
     await page.waitForFunction(()=>window.numos.diagnosticState().app==='Menu');await delay(400);
     await focusApp(2);

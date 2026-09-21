@@ -29,7 +29,7 @@ if options.results:
 elif needle in source:source=source.replace(needle,needle+injected,1)
 else:
  inc=(baseline/'src/apps/TutorStepsView.inc').read_text(encoding='utf-8')
- needle='void EquationsApp::drawStep(bool preserveScroll) {'
+ needle='void EquationsApp::drawStep(bool preserveScroll, bool reuseFormulas) {' if 'bool reuseFormulas' in inc else 'void EquationsApp::drawStep(bool preserveScroll) {'
  assert needle in inc
  inc=inc.replace(needle,needle+injected,1)
  (scratch/'TutorStepsView.inc').write_text(inc,encoding='utf-8')

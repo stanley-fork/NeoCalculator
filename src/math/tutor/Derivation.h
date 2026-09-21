@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 #include "TraceAllocator.h"
+#include "Locale.h"
 #include "../PeriodicMath.h"
 #include <array>
 #include <cstdint>
@@ -139,6 +140,8 @@ enum class Message : uint8_t {
     ViewPeriodic, ViewInteger, ViewFamilyNumber, ViewPrincipal, ViewRange, ViewRepresentatives,
     TangentDomain, ViewDegreeConvention, ViewRepresentativesTitle,
     ViewPeriodicAgreement, ViewPeriodicIndependent, ViewPeriodicResults, ViewOr,
+    ViewSteps, ViewResult, ViewResultHint, ViewPeriodicHint, ViewResultPagesHint, ViewRecoveryHint, ViewSolveAgain, ViewInvalidEquation, ViewUnresolved, ViewNoMemory, ViewSolveFailed, ViewSolveError, ViewPresentationUnavailable, ViewNoComplex, ViewNoReal, ViewConditionalFamily, ViewDependentSystem, ViewTuple2, ViewTuple3, ViewFamilyRelations, ViewUnresolvedExclusions, ViewConditionalIdentity, ViewConditionalExplanation, ViewAllValues, ViewEveryComplex, ViewEveryReal, ViewUnresolvedResult, ViewNumericalCandidates, ViewNumericalNote, ViewCandidateNumber, ViewExactText, ViewDisplayLimit, ViewPageReal, ViewPageComplex, ViewCountRealOne, ViewCountRealMany, ViewCountComplexOne, ViewCountComplexMany, ViewLanguage, ViewEnglish, ViewSpanish,
+    ViewSolving, ViewWait, ViewSettingsHint,
     Count
 };
 enum class ParameterKind : uint8_t { Expression, Variable, Row, Integer };
@@ -245,11 +248,12 @@ struct Derivation {
     Metrics metrics;
     std::string diagnostic; // developer diagnostic; UI uses semantic status key
 };
-enum class Locale : uint8_t { English, Spanish, French, Pseudo };
 const char *ruleId(Rule rule);
 const char *messageKey(Message key);
-// Allocation-free English fallback for a zero-parameter recovery message.
-const char *messageFallback(Message key);
+// Allocation-free localized fallback for a zero-parameter recovery message.
+const char *messageFallback(Message key, Locale locale = Locale::English);
+const char *messageSchema(Message key);
+bool hasTranslation(Message key, Locale locale);
 std::string explain(Message key, const Vector<Parameter> &parameters,
                     Locale locale = Locale::English);
 bool validateMessage(Message key, const Vector<Parameter> &parameters);

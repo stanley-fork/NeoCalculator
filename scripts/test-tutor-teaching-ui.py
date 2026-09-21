@@ -260,6 +260,7 @@ def main():
     parser.add_argument("--bin", default="C:/.piobuild/numOS/emulator_pc/program.exe")
     parser.add_argument("--out", type=Path, default=Path("out/tutor-teaching-ux-01/ui"))
     parser.add_argument("--cases", nargs="*")
+    parser.add_argument("--bilingual", action="store_true", help="Capture every selected sequence in English and Spanish")
     parser.add_argument("--render-only", action="store_true", help="Render existing framebuffer evidence; do not rerun or report tests")
     args = parser.parse_args()
     binary = Path(args.bin).resolve()
@@ -335,6 +336,8 @@ def main():
             modes.extend([(locale, "assert_equations locale " + locale + "\n") for locale in ("es", "fr", "pseudo")])
         if name == "quadratic":
             modes.append(("pseudo", "assert_equations locale pseudo\n"))
+        if args.bilingual and not any(mode=="es" for mode,_ in modes):
+            modes.append(("es", "assert_equations locale es\n"))
         for mode, switch in modes:
             label = name + "-" + mode
             begin = start + switch

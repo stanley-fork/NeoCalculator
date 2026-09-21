@@ -23,6 +23,7 @@ def main():
     p.add_argument('--out', type=Path, required=True)
     p.add_argument('--transcendental', action='store_true')
     p.add_argument('--trig', action='store_true')
+    p.add_argument('--i18n', action='store_true')
     args=p.parse_args()
     os.chdir(ROOT)
     args.out.mkdir(parents=True, exist_ok=True)
@@ -63,8 +64,10 @@ def main():
         i=cycle%len(starts)
         script+=starts[i].replace(eq.OPEN,'open_app Equations\nwait 30\n')
         script+='assert_equations trace complete\ncalculus_probe\n'+eq.keys('tools')+'assert_equations trace builds 1\ncalculus_probe\n'
+        if args.i18n:script+='assert_equations locale es\nassert_equations trace builds 1\n'
         for page in range(counts[i]):
             script+=f'assert_equations view page {page}\nassert_equations trace formulas\n'+eq.keys('DOWN DOWN VAR RIGHT')
+        if args.i18n:script+='assert_equations locale en\nassert_equations locale es\nassert_equations trace builds 1\n'
         script+='assert_equations trace check\ncalculus_probe\n'+eq.keys('BACK tools')+'assert_equations trace builds 1\nassert_equations trace formulas\ncalculus_probe\n'
         # Cancel a changed draft: the committed trace and epoch remain current.
         script+=eq.keys('BACK BACK UP UP UP UP ENTER')+'assert_equations state editing\n'

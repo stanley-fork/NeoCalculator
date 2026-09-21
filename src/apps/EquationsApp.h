@@ -131,6 +131,6 @@ private:
     int listItemCount() const;
     vpam::NodePtr buildTemplateAST(int index);
     bool splitAtEquals(vpam::NodeRow*, vpam::NodePtr&, vpam::NodePtr&);
-    void drawStep(bool preserveScroll = false);
+    void drawStep(bool preserveScroll = false, bool reuseFormulas = false);
     void scrollTeaching(int delta);
 };

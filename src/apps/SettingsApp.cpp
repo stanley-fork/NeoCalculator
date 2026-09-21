@@ -25,6 +25,8 @@
 #include "../Config.h"
 #include "../display/DisplayDriver.h"
 #include "../math/AngleModeRuntime.h"
+#include "../math/tutor/Derivation.h"
+#include "../ui/TutorFonts.h"
 
 #if NUMOS_BOARD_PROD_WROOM1U_N16R8
 #if NUMOS_PRODUCTION_DEMO_PROFILE
@@ -74,7 +76,7 @@ bool SettingsApp::savePersistentState() {
     const auto record = numos::demo::encodeSettingsRecord(
         numos::angleModeIsDeg(), setting_complex_enabled,
         setting_edu_steps, static_cast<uint8_t>(setting_decimal_precision),
-        g_persistedBrightness);
+        g_persistedBrightness, numos::tutor::localeStorageValue());
 
     LittleFS.remove(SETTINGS_TEMP_PATH);
     fs::File file = LittleFS.open(SETTINGS_TEMP_PATH, "w");
@@ -113,6 +115,7 @@ bool SettingsApp::loadPersistentState() {
     if (!numos::demo::decodeSettingsRecord(
             record.data(), record.size(), decoded)) return false;
 
+    numos::tutor::productLocale = numos::tutor::storedLocale(decoded.tutorLanguage);
     if (decoded.angleValid) {
         numos::setAngleMode(decoded.angleDeg ? vpam::AngleMode::DEG
                                              : vpam::AngleMode::RAD);
@@ -151,7 +154,7 @@ bool SettingsApp::savePersistentState() {
     record[6] = setting_complex_enabled ? 1 : 0;
     record[7] = setting_edu_steps ? 1 : 0;
     record[8] = static_cast<uint8_t>(setting_decimal_precision);
-    record[9] = 0;
+    record[9] = numos::tutor::localeStorageValue();
 
     File file = LittleFS.open(SETTINGS_PATH, "w");
     if (!file) return false;
@@ -184,6 +187,7 @@ bool SettingsApp::loadPersistentState() {
     setting_complex_enabled = record[6] != 0;
     setting_edu_steps = record[7] != 0;
     setting_decimal_precision = precision;
+    numos::tutor::productLocale = numos::tutor::storedLocale(record[9]);
     return true;
 }
 #endif
@@ -319,6 +323,7 @@ void SettingsApp::createUI() {
 #if NUMOS_BOARD_PROD_WROOM1U_N16R8
         "Brightness",
 #endif
+        "Tutor language",
     };
 
     for (int i = 0; i < NUM_ITEMS; ++i) {
@@ -372,11 +377,12 @@ void SettingsApp::createUI() {
     // in this build, so they already rendered as tofu — dropped here (the words
     // convey navigation just as the re-blessed RegressionApp hint does).
     _hintLabel = lv_label_create(_container);
-    lv_label_set_text(_hintLabel, "Navigate   Left/Right Adjust   MODE Back");
-    lv_obj_set_style_text_font(_hintLabel, &lv_font_montserrat_14, LV_PART_MAIN);
+    lv_obj_set_style_text_font(_hintLabel, ui::tutorFont14(), LV_PART_MAIN);
     lv_obj_set_style_text_color(_hintLabel, lv_color_hex(COL_HINT), LV_PART_MAIN);
     lv_obj_set_pos(_hintLabel, PAD, SCREEN_H - barH - 22);
 
+    lv_obj_set_style_text_font(_labels[LANGUAGE_ITEM],ui::tutorFont14(),0);
+    lv_obj_set_style_text_font(_values[LANGUAGE_ITEM],ui::tutorFont14(),0);
     updateValues();
     updateFocus();
 }
@@ -405,6 +411,10 @@ void SettingsApp::updateFocus() {
 // ════════════════════════════════════════════════════════════════════════════
 
 void SettingsApp::updateValues() {
+    using namespace numos::tutor;
+    lv_label_set_text(_hintLabel,messageFallback(Message::ViewSettingsHint,productLocale));
+    lv_label_set_text(_labels[LANGUAGE_ITEM],messageFallback(Message::ViewLanguage,productLocale));
+    lv_label_set_text(_values[LANGUAGE_ITEM],messageFallback(productLocale==Locale::Spanish?Message::ViewSpanish:Message::ViewEnglish,productLocale));
     // Angle mode (runtime source of truth — same value the StatusBar badge shows)
     lv_label_set_text(_values[0], numos::angleModeIsDeg() ? "Degrees" : "Radians");
     lv_obj_set_style_text_color(_values[0], lv_color_hex(COL_VALUE), LV_PART_MAIN);
@@ -469,6 +479,10 @@ void SettingsApp::adjustBrightness(const int delta) {
 // ════════════════════════════════════════════════════════════════════════════
 
 void SettingsApp::toggleCurrent() {
+    if(_focus==LANGUAGE_ITEM) {
+        using namespace numos::tutor;
+        productLocale=productLocale==Locale::Spanish?Locale::English:Locale::Spanish;
+    }
     switch (_focus) {
         case 0:  // Angle mode toggle: writes the runtime truth, badge follows
             numos::setAngleMode(numos::angleModeIsDeg() ? vpam::AngleMode::RAD
@@ -548,10 +562,12 @@ void SettingsApp::handleKey(const KeyEvent& ev) {
             break;
 
         case KeyCode::ENTER:
+            if(_focus==LANGUAGE_ITEM && ev.action==KeyAction::REPEAT)break;
             toggleCurrent();
             break;
 
         case KeyCode::LEFT:
+            if(_focus==LANGUAGE_ITEM){if(ev.action==KeyAction::PRESS)toggleCurrent();break;}
             // For precision (row 2): cycle backward
             if (_focus == 2) {
                 int idx = 0;
@@ -576,6 +592,7 @@ void SettingsApp::handleKey(const KeyEvent& ev) {
             break;
 
         case KeyCode::RIGHT:
+            if(_focus==LANGUAGE_ITEM){if(ev.action==KeyAction::PRESS)toggleCurrent();break;}
             // For precision (row 2): cycle forward
             if (_focus == 2) {
                 toggleCurrent();

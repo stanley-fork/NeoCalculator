@@ -60,12 +60,13 @@ public:
 
 private:
     static constexpr int NUM_ITEMS =
-        NUMOS_BOARD_PROD_WROOM1U_N16R8 ? 5 : 4;
+        NUMOS_BOARD_PROD_WROOM1U_N16R8 ? 6 : 5;
+    static constexpr int LANGUAGE_ITEM = NUM_ITEMS - 1;
     static constexpr int SCREEN_W  = 320;
     static constexpr int SCREEN_H  = 240;
     static constexpr int PAD       = 12;
     static constexpr int ROW_H     =
-        NUMOS_BOARD_PROD_WROOM1U_N16R8 ? 34 : 44;
+        NUMOS_BOARD_PROD_WROOM1U_N16R8 ? 28 : 34;
     static constexpr int ROW_GAP   = 2;
 
     lv_obj_t*       _screen;

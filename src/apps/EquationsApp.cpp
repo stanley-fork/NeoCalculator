@@ -17,6 +17,7 @@
 #include "../input/KeyboardManager.h"
 #include "../input/KeySemanticResolver.h"
 #include "../ui/MathTypography.h"
+#include "../ui/TutorFonts.h"
 #include "../utils/HwUxProbe.h"
 #include "../math/AngleModeRuntime.h"
 #include <algorithm>
@@ -111,7 +112,7 @@ NodePtr resultFormula(const numos::EngineResultNode& node, int depth=0,
 
 lv_obj_t* EquationsApp::text(lv_obj_t* parent, const char* value, int x, int y, int width) {
     auto* label=lv_label_create(parent);
-    lv_obj_set_style_text_font(label,&lv_font_montserrat_12,0);
+    lv_obj_set_style_text_font(label,ui::tutorFont12(),0);
     lv_obj_set_style_text_color(label,lv_color_hex(0x333333),0);
     lv_obj_set_pos(label,x,y);
     if (width) { lv_obj_set_width(label,width); lv_label_set_long_mode(label,LV_LABEL_LONG_WRAP); }
@@ -123,6 +124,7 @@ void EquationsApp::header(const char* title, const char* hint) {
 }
 void EquationsApp::begin() {
     if (_screen) return;
+    _stepLocale=numos::tutor::productLocale;
     _screen=box(nullptr,0,0,320,240);
     _statusBar.create(_screen); _statusBar.setTitle("Equations"); _statusBar.setBatteryLevel(100);
     _title=text(_screen,"",8,30,304);
@@ -130,7 +132,7 @@ void EquationsApp::begin() {
     lv_obj_add_flag(_body,LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_scroll_dir(_body,LV_DIR_VER); lv_obj_set_scrollbar_mode(_body,LV_SCROLLBAR_MODE_AUTO);
     _hint=text(_screen,"",6,225,308);
-    lv_obj_set_style_text_font(_hint,&lv_font_montserrat_10,0);
+    lv_obj_set_style_text_font(_hint,ui::tutorFont10(),0);
     showEqList();
 }
 void EquationsApp::load() {
@@ -483,7 +485,10 @@ void EquationsApp::solveEquations() {
     clearView(); _solveEpoch=_stepsEpoch=0; _page=0; _errorRow=-1;
     _giacResult={}; _resultKind=ResultKind::None; _tutorStatus=TutorStatus::Unavailable;
     _derivation={}; _stepIndex=0; _teachingPage=0; _stepDetail=true; _tutorDiagnostic.clear();
-    _state=State::SOLVING; header("Solving with Giac...","Please wait"); lv_refr_now(nullptr);
+    _state=State::SOLVING;
+    header(numos::tutor::messageFallback(numos::tutor::Message::ViewSolving,_stepLocale),
+           numos::tutor::messageFallback(numos::tutor::Message::ViewWait,_stepLocale));
+    lv_refr_now(nullptr);
     std::vector<numos::SolveEquation> equations;
     equations.reserve(_numEquations);
     for(int i=0;i<_numEquations;++i) {
@@ -520,25 +525,31 @@ void EquationsApp::solveEquations() {
     showResult(); probe.finish(_giacResult.ok()?"ok":"error","result","giac",0);
 }
 void EquationsApp::showResult() {
+    using namespace numos::tutor;
+    auto words=[&](Message key){return messageFallback(key,_stepLocale);};
+    auto numbered=[&](Message key,unsigned n){return explain(key,{{ParameterKind::Integer,std::to_string(n)}},_stepLocale);};
     clearView(); _state=State::RESULT; _resultKind=ResultKind::None;
-    header("Result","Arrows Scroll   EXE Equations   TOOLBOX Steps");
+    header(words(Message::ViewResult),words(Message::ViewResultHint));
     auto info=[&](const char* title,const std::string& message) {
         lv_label_set_text(_title,title);
         // A pathological printed value must not exhaust the firmware LVGL pool.
         // This is a presentation limit, never a truncation of the engine result.
         if(message.size()>3072) {
-            const auto limited=message.substr(0,3072)+"\n[Display limit: remaining text is not shown.]";
+            size_t end=3072;
+            // WHY: never cut a multibyte character; the retained machine result is unchanged.
+            while(end && (static_cast<unsigned char>(message[end])&0xc0)==0x80)--end;
+            const auto limited=message.substr(0,end)+"\n["+words(Message::ViewDisplayLimit)+"]";
             text(_body,limited.c_str(),8,8,284);
         } else text(_body,message.c_str(),8,8,284);
     };
     if(_giacResult.origin==numos::SolveOrigin::GiacAllTrig &&
        (!numos::GiacEngine::instance().periodicAnswerCurrent(_giacResult)||setting_complex_enabled)) {
-        info("Solve again",numos::tutor::explain(numos::tutor::Message::ViewSolveFirst,{},_stepLocale));return;
+        info(words(Message::ViewSolveAgain),numos::tutor::explain(numos::tutor::Message::ViewSolveFirst,{},_stepLocale));return;
     }
     if(!_giacResult.ok()) {
-        info(_giacResult.status==numos::MathEngineStatus::ParseError?"Invalid equation":
-             _giacResult.status==numos::MathEngineStatus::Unsupported?"Unresolved / unsupported":
-             _giacResult.status==numos::MathEngineStatus::OutOfMemory?"Not enough memory":"Solve failed",_giacResult.diagnostic);
+        info(_giacResult.status==numos::MathEngineStatus::ParseError?words(Message::ViewInvalidEquation):
+             _giacResult.status==numos::MathEngineStatus::Unsupported?words(Message::ViewUnresolved):
+             _giacResult.status==numos::MathEngineStatus::OutOfMemory?words(Message::ViewNoMemory):words(Message::ViewSolveFailed),words(Message::ViewSolveError));
         return;
     }
     _resultKind=ResultKind::Structured;
@@ -552,20 +563,20 @@ void EquationsApp::showResult() {
             for(const auto& family:_giacResult.families){prepared[count]=tutorview::ordinaryPeriodic(family);if(!prepared[count++])throw std::bad_alloc();}
             prepared[count++]=tutorview::integerParameter();
             for(const auto& c:_giacResult.restrictions){if(count>=prepared.size())throw std::bad_alloc();auto expression=tutorview::converted(c.expression);if(!expression)throw std::bad_alloc();prepared[count++]=tutorview::relation(std::move(expression),makeNumber("0"),OpKind::Ne);}
-            header(explain(Message::ViewPeriodicResults,{},_stepLocale).c_str(),"Arrows Scroll/Pan   BACK Equations   TOOLBOX Steps");
+            header(explain(Message::ViewPeriodicResults,{},_stepLocale).c_str(),words(Message::ViewPeriodicHint));
             int y=0;for(unsigned i=0;i<count;++i){if(i&&i<_giacResult.families.size()){text(_body,explain(Message::ViewOr,{},_stepLocale).c_str(),8,y,280);y+=22;}
                 _viewNodes[i]=std::move(prepared[i]);y+=formula(int(i),static_cast<NodeRow*>(_viewNodes[i].get()),y,nullptr);}
         } catch(...) {
-            clearView();header("Result","BACK Equations   HOME");
-            lv_label_set_text_static(_title,"Presentation unavailable");
+            clearView();header(words(Message::ViewResult),words(Message::ViewRecoveryHint));
+            lv_label_set_text_static(_title,words(Message::ViewPresentationUnavailable));
             // WHY: the fault may still be active. Reuse the catalog's static
             // fallback without constructing an allocating std::string.
-            text(_body,messageFallback(Message::ViewUnavailable),8,8,284);
+            text(_body,messageFallback(Message::ViewUnavailable,_stepLocale),8,8,284);
         }
         return;
     }
     if(_giacResult.setKind==numos::SolutionSetKind::NoSolution) {
-        info("No solutions",setting_complex_enabled?"No solutions in the complex domain.":"No solutions in the real domain."); return;
+        info(words(Message::ViewNoSolution),setting_complex_enabled?words(Message::ViewNoComplex):words(Message::ViewNoReal)); return;
     }
     if(_giacResult.setKind==numos::SolutionSetKind::AllValues) {
         // The original adapter conflates free variables and independent values.
@@ -573,39 +584,40 @@ void EquationsApp::showResult() {
         if(_numEquations>1) {
             bool conditional=false;
             for(int i=0;i<_numEquations;++i) conditional=conditional || mayHaveDomainConditions(_eqRowData[i]);
-            info(conditional?"Conditional family":"Dependent system / family",
-                std::string(_numEquations==2?"Tuple order: x, y\n":"Tuple order: x, y, z\n")+
-                _giacResult.rawExactText+"\nParameters must satisfy these relations."+
-                (conditional?" Only where the original equations are defined; exclusions remain unresolved.":""));
+            info(conditional?words(Message::ViewConditionalFamily):words(Message::ViewDependentSystem),
+                std::string(words(_numEquations==2?Message::ViewTuple2:Message::ViewTuple3))+"\n"+
+                _giacResult.rawExactText+"\n"+words(Message::ViewFamilyRelations)+
+                (conditional?std::string("\n")+words(Message::ViewUnresolvedExclusions):""));
         }
         else if(mayHaveDomainConditions(_eqRowData[0]))
-            info("Conditional identity","Equality holds where the original expression is defined. Domain exclusions remain unresolved; this is not an unrestricted solution set.");
-        else info("Identity / all values",setting_complex_enabled?"Every complex x satisfies the equation.":"Every real x satisfies the equation.");
+            info(words(Message::ViewConditionalIdentity),words(Message::ViewConditionalExplanation));
+        else info(words(Message::ViewAllValues),setting_complex_enabled?words(Message::ViewEveryComplex):words(Message::ViewEveryReal));
         return;
     }
-    if(_giacResult.groups.empty()) { _resultKind=ResultKind::TextFallback; info("Unresolved result",_giacResult.rawExactText); return; }
+    if(_giacResult.groups.empty()) { _resultKind=ResultKind::TextFallback; info(words(Message::ViewUnresolvedResult),_giacResult.rawExactText); return; }
     bool numerical=false;
     for(const auto& group:_giacResult.groups) for(const auto& value:group.values)
         numerical=numerical || hasDecimal(value.exactValue);
     if(numerical) {
         _resultKind=ResultKind::TextFallback;
-        std::string visible="Numerical candidates from Giac. Completeness is not established.\n";
+        std::string visible=std::string(words(Message::ViewNumericalNote))+"\n";
         for(size_t i=0;i<_giacResult.groups.size();++i) {
-            visible+="\nCandidate "+std::to_string(i+1)+":\n";
+            visible+="\n"+numbered(Message::ViewCandidateNumber,unsigned(i+1))+":\n";
             for(const auto& value:_giacResult.groups[i].values) visible+=value.variable+" = "+value.exactText+"\n";
         }
-        info("Numerical candidates",visible); return;
+        info(words(Message::ViewNumericalCandidates),visible); return;
     }
     // A page is a complete solution group. No root or assignment is dropped by
     // the fixed widget budget; VAR advances through every engine-owned group.
     const bool system=_numEquations>1;
     const bool pages=system || _giacResult.groups.size()>MAX_RESULTS;
-    char title[96];
+    std::string title;
     const bool periodic=_giacResult.coverage==numos::SolveCoverage::Representatives;
-    if(periodic)std::snprintf(title,sizeof(title),"%s",numos::tutor::explain(numos::tutor::Message::ViewRepresentativesTitle,{},_stepLocale).c_str());
-    else if(pages) std::snprintf(title,sizeof(title),"Solution %d/%u  |  %s",_page+1,unsigned(_giacResult.groups.size()),setting_complex_enabled?"Complex":"Real");
-    else std::snprintf(title,sizeof(title),"%u %s  |  x  |  %s",unsigned(_giacResult.groups.size()),_giacResult.groups.size()==1?"solution":"solutions",setting_complex_enabled?"Complex":"Real");
-    header(title,pages && _giacResult.groups.size()>1?"VAR Next set   Arrows Scroll   BACK Equations":"Arrows Scroll   EXE Equations   TOOLBOX Steps");
+    if(periodic)title=words(Message::ViewRepresentativesTitle);
+    else if(pages)title=explain(setting_complex_enabled?Message::ViewPageComplex:Message::ViewPageReal,{{ParameterKind::Integer,std::to_string(_page+1)},{ParameterKind::Integer,std::to_string(_giacResult.groups.size())}},_stepLocale);
+    else if(_giacResult.groups.size()==1)title=words(setting_complex_enabled?Message::ViewCountComplexOne:Message::ViewCountRealOne);
+    else title=numbered(setting_complex_enabled?Message::ViewCountComplexMany:Message::ViewCountRealMany,unsigned(_giacResult.groups.size()));
+    header(title.c_str(),pages && _giacResult.groups.size()>1?words(Message::ViewResultPagesHint):words(Message::ViewResultHint));
     int slot=0,y=0;
     const size_t first=pages?size_t(_page):0, last=pages?first+1:_giacResult.groups.size();
     for(size_t g=first;g<last;++g) {
@@ -615,10 +627,10 @@ void EquationsApp::showResult() {
                 clearView(); _resultKind=ResultKind::TextFallback;
                 std::string fallback;
                 for(size_t j=0;j<_giacResult.groups.size();++j) {
-                    fallback+="Solution "+std::to_string(j+1)+":\n";
+                    fallback+=numbered(Message::ViewSolutionNumber,unsigned(j+1))+":\n";
                     for(const auto& v:_giacResult.groups[j].values) fallback+=v.variable+" = "+v.exactText+"\n";
                 }
-                info("Exact results (text)",fallback); return;
+                info(words(Message::ViewExactText),fallback); return;
             }
             auto row=makeRow(); auto* r=static_cast<NodeRow*>(row.get());
             r->appendChild(std::move(value));
@@ -902,7 +914,7 @@ bool EquationsApp::debugAssert(const std::string& expected) {
         else if(value=="fr")_stepLocale=numos::tutor::Locale::French;
         else if(value=="pseudo")_stepLocale=numos::tutor::Locale::Pseudo;
         else return false;
-        if(_state==State::STEPS)drawStep(true);else if(_state==State::RESULT)showResult();return true;
+        if(_state==State::STEPS){if(_stepProse)drawStep(true,true);else showSteps();}else if(_state==State::RESULT)showResult();return true;
     }
     if(kind=="state") {
         const char* names[]={"list","template","editing","solving","result","steps"};

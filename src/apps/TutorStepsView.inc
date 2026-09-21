@@ -4,7 +4,7 @@ void EquationsApp::showSteps() {
     using namespace numos::tutor;
     clearView(); _state=State::STEPS;
     const auto hint=explain(Message::ViewGuidedHint,{},_stepLocale);
-    header("Steps",hint.c_str());
+    header(messageFallback(Message::ViewSteps,_stepLocale),hint.c_str());
     if(!_solveEpoch || _solveEpoch!=_equationEpoch ||
        !numos::GiacEngine::instance().tutorSnapshotCurrent(_derivation.input,_equationEpoch,setting_complex_enabled)) {
         const auto note=explain(Message::ViewSolveFirst,{},_stepLocale);
@@ -22,7 +22,7 @@ void EquationsApp::showSteps() {
     lv_obj_set_style_text_color(_stepConditions,lv_color_hex(ACCENT),0);
     lv_obj_set_width(_title,196);
     _stepVerified=text(_screen,"",212,32,100);
-    lv_obj_set_style_text_font(_stepVerified,&lv_font_montserrat_10,0);
+    lv_obj_set_style_text_font(_stepVerified,ui::tutorFont10(),0);
     lv_obj_set_style_text_align(_stepVerified,LV_TEXT_ALIGN_RIGHT,0);
     // WHY: four reused formula widgets cover a summary's start plus three
     // intermediate states, or a row operation with both input equations.
@@ -41,7 +41,7 @@ void EquationsApp::scrollTeaching(int delta) {
     lv_obj_scroll_to_y(_body,std::clamp(current+delta,0,bottom),LV_ANIM_OFF);
 }
 
-void EquationsApp::drawStep(bool preserveScroll) {
+void EquationsApp::drawStep(bool preserveScroll, bool reuseFormulas) {
     using namespace numos::tutor;
     using tutorview::FormulaKind;
     using tutorview::FormulaRef;
@@ -263,7 +263,15 @@ void EquationsApp::drawStep(bool preserveScroll) {
 
         // Construct transactionally before changing the visible page. Authored
         // equations are cloned before any Giac evaluation can cancel x/x, etc.
-        for(unsigned i=0;i<count;++i) {
+        if(reuseFormulas) {
+            if(count!=_stepFormulaCount)throw std::bad_alloc();
+            for(unsigned i=0;i<count;++i){
+                const auto& a=refs[i];const auto& b=_stepFormulaRefs[i];
+                if(a.kind!=b.kind||a.state!=b.state||a.step!=b.step||a.branch!=b.branch||a.row!=b.row||!_viewNodes[i])throw std::bad_alloc();
+                nodes+=tutorview::nodeCount(_viewNodes[i].get());
+            }
+        }
+        for(unsigned i=0;!reuseFormulas && i<count;++i) {
             const Equation* authored=nullptr;
             if(refs[i].kind==FormulaKind::Authored)authored=&_derivation.input.authored[refs[i].row];
             if(refs[i].kind==FormulaKind::Equation)
@@ -298,9 +306,14 @@ void EquationsApp::drawStep(bool preserveScroll) {
             lv_label_set_text(_stepLabels[i],captions[i].c_str());lv_obj_set_pos(_stepLabels[i],8,y);
             lv_obj_remove_flag(_stepLabels[i],LV_OBJ_FLAG_HIDDEN);lv_obj_update_layout(_stepLabels[i]);
             if(!captions[i].empty())y+=lv_obj_get_height(_stepLabels[i])+4;
-            _canvas[i].setExpression(nullptr,nullptr);_viewNodes[i].reset();
-            auto row=makeRow();auto* r=static_cast<NodeRow*>(row.get());r->appendChild(std::move(prepared[i]));
-            _viewNodes[i]=std::move(row);auto& canvas=_canvas[i];canvas.setExpression(r,nullptr);
+            auto& canvas=_canvas[i];
+            if(!reuseFormulas) {
+                canvas.setExpression(nullptr,nullptr);_viewNodes[i].reset();
+                auto row=makeRow();static_cast<NodeRow*>(row.get())->appendChild(std::move(prepared[i]));
+                _viewNodes[i]=std::move(row);
+            }
+            auto* r=static_cast<NodeRow*>(_viewNodes[i].get());
+            if(!reuseFormulas)canvas.setExpression(r,nullptr);
             r->calculateLayout(canvas.normalMetrics());
             const int height=std::max(26,int(mathObjectHeightPx(r->layout(),canvas.normalMetrics(),4)));
             lv_obj_remove_flag(_rows[i],LV_OBJ_FLAG_HIDDEN);lv_obj_set_pos(_rows[i],2,y);lv_obj_set_height(_rows[i],height+8);
@@ -311,7 +324,7 @@ void EquationsApp::drawStep(bool preserveScroll) {
             const bool rejected=refs[i].kind==FormulaKind::Equation&&
                 _derivation.states[refs[i].state].branches[refs[i].branch].status==BranchStatus::Rejected;
             lv_obj_set_style_bg_color(_rows[i],lv_color_hex(rejected?0xFCE5E5:changed?0xFFF1C9:0xF5F5F5),0);
-            lv_obj_set_size(canvas.obj(),292,height);canvas.scrollBounded(10000);canvas.invalidate();
+            lv_obj_set_size(canvas.obj(),292,height);if(!reuseFormulas)canvas.scrollBounded(10000);canvas.invalidate();
             y+=height+14;
         }
         if(proseAfter==count)placeProse();
@@ -330,7 +343,12 @@ void EquationsApp::drawStep(bool preserveScroll) {
         // Existing formula trees remain owned and BACK continues to work.
         _stepFormulaCount=0;
         for(unsigned i=0;i<4;++i){lv_obj_add_flag(_rows[i],LV_OBJ_FLAG_HIDDEN);lv_obj_add_flag(_stepLabels[i],LV_OBJ_FLAG_HIDDEN);}
-        lv_label_set_text_static(_stepProse,messageFallback(Message::ViewUnavailable));lv_obj_set_pos(_stepProse,8,8);
+        // WHY: a failed locale reflow must not retain the previous language's
+        // title/badge/help. Static catalog storage remains usable under the fault.
+        lv_label_set_text_static(_title,messageFallback(Message::ViewSteps,_stepLocale));
+        lv_label_set_text_static(_hint,messageFallback(_stepDetail?Message::ViewGuidedHint:Message::ViewSummaryHint,_stepLocale));
+        lv_label_set_text_static(_stepVerified,messageFallback(_derivation.status==Status::Complete?Message::ViewVerified:Message::ViewPartial,_stepLocale));
+        lv_label_set_text_static(_stepProse,messageFallback(Message::ViewUnavailable,_stepLocale));lv_obj_set_pos(_stepProse,8,8);
         lv_label_set_text_static(_stepConditions,"");
     }
 }
