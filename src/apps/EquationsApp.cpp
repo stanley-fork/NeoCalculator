@@ -460,7 +460,9 @@ void EquationsApp::handleKey(const KeyEvent& ev) {
                 if(ev.code==KeyCode::UP || ev.code==KeyCode::DOWN) lv_obj_scroll_by(_body,0,ev.code==KeyCode::UP?28:-28,LV_ANIM_OFF);
                 else for(auto& canvas:_canvas) if(canvas.obj()) canvas.scrollBounded(ev.code==KeyCode::LEFT?24:-24);
             } else if(_state==State::RESULT && (ev.code==KeyCode::TOOLBOX || ev.code==KeyCode::SHOW_STEPS)) showSteps();
-            else if(_state==State::RESULT && ev.code==KeyCode::VAR && _giacResult.groups.size()>1) {
+            else if(_state==State::RESULT && ev.code==KeyCode::VAR && _giacResult.setKind==numos::SolutionSetKind::Periodic && _giacResult.families.size()>2) {
+                _page=(_page+1)%((_giacResult.families.size()+1)/2);showResult();
+            } else if(_state==State::RESULT && ev.code==KeyCode::VAR && _giacResult.groups.size()>1) {
                 _page=(_page+1)%_giacResult.groups.size(); showResult();
             } else if(ev.code==KeyCode::EXE || ev.code==KeyCode::ENTER || ev.code==KeyCode::AC || ev.code==KeyCode::DEL) navigateBack();
             break;
@@ -559,12 +561,18 @@ void EquationsApp::showResult() {
         // conversion or hidden page tree is needed for these already owned nodes.
         try {
             std::array<NodePtr,4> prepared;unsigned count=0;
-            if(_giacResult.families.empty()||_giacResult.families.size()>2)throw std::bad_alloc();
-            for(const auto& family:_giacResult.families){prepared[count]=tutorview::ordinaryPeriodic(family);if(!prepared[count++])throw std::bad_alloc();}
+            if(_giacResult.families.empty()||_giacResult.families.size()>numos::PeriodicLimits::families)throw std::bad_alloc();
+            const unsigned first=unsigned(_page)*2,last=std::min(first+2,unsigned(_giacResult.families.size()));
+            if(first>=last)throw std::bad_alloc();
+            for(unsigned i=first;i<last;++i){prepared[count]=tutorview::ordinaryPeriodic(_giacResult.families[i]);if(!prepared[count++])throw std::bad_alloc();}
             prepared[count++]=tutorview::integerParameter();
             for(const auto& c:_giacResult.restrictions){if(count>=prepared.size())throw std::bad_alloc();auto expression=tutorview::converted(c.expression);if(!expression)throw std::bad_alloc();prepared[count++]=tutorview::relation(std::move(expression),makeNumber("0"),OpKind::Ne);}
-            header(explain(Message::ViewPeriodicResults,{},_stepLocale).c_str(),words(Message::ViewPeriodicHint));
-            int y=0;for(unsigned i=0;i<count;++i){if(i&&i<_giacResult.families.size()){text(_body,explain(Message::ViewOr,{},_stepLocale).c_str(),8,y,280);y+=22;}
+            const auto title=_giacResult.families.size()>2
+                ?explain(Message::ViewPeriodicPage,{{ParameterKind::Integer,std::to_string(_page+1)},
+                         {ParameterKind::Integer,std::to_string((_giacResult.families.size()+1)/2)}},_stepLocale)
+                :explain(Message::ViewPeriodicResults,{},_stepLocale);
+            header(title.c_str(),words(_giacResult.families.size()>2?Message::ViewPeriodicGroupsHint:Message::ViewPeriodicHint));
+            int y=0;for(unsigned i=0;i<count;++i){if(i&&i<last-first){text(_body,explain(Message::ViewOr,{},_stepLocale).c_str(),8,y,280);y+=22;}
                 _viewNodes[i]=std::move(prepared[i]);y+=formula(int(i),static_cast<NodeRow*>(_viewNodes[i].get()),y,nullptr);}
         } catch(...) {
             clearView();header(words(Message::ViewResult),words(Message::ViewRecoveryHint));
@@ -870,10 +878,11 @@ bool EquationsApp::debugAssert(const std::string& expected) {
             };
             const auto page=teachingPageAt(_derivation,_stepDetail,_teachingPage);
             const char* kinds[]={"start","transition","chain","coefficients","discriminant","quadratic_formula","roots","final"};
-            const char* formulas[]={"equation","authored","conditions","standard_quadratic","coefficients","discriminant_definition","discriminant_values","general_formula","substituted_formula","operand","row_operation","coefficient_equation","solution_set","balanced_operation","periodic_family","integer_parameter","trig_principal","trig_range","family_operation"};
+            const char* formulas[]={"equation","authored","conditions","standard_quadratic","coefficients","discriminant_definition","discriminant_values","general_formula","substituted_formula","operand","row_operation","coefficient_equation","solution_set","balanced_operation","periodic_family","integer_parameter","trig_principal","trig_range","family_operation","auxiliary_conditions"};
             std::ostringstream json;
             json<<"{\"page\":"<<_teachingPage<<",\"count\":"<<teachingPageCount(_derivation,_stepDetail)
                 <<",\"guided\":"<<(_stepDetail?"true":"false")<<",\"step\":"<<_stepIndex<<",\"lastStep\":"<<page.last
+                <<",\"child\":"<<unsigned(page.child)<<",\"section\":"<<unsigned(page.section)
                 <<",\"kind\":"<<quote(kinds[unsigned(page.kind)])<<",\"title\":"<<quote(lv_label_get_text(_title))
                 <<",\"prose\":"<<quote(lv_label_get_text(_stepProse))<<",\"heading\":"<<quote(lv_label_get_text(_stepConditions))
                 <<",\"scrollY\":"<<scroll<<",\"maxScroll\":"<<maxScroll
@@ -883,6 +892,7 @@ bool EquationsApp::debugAssert(const std::string& expected) {
                 const auto& f=_stepFormulaRefs[i];if(i)json<<',';
                 json<<"{\"kind\":"<<quote(formulas[unsigned(f.kind)])<<",\"state\":"<<f.state<<",\"step\":"<<f.step
                     <<",\"branch\":"<<unsigned(f.branch)<<",\"row\":"<<unsigned(f.row)
+                    <<",\"child\":"<<unsigned(f.child)
                     <<",\"caption\":"<<quote(lv_label_get_text(_stepLabels[i]))<<",\"ast\":"<<ast(_viewNodes[i].get(),ast,0)<<'}';
             }
             json<<"]}";std::printf("[TUTOR_VIEW] %s\n",json.str().c_str());return true;

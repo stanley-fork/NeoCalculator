@@ -57,6 +57,7 @@ struct Algebra {
         rejectedLine = line;
         return Verdict::Rejected;
     }
+    bool compositionMode = false;
     uint32_t *measuredCalls = nullptr;
     void tick() {
         if (measuredCalls)
@@ -72,6 +73,13 @@ struct Algebra {
     }
     gen normal(const gen &g) {
         tick();
+        // The pinned simplify path can inflate nested radicals beyond our
+        // bounded exact grammar (03B isolated reproducer). Rational normalization
+        // suffices here; retain the nested principal root structurally.
+        if((compositionMode||input.parentScope)&&composition::nestedRoot(g)){
+            composition::Work work{ctx,calls,Limits::symbolicCalls};
+            return composition::normalizeRoots(work,g);
+        }
         return giac::_simplify(giac::ratnormal(g.eval(1, ctx), ctx), ctx);
     }
     gen expand(const gen &g) {
@@ -235,11 +243,12 @@ bool domainSafe(Algebra &a, const gen &g, const State &state, unsigned depth, un
     if(trigAtom(g) || (g.type==giac::_SYMB && (g._SYMBptr->sommet==giac::at_asin||g._SYMBptr->sommet==giac::at_acos||g._SYMBptr->sommet==giac::at_atan))) {
         // Only read-only presentation accepts these here. Proof admission and
         // exact range checks belong to the independent periodic theorem path.
-        return a.presentationOnly && domainSafe(a,g._SYMBptr->feuille,state,depth+1,nodes);
+        return (a.presentationOnly || (a.trigonometricInput && trigAtom(g))) && domainSafe(a,g._SYMBptr->feuille,state,depth+1,nodes);
     }
     if(transAtom(g))return transDomainSafe(a,g,state,depth,nodes);
-    if (g.type == giac::_CPLX)
+    if (g.type == giac::_CPLX) {
         return a.rational(*g._CPLXptr) && a.rational(*(g._CPLXptr + 1));
+    }
     if (g.type == giac::_IDNT) {
         if(a.presentationOnly && g==gen(giac::_IDNT_pi()))return true;
         auto name = a.print(g);
@@ -490,6 +499,7 @@ void message(Algebra &a, Step &s, const State &after) {
         s.parameters = {variable(a.input.variables.front())};
         break;
     case Rule::AddBoth: {
+        if(a.trigonometricInput){s.explanation=a.negative(a.parse(s.operand))?Message::TransSubtract:Message::TransAdd;break;}
         if(a.transcendentalInput && hasTrans(after.branches[s.branch].equations[s.row],a,true)) {
             s.explanation=a.negative(a.parse(s.operand))?Message::TransSubtract:Message::TransAdd;break;
         }
@@ -533,6 +543,7 @@ void message(Algebra &a, Step &s, const State &after) {
         break;
     }
     case Rule::DivideBoth: {
+        if(a.trigonometricInput){s.explanation=Message::TransDivide;break;}
         if(a.transcendentalInput && hasTrans(after.branches[s.branch].equations[s.row],a,true)){s.explanation=Message::TransDivide;break;}
         auto special=findSpecialEquation(a,after.branches[s.branch].equations[s.row]);
         if(special.count) {s.explanation=special.radical?Message::RadicalDivide:Message::AbsDivide;break;}
@@ -662,9 +673,12 @@ bool equationSame(Algebra &a, const Equation &actual, const gen &lhs, const gen 
 // sides, or invokes a theorem with explicitly checked hypotheses. In particular
 // equation residual equality is NEVER used to justify balancing or row scaling.
 Verdict verifyLifted(Algebra&,const Derivation&,const Step&);
+Verdict verifyComposition(Algebra&,const Derivation&,const Step&);
+Verdict replay(Algebra&,const Derivation&);
 Verdict verifyStep(Algebra &a, const Derivation &d, const Step &s) {
     if (s.before >= d.states.size() || s.after >= d.states.size() || s.after != s.before + 1)
         return a.reject(__LINE__);
+    if(s.rule>=Rule::SubstitutionDefine)return verifyComposition(a,d,s);
     if(s.rule>=Rule::TrigRange)return verifyTrig(a,d,s);
     if(d.states[s.before].periodicStage || d.states[s.after].periodicStage || !d.states[s.before].families.empty() || !d.states[s.after].families.empty())return a.reject(__LINE__);
     if(s.caseStart != UINT16_MAX) return verifyLifted(a,d,s);
@@ -721,8 +735,9 @@ Verdict verifyStep(Algebra &a, const Derivation &d, const Step &s) {
             for (const auto &e : b.equations) {
                 unsigned nodes = 0;
                 if (!domainSafe(a, a.parse(e.lhs), after, 0, nodes) ||
-                    !domainSafe(a, a.parse(e.rhs), after, 0, nodes))
+                    !domainSafe(a, a.parse(e.rhs), after, 0, nodes)){
                     return a.reject(__LINE__);
+                }
             }
         }
         if (s.rule == Rule::AddBoth) {
@@ -814,6 +829,7 @@ Verdict verifyStep(Algebra &a, const Derivation &d, const Step &s) {
     case Rule::AddBoth: {
         const gen v = a.parse(s.operand);
         ok = !a.zero(v) && transformed(lhs + v, rhs + v);
+        if(a.trigonometricInput)break; // exact declared balancing on both sides
         if(a.transcendentalInput && hasTrans(eq,a,true)) {
             auto form=transForm(a,eq);ok=ok && !form.reversed && a.same(v,-form.remainder);break;
         }
@@ -847,6 +863,7 @@ Verdict verifyStep(Algebra &a, const Derivation &d, const Step &s) {
     }
     case Rule::DivideBoth: {
         const gen v = a.normal(a.parse(s.operand));
+        if(a.trigonometricInput){ok=a.rational(v)&&!a.zero(v)&&!a.same(v,gen(1))&&transformed(lhs/v,rhs/v);break;}
         if(a.transcendentalInput && hasTrans(eq,a,true)) {
             auto form=transForm(a,eq);ok=!form.reversed && a.zero(form.remainder) && a.rational(v) && !a.zero(v) && !a.same(v,gen(1)) && a.same(v,form.coefficient) && transformed(lhs/v,rhs/v);break;
         }
@@ -1529,7 +1546,10 @@ struct Planner {
     void nonlinear();
     void transcendental();
     void trigonometric();
+    void compose();
+    void squarePreimage();
     void run() {
+        if(a.input.childRole==3){squarePreimage();return;}
         Vector<Condition> conditions;
         std::vector<gen> denominators;
         capture(a, conditions, denominators);
@@ -1594,6 +1614,7 @@ struct Planner {
 #include "GiacTutorNonlinearPlanner.inc"
 #include "GiacTutorTranscendentalPlanner.inc"
 #include "GiacTutorTrigPlanner.inc"
+#include "GiacTutorComposition.inc"
 
 void groupPresentation(Derivation &d) {
     for (size_t i = 0; i < d.steps.size(); ++i) {
@@ -1625,7 +1646,7 @@ bool inputValid(const Snapshot &s) {
     if (bytes > Limits::sourceBytes)
         return false;
     for (size_t i = 0; i < s.variables.size(); ++i) {
-        if (!validIdentifier(s.variables[i]))
+        if (!validIdentifier(s.variables[i]) && !(s.parentScope && s.childRole==1 && s.variables.size()==1 && s.variables[i]=="t"))
             return false;
         for (size_t j = 0; j < i; ++j)
             if (s.variables[i] == s.variables[j])
@@ -1691,6 +1712,7 @@ bool rationalLiteral(const gen &g) {
     return rationalLiteral(f);
 }
 Verdict replay(Algebra &a, const Derivation &d) {
+    if(d.composition)a.compositionMode=true;
     if (!inputValid(d.input) || d.states.empty() || d.states.size() != d.steps.size() + 1 ||
         d.steps.size() > Limits::steps || retainedBytes(d) > Limits::retainedBytes)
         return Verdict::Rejected;
@@ -1709,7 +1731,8 @@ Verdict replay(Algebra &a, const Derivation &d) {
         return Verdict::Rejected;
     Vector<Condition> conditions;
     std::vector<gen> den;
-    capture(a, conditions, den);
+    if(d.composition)conditions=d.composition->originalConditions;
+    else if(d.input.childRole!=3)capture(a, conditions, den);
     for (size_t i = 0; i < d.steps.size(); ++i) {
         if (d.steps[i].before != i || verifyStep(a, d, d.steps[i]) != Verdict::Verified)
             return Verdict::Rejected;
@@ -1795,7 +1818,7 @@ tutor::Derivation GiacEngine::explainEquations(const tutor::Snapshot &request,
     using namespace tutor;
     using namespace tutorkernel;
     Derivation d;
-    if (!inputValid(request) || !begin())
+    if (request.parentScope || request.childRole || !inputValid(request) || !begin())
         return d;
     CallGuard guard(_inCall);
     if (!guard.entered())
@@ -1852,7 +1875,12 @@ tutor::Derivation GiacEngine::explainEquations(const tutor::Snapshot &request,
         }
         d.states.push_back(authoredState(d.input));
         Planner p{a, d};
-        p.run();
+        try { p.run(); }
+        catch(const UnsupportedInput&) {
+            // Preserve every accepted old plan. Only a structural admission
+            // failure reaches the bounded single-substitution planner.
+            p.compose();
+        }
         groupPresentation(d);
         d.status = Status::Complete;
         d.validity = replay(a, d);
@@ -1869,7 +1897,14 @@ tutor::Derivation GiacEngine::explainEquations(const tutor::Snapshot &request,
         d.metrics.symbolicCalls = a.calls;
     } catch (const LimitReached &e) {
         d.status = Status::Partial;
-        d.diagnostic = "construction budget exhausted at " + std::to_string(e.line);
+        // WHY: the allocator fault may still be armed at the budget boundary.
+        // A diagnostic must never turn a safe Partial result into an exception.
+        try { d.diagnostic = "construction budget exhausted at " + std::to_string(e.line); }
+        catch (const std::bad_alloc &) { d.diagnostic.clear(); }
+    } catch (const composition::BudgetExceeded &) {
+        d.status = Status::Partial;
+        try { d.diagnostic = "composition symbolic budget exhausted"; }
+        catch (const std::bad_alloc &) { d.diagnostic.clear(); }
     } catch (const UnsupportedInput &e) {
         d.status = Status::Unsupported;
         d.diagnostic = "outside checked polynomial / real single-function / linear system contract at " +
@@ -1887,6 +1922,7 @@ tutor::Derivation GiacEngine::explainEquations(const tutor::Snapshot &request,
         d.diagnostic = "symbolic checker could not establish a proof";
     }
     if (retainedBytes(d) > Limits::retainedBytes) {
+        d.composition.reset();
         d.states.clear();
         d.states.shrink_to_fit();
         d.steps.clear();
@@ -1943,7 +1979,7 @@ bool GiacEngine::tutorSnapshotCurrent(const tutor::Snapshot &input, uint32_t epo
         return false;
     }
 }
-StructuredEngineResult GiacEngine::tutorFormula(const tutor::Equation &equation) {
+StructuredEngineResult GiacEngine::tutorFormula(const tutor::Equation &equation,bool scopedAuxiliary) {
     StructuredEngineResult out;
     if (!begin())
         return out;
@@ -1957,6 +1993,7 @@ StructuredEngineResult GiacEngine::tutorFormula(const tutor::Equation &equation)
         // into the existing structured display boundary. No solve or simplification.
         tutor::Snapshot input;
         input.variables = {"x", "y", "z"};
+        if(scopedAuxiliary)input.variables.push_back("t");
         input.complex = true;
         tutorkernel::Scope scope(_state->ctx, input);
         tutorkernel::Algebra a{_state->ctx, input};

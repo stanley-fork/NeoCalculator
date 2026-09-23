@@ -17,7 +17,8 @@ def run(name,script,extra=None):
     views=[json.loads(x.split('[PERIODIC_RESULT] ',1)[1]) for x in lines if '[PERIODIC_RESULT] ' in x]
     samples=[{k:int(v) for k,v in (f.split('=',1) for f in x.split('|')[1:])} for x in lines if x.startswith('UI_ALLOCATION|')]
     return views,samples
-for name,expression in [('sine','sin 3 x - 1 RIGHT = 1 / 3 RIGHT'),('tangent','tan 3 x RIGHT = 1')]:
+for name,expression in [('sine','sin 3 x - 1 RIGHT = 1 / 3 RIGHT'),('tangent','tan 3 x RIGHT = 1'),
+                        ('four-families','6 sin x RIGHT ^ 2 RIGHT - 5 sin x RIGHT + 1 = 0')]:
     start=eq.single(expression)
     tail='assert_equations periodic equivalent\nassert_equations periodic dump\n'+eq.keys('tools BACK')+'assert_equations periodic dump\nassert_equations trace builds 1\n'+eq.keys('HOME')+'wait 30\nassert_equations closed\n'
     expected,samples=run(name+'-healthy',start+tail);count=samples[0]['attempts']

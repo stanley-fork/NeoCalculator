@@ -6,11 +6,12 @@ namespace tutorview {
 enum class FormulaKind : uint8_t { Equation, Authored, Conditions, StandardQuadratic,
     Coefficients, DiscriminantDefinition, DiscriminantValues, GeneralFormula,
     SubstitutedFormula, Operand, RowOperation, CoefficientEquation, SolutionSet,
-    BalancedOperation, PeriodicFamily, IntegerParameter, TrigPrincipal, TrigRange, FamilyOperation };
+    BalancedOperation, PeriodicFamily, IntegerParameter, TrigPrincipal, TrigRange, FamilyOperation, AuxiliaryConditions };
 // Every displayed mathematical object names its immutable checked source.
 struct FormulaRef {
     FormulaKind kind = FormulaKind::Equation;
     uint16_t state = 0, step = 0;
     uint8_t branch = 0, row = 0;
+    uint8_t child = 0;
 };
 } // namespace tutorview

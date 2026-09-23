@@ -15,6 +15,7 @@ def main():
     p.add_argument('--out',type=Path,required=True)
     p.add_argument('--compiler',default='g++')
     p.add_argument('--phase',action='store_true')
+    p.add_argument('--lvgl',type=Path,help='Exact LVGL headers used by the matching native build')
     a=p.parse_args();source=a.source.resolve();build=a.build.resolve();out=a.out.resolve();out.mkdir(parents=True,exist_ok=True)
     names=['MathAST.o','CalculationEngine.o','MathGlyphAssembly.o','MathTypography.o',
            'MathRenderVisualCases.o','CursorController.o']
@@ -22,8 +23,8 @@ def main():
     assert all(any(p.name==n for p in objects) for n in names),names
     lvgl=list(build.rglob('liblvgl.a'));assert len(lvgl)==1
     libraries=[*lvgl,*build.rglob('libgiac.a'),*build.rglob('libtommath.a')]
-    flags=['-std=gnu++17','-ffunction-sections','-fdata-sections','-DNATIVE_SIM','-DLV_CONF_INCLUDE_SIMPLE',
-           '-DLV_USE_STDLIB_MALLOC=LV_STDLIB_CLIB','-I.','-Isrc','-I.pio/libdeps/emulator_pc/lvgl']
+    flags=['-std=c++17','-ffunction-sections','-fdata-sections','-DNATIVE_SIM','-DLV_CONF_INCLUDE_SIMPLE',
+           '-DLV_USE_STDLIB_MALLOC=LV_STDLIB_CLIB','-I.','-Isrc','-I'+str(a.lvgl.resolve() if a.lvgl else source/'.pio/libdeps/emulator_pc/lvgl')]
     records=[]
     env=dict(os.environ);env['PATH']='C:/mingw64/bin;C:/SDL2/x86_64-w64-mingw32/bin;'+env.get('PATH','')
     def run(name,command):

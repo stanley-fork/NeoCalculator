@@ -77,7 +77,13 @@ int main(){try{
     reject("wrong relation",inject,[](auto& d){d.steps[rule(d,Rule::ExpInjective)].relation=Relation::Candidates;});
     auto stale=log.input;++stale.inputEpoch;require(engine.verifyDerivation(log,stale)==Verdict::Rejected,"stale epoch");
     stale=log.input;++stale.engineGeneration;require(engine.verifyDerivation(log,stale)==Verdict::Rejected,"stale generation");
-    for(const auto& e:std::initializer_list<Equation>{{"ln(x)","ln(-1)"},{"ln((x^2-1)/(x-1))","0"},{"exp((x^2-1)/(x-1))","5"},{"exp(x)+exp(2*x)","3"},{"ln(x)+ln(x-1)","2"},{"ln(exp(x))","2"},{"exp(ln(x))","2"},{"x^x","4"},{"1^x","1"},{"(-2)^x","4"},{"exp(x)","x"},{"exp(x^3)","2"},{"ln(x^2)","2"},{"exp(x)","exp(x)"},{"logb(x,1)","2"}})
+    // 03B deliberately adds this formerly unsupported quadratic composition.
+    const auto composed=solve("exp(x)+exp(2*x)","3");
+    require(composed.status==Status::Complete && composed.composition &&
+            composed.states.back().branches.size()==1 &&
+            engine.verifyDerivation(composed,composed.input)==Verdict::Verified,
+            "quadratic exponential now has a checked complete preimage");
+    for(const auto& e:std::initializer_list<Equation>{{"ln(x)","ln(-1)"},{"ln((x^2-1)/(x-1))","0"},{"exp((x^2-1)/(x-1))","5"},{"ln(x)+ln(x-1)","2"},{"ln(exp(x))","2"},{"exp(ln(x))","2"},{"x^x","4"},{"1^x","1"},{"(-2)^x","4"},{"exp(x)","x"},{"exp(x^3)","2"},{"ln(x^2)","2"},{"exp(x)","exp(x)"},{"logb(x,1)","2"}})
         require(solve(e.lhs,e.rhs).status==Status::Unsupported,"unsupported boundary");
     require(solve("exp(x)","2",true).status==Status::Unsupported,"complex exponential refusal");require(solve("ln(x)","2",true).status==Status::Unsupported,"complex logarithm refusal");
     engine.evaluateStructured("A:=2");auto stored=solve("exp(A*x)","1");require(stored.status==Status::Complete,"stored exact exponent");

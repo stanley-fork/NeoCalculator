@@ -111,7 +111,14 @@ try{
       ['trig-cosine',[39,17,16,78,41,30,42,16],null,null],
       ['trig-tangent',[40,43,17,16,78,41],null,null],
       ['trig-impossible',[38,17,16,78,42],0,'']);
+    if(process.argv.includes('--composition'))fixtures.push(
+      ['composition-square',[17,31,33,16,37,34,17,31,42,16,44,33,78,46],4,null],
+      ['composition-exp',[1,51,42,17,16,37,43,1,51,17,16,44,42,78,46],2,null],
+      ['composition-log',[51,17,37,41,16,31,42,16,37,43,51,17,37,41,16,44,42,78,46],2,null],
+      ['composition-sine',[35,38,17,16,31,42,16,37,34,38,17,16,44,41,78,46],null,null],
+      ['composition-tangent',[40,42,17,16,31,42,16,78,43],null,null]);
     for(const [name,keys,count,first] of fixtures) {
+      if(process.argv.includes('--composition-only') && !name.startsWith('composition-'))continue;
       for(const key of [70,14,14,50,10,...keys,50,15,15,50])await press(key);
       await page.waitForFunction(expected=>{
         const e=window.numos.diagnosticState().equations;
@@ -120,6 +127,12 @@ try{
           (Array.isArray(expected.first)?expected.first.includes(e.x0Exact):e.x0Exact===expected.first));
       },{count,first},{timeout:20000});
       const solved=await page.evaluate(()=>window.numos.diagnosticState());
+      if(name==='composition-sine'||name==='composition-tangent') {
+        assert.equal(solved.equations.answerOrigin,1);
+        assert.equal(solved.equations.answerCoverage,1);
+        assert.equal(solved.equations.reconciliation,1);
+        assert.equal(solved.equations.periodicFamilies,name==='composition-sine'?4:2);
+      }
       if(process.argv.includes('--periodic') && name.startsWith('trig-')) {
         assert.equal(solved.equations.answerOrigin,1,'ordinary public Giac producer');
         assert.equal(solved.equations.answerCoverage,1,'all branches converted');

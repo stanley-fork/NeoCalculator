@@ -52,12 +52,13 @@ void EquationsApp::drawStep(bool preserveScroll, bool reuseFormulas) {
     if(!total)return;
     _teachingPage=std::min(_teachingPage,total-1);
     const auto page=teachingPageAt(_derivation,_stepDetail,_teachingPage);
+    const auto& trace=teachingTrace(_derivation,page);
     _stepIndex=page.first;
     const unsigned operationIndex=page.kind==TeachingKind::Final ||
-        _derivation.steps[page.first].rule==Rule::BaseDomain?page.last:page.first;
-    const auto& step=_derivation.steps[operationIndex];
-    const auto& before=_derivation.states[step.before];
-    const auto& after=_derivation.states[step.after];
+        trace.steps[page.first].rule==Rule::BaseDomain?page.last:page.first;
+    const auto& step=trace.steps[operationIndex];
+    const auto& before=trace.states[step.before];
+    const auto& after=trace.states[step.after];
     std::array<FormulaRef,4> refs{};
     std::array<NodePtr,4> prepared{};
     std::array<std::string,4> captions{};
@@ -66,7 +67,7 @@ void EquationsApp::drawStep(bool preserveScroll, bool reuseFormulas) {
     auto numbered=[&](Message key,unsigned number){return explain(key,{{ParameterKind::Integer,std::to_string(number)}},_stepLocale);};
     auto titleKey=Message::ViewCurrent;
     auto ref=[&](FormulaKind kind,unsigned state=0,unsigned branch=0,unsigned row=0,unsigned source=65535){
-        return FormulaRef{kind,uint16_t(state),uint16_t(source==65535?operationIndex:source),uint8_t(branch),uint8_t(row)};
+        return FormulaRef{kind,uint16_t(state),uint16_t(source==65535?operationIndex:source),uint8_t(branch),uint8_t(row),page.child};
     };
     try {
         std::string prose=teachingOperationText(step,_stepLocale);
@@ -75,7 +76,7 @@ void EquationsApp::drawStep(bool preserveScroll, bool reuseFormulas) {
             refs[count]=formula;captions[count]=std::move(caption);++count;
         };
         bool absSplit=false;
-        for(const auto& s:_derivation.steps)if(s.rule==Rule::AbsCases && _derivation.states[s.after].branches.size()>1)absSplit=true;
+        for(const auto& s:trace.steps)if(s.rule==Rule::AbsCases && trace.states[s.after].branches.size()>1)absSplit=true;
         auto caseCaption=[&](const numos::tutor::State& value,unsigned branch, bool active, bool final=false) {
             if(final)return numbered(Message::ViewSolutionNumber,branch+1);
             const auto& b=value.branches[branch];
@@ -87,7 +88,7 @@ void EquationsApp::drawStep(bool preserveScroll, bool reuseFormulas) {
             return numbered(active?Message::ActiveAlternative:Message::ViewUnchangedCase,branch+1);
         };
         auto addState=[&](unsigned state,bool final) {
-            const auto& value=_derivation.states[state];
+            const auto& value=trace.states[state];
             if(final && value.branches.size()>3 && !value.conditions.empty()) {
                 add(ref(FormulaKind::SolutionSet,state),words(Message::ViewSolutions));return;
             }
@@ -109,24 +110,56 @@ void EquationsApp::drawStep(bool preserveScroll, bool reuseFormulas) {
             return absSplit && step.caseStart!=UINT16_MAX
                 ? caseCaption(before,step.branch,true)+"\n"+words(key) : words(key);
         };
-        if(step.rule>=Rule::TrigRange) {
+        if(step.rule>=Rule::SubstitutionDefine) {
+            titleKey=Message::ViewDefineSubstitution;
+            if(step.rule==Rule::SubstitutionDefine){
+                add(ref(FormulaKind::Authored),words(page.child?Message::ViewReturnEquation:Message::ViewOriginal));
+                add(ref(FormulaKind::Equation,step.after));
+                if(trace.composition && !trace.composition->auxiliaryConditions.empty())add(ref(FormulaKind::AuxiliaryConditions),words(Message::ViewSubstitutionRange));
+                if(!after.conditions.empty())add(ref(FormulaKind::Conditions,step.after),numbered(Message::ViewRestrictions,after.conditions.size()));
+            }else if(step.rule==Rule::SubstitutionRewrite){
+                titleKey=Message::ViewAuxiliaryEquation;add(ref(FormulaKind::Equation,step.after),words(Message::ViewAuxiliaryEquation));
+            }else if(step.rule==Rule::SubstitutionAuxiliary){
+                titleKey=Message::ViewAuxiliary;addState(step.after,false);
+            }else if(step.rule==Rule::SubstitutionReject){
+                titleKey=Message::ViewAuxiliary;add(ref(FormulaKind::Equation,step.before,step.branch),numbered(Message::RejectedAlternative,step.branch+1));
+                if(trace.composition && !trace.composition->auxiliaryConditions.empty())add(ref(FormulaKind::AuxiliaryConditions),words(Message::ViewSubstitutionRange));
+            }else if(step.rule==Rule::SubstitutionPullback){
+                titleKey=Message::ViewPullback;add(ref(FormulaKind::Equation,step.before,step.branch),words(Message::ViewAuxiliary));
+                add(ref(FormulaKind::Equation,step.after,step.branch),numbered(Message::ActiveAlternative,step.branch+1));
+            }else if(step.rule==Rule::SquarePreimage){
+                titleKey=Message::ViewSquareRoots;add(ref(FormulaKind::Equation,step.before));addState(step.after,false);
+            }else if(after.conclusion==Conclusion::Periodic){
+                titleKey=Message::ViewPeriodic;
+                for(unsigned i=2*page.section;i<std::min<unsigned>(2*page.section+2,after.families.size());++i)add(ref(FormulaKind::PeriodicFamily,step.after,i),numbered(Message::ViewFamilyNumber,i+1));
+                add(ref(FormulaKind::IntegerParameter),words(Message::ViewInteger));
+                if(!after.conditions.empty())add(ref(FormulaKind::Conditions,step.after),numbered(Message::ViewRestrictions,after.conditions.size()));
+                const bool completeAnswer=_giacResult.coverage==numos::SolveCoverage::PeriodicComplete;
+                prose+="\n"+words(completeAnswer?(_derivation.reconciliation==Verdict::Verified?Message::ViewPeriodicAgreement:Message::ViewPeriodicIndependent):Message::ViewRepresentatives);
+            }else {
+                titleKey=after.conclusion==Conclusion::Empty?Message::ViewNoSolution:Message::ViewSolutions;
+                if(after.conclusion==Conclusion::Empty)add(ref(FormulaKind::Authored),words(page.child?Message::ViewReturnEquation:Message::ViewOriginal));
+                else addState(step.after,true);
+                if(!after.conditions.empty())add(ref(FormulaKind::Conditions,step.after),numbered(Message::ViewRestrictions,after.conditions.size()));
+            }
+        }else if(step.rule>=Rule::TrigRange) {
             if(step.rule==Rule::FamilyShift && !step.operand.empty()){
                 const bool negative=step.operand.front()=='-';
                 const auto amount=negative?step.operand.substr(1):step.operand;
                 bool integer=!amount.empty();for(char c:amount)integer=integer&&c>='0'&&c<='9';
                 if(integer)prose=explain(negative?Message::ViewAddAmount:Message::ViewSubtractAmount,{{ParameterKind::Expression,amount}},_stepLocale)+"\n"+prose;
             }
-            if(_derivation.input.degrees && step.rule==Rule::TrigPrincipal)prose+="\n"+words(Message::ViewDegreeConvention);
+            if(trace.input.degrees && step.rule==Rule::TrigPrincipal)prose+="\n"+words(Message::ViewDegreeConvention);
             titleKey=step.rule==Rule::FamilyFinish?Message::ViewPeriodic:
                 step.rule==Rule::TrigImpossible?Message::ViewNoSolution:
                 step.rule==Rule::TrigPrincipal?Message::ViewPrincipal:
                 step.rule==Rule::TrigRange?Message::ViewRange:Message::ViewPeriodic;
             if(step.rule==Rule::TrigRange||step.rule==Rule::TrigImpossible) {
-                add(ref(FormulaKind::Authored,0),words(Message::ViewOriginal));
+                add(ref(FormulaKind::Authored,0),words(page.child?Message::ViewReturnEquation:Message::ViewOriginal));
                 if(after.conditions.empty())add(ref(FormulaKind::TrigRange));
                 else add(ref(FormulaKind::Conditions,step.after),numbered(Message::ViewRestrictions,after.conditions.size()));
             }else if(step.rule==Rule::TrigPrincipal){
-                add(ref(FormulaKind::Authored,0),words(Message::ViewOriginal));add(ref(FormulaKind::TrigPrincipal));
+                add(ref(FormulaKind::Authored,0),words(page.child?Message::ViewReturnEquation:Message::ViewOriginal));add(ref(FormulaKind::TrigPrincipal));
             }else {
                 if(step.rule==Rule::FamilyShift||step.rule==Rule::FamilyDivide)
                     for(unsigned i=0;i<before.families.size();++i)add(ref(FormulaKind::FamilyOperation,step.before,i),numbered(Message::ViewFamilyNumber,i+1));
@@ -134,14 +167,14 @@ void EquationsApp::drawStep(bool preserveScroll, bool reuseFormulas) {
                 if(count<4)add(ref(FormulaKind::IntegerParameter),words(Message::ViewInteger));
                 if(step.rule==Rule::FamilyFinish){
                     const bool completeAnswer=_giacResult.coverage==numos::SolveCoverage::PeriodicComplete;
-                    prose+="\n"+words(completeAnswer?(_derivation.reconciliation==Verdict::Verified?Message::ViewPeriodicAgreement:Message::ViewPeriodicIndependent):Message::ViewRepresentatives);
+                    prose+="\n"+words(completeAnswer?(trace.reconciliation==Verdict::Verified?Message::ViewPeriodicAgreement:Message::ViewPeriodicIndependent):Message::ViewRepresentatives);
                     if(!after.conditions.empty())add(ref(FormulaKind::Conditions,step.after),numbered(Message::ViewRestrictions,after.conditions.size()));
                 }
             }
         }else switch(page.kind) {
         case TeachingKind::Start:
             titleKey=Message::ViewStart;prose=words(Message::ViewStartingSystem);
-            for(unsigned r=0;r<_derivation.input.authored.size();++r)
+            for(unsigned r=0;r<trace.input.authored.size();++r)
                 add(ref(FormulaKind::Authored,0,0,r),numbered(Message::EquationRow,r+1));
             break;
         case TeachingKind::Coefficients:
@@ -185,7 +218,7 @@ void EquationsApp::drawStep(bool preserveScroll, bool reuseFormulas) {
             titleKey=Message::ViewSummary;prose.clear();
             add(ref(FormulaKind::Equation,step.before),words(Message::ViewBefore));
             for(unsigned i=page.first;i<=page.last;++i) {
-                const auto& item=_derivation.steps[i];
+                const auto& item=trace.steps[i];
                 add(ref(FormulaKind::Equation,item.after,0,0,i),teachingOperationText(item,_stepLocale));
             }
             break;
@@ -256,7 +289,7 @@ void EquationsApp::drawStep(bool preserveScroll, bool reuseFormulas) {
         }
         }
         bool transcendental=false;
-        for(const auto& s:_derivation.steps)if(s.rule>=Rule::PositiveDomain)transcendental=true;
+        for(const auto& s:trace.steps)if(s.rule>=Rule::PositiveDomain)transcendental=true;
         const bool showConditions=!transcendental || page.kind==TeachingKind::Final || step.rule==Rule::PositiveDomain || step.rule==Rule::BaseDomain || step.rule==Rule::ExpRange || step.rule==Rule::RejectOriginal;
         if(step.rule<Rule::TrigRange && showConditions && page.kind!=TeachingKind::Start && !after.conditions.empty())
             add(ref(FormulaKind::Conditions,step.after),numbered(Message::ViewRestrictions,unsigned(after.conditions.size())));
@@ -267,17 +300,17 @@ void EquationsApp::drawStep(bool preserveScroll, bool reuseFormulas) {
             if(count!=_stepFormulaCount)throw std::bad_alloc();
             for(unsigned i=0;i<count;++i){
                 const auto& a=refs[i];const auto& b=_stepFormulaRefs[i];
-                if(a.kind!=b.kind||a.state!=b.state||a.step!=b.step||a.branch!=b.branch||a.row!=b.row||!_viewNodes[i])throw std::bad_alloc();
+                if(a.kind!=b.kind||a.state!=b.state||a.step!=b.step||a.branch!=b.branch||a.row!=b.row||a.child!=b.child||!_viewNodes[i])throw std::bad_alloc();
                 nodes+=tutorview::nodeCount(_viewNodes[i].get());
             }
         }
         for(unsigned i=0;!reuseFormulas && i<count;++i) {
             const Equation* authored=nullptr;
-            if(refs[i].kind==FormulaKind::Authored)authored=&_derivation.input.authored[refs[i].row];
+            if(refs[i].kind==FormulaKind::Authored)authored=&trace.input.authored[refs[i].row];
             if(refs[i].kind==FormulaKind::Equation)
-                authored=&_derivation.states[refs[i].state].branches[refs[i].branch].equations[refs[i].row];
-            if(authored)for(unsigned j=0;j<_derivation.input.authored.size();++j)
-                if(authored->lhs==_derivation.input.authored[j].lhs&&authored->rhs==_derivation.input.authored[j].rhs) {
+                authored=&trace.states[refs[i].state].branches[refs[i].branch].equations[refs[i].row];
+            if(authored && !page.child)for(unsigned j=0;j<trace.input.authored.size();++j)
+                if(authored->lhs==trace.input.authored[j].lhs&&authored->rhs==trace.input.authored[j].rhs) {
                     prepared[i]=cloneNode(_eqRowData[j]);
                     tutorview::authoredSigns(prepared[i].get());break;
                 }
@@ -286,13 +319,23 @@ void EquationsApp::drawStep(bool preserveScroll, bool reuseFormulas) {
             nodes+=tutorview::nodeCount(prepared[i].get());
             if(nodes>640)throw std::bad_alloc();
         }
-        const auto title=page.kind==TeachingKind::Final||page.kind==TeachingKind::Start?words(titleKey):
+        if(page.child==1){prose=words(Message::ViewAuxiliary)+"\n"+prose;if(page.kind==TeachingKind::Final||page.kind==TeachingKind::Roots)titleKey=Message::ViewAuxiliary;}
+        if(page.child>1 && _derivation.composition){
+            for(unsigned i=0;i<_derivation.composition->preimages.size();++i)
+                if(_derivation.composition->preimages[i].child==page.child-1){
+                    prose=numbered(Message::ViewAuxiliaryNumber,i+1)+"\n"+prose;break;
+                }
+        }
+        const auto title=page.kind==TeachingKind::Final && !page.child && after.families.size()>2
+            ?explain(Message::ViewPeriodicPage,{{ParameterKind::Integer,std::to_string(page.section+1)},
+                     {ParameterKind::Integer,std::to_string((after.families.size()+1)/2)}},_stepLocale)
+            :page.kind==TeachingKind::Final||page.kind==TeachingKind::Start?words(titleKey):
             explain(_stepDetail?Message::ViewStep:Message::ViewSummary,
                     {{ParameterKind::Integer,std::to_string(_teachingPage+1)},
                      {ParameterKind::Integer,std::to_string(total)}},_stepLocale);
         const auto hint=words(_stepDetail?Message::ViewGuidedHint:Message::ViewSummaryHint);
         header(title.c_str(),hint.c_str());
-        lv_label_set_text(_stepVerified,words(_derivation.status==Status::Complete?Message::ViewVerified:Message::ViewPartial).c_str());
+        lv_label_set_text(_stepVerified,words(trace.status==Status::Complete?Message::ViewVerified:Message::ViewPartial).c_str());
         const auto heading=page.kind==TeachingKind::Final||page.kind==TeachingKind::Start||page.kind==TeachingKind::Chain?std::string{}:words(titleKey);
         lv_label_set_text(_stepConditions,heading.c_str());lv_obj_set_pos(_stepConditions,8,2);lv_obj_update_layout(_stepConditions);
         int y=heading.empty()?2:lv_obj_get_height(_stepConditions)+8;
@@ -322,7 +365,7 @@ void EquationsApp::drawStep(bool preserveScroll, bool reuseFormulas) {
             const bool changed=refs[i].kind==FormulaKind::Equation&&refs[i].state==step.after&&affected&&
                 page.kind!=TeachingKind::Final&&page.kind!=TeachingKind::Roots;
             const bool rejected=refs[i].kind==FormulaKind::Equation&&
-                _derivation.states[refs[i].state].branches[refs[i].branch].status==BranchStatus::Rejected;
+                trace.states[refs[i].state].branches[refs[i].branch].status==BranchStatus::Rejected;
             lv_obj_set_style_bg_color(_rows[i],lv_color_hex(rejected?0xFCE5E5:changed?0xFFF1C9:0xF5F5F5),0);
             lv_obj_set_size(canvas.obj(),292,height);if(!reuseFormulas)canvas.scrollBounded(10000);canvas.invalidate();
             y+=height+14;
@@ -347,7 +390,7 @@ void EquationsApp::drawStep(bool preserveScroll, bool reuseFormulas) {
         // title/badge/help. Static catalog storage remains usable under the fault.
         lv_label_set_text_static(_title,messageFallback(Message::ViewSteps,_stepLocale));
         lv_label_set_text_static(_hint,messageFallback(_stepDetail?Message::ViewGuidedHint:Message::ViewSummaryHint,_stepLocale));
-        lv_label_set_text_static(_stepVerified,messageFallback(_derivation.status==Status::Complete?Message::ViewVerified:Message::ViewPartial,_stepLocale));
+        lv_label_set_text_static(_stepVerified,messageFallback(trace.status==Status::Complete?Message::ViewVerified:Message::ViewPartial,_stepLocale));
         lv_label_set_text_static(_stepProse,messageFallback(Message::ViewUnavailable,_stepLocale));lv_obj_set_pos(_stepProse,8,8);
         lv_label_set_text_static(_stepConditions,"");
     }

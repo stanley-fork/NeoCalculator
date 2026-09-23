@@ -38,14 +38,18 @@ def edit(text,old,new):
  return text.replace(old,new)
 ui=(source/'src/apps/TutorStepsView.inc').read_text(encoding='utf-8')
 ui=edit(ui,'const auto started=std::chrono::steady_clock::now();','pageprobe::Page probe(_teachingPage); pageprobe::Span projection(pageprobe::projection);\n    const auto started=std::chrono::steady_clock::now();')
-ui=edit(ui,'for(unsigned i=0;i<count;++i) {\n            const Equation* authored','projection.stop(); pageprobe::Span formulaProbe(pageprobe::formula);\n        for(unsigned i=0;i<count;++i) {\n            const Equation* authored')
+loop=('for(unsigned i=0;!reuseFormulas && i<count;++i) {' if 'for(unsigned i=0;!reuseFormulas' in ui else 'for(unsigned i=0;i<count;++i) {')
+ui=edit(ui,loop+'\n            const Equation* authored','projection.stop(); pageprobe::Span formulaProbe(pageprobe::formula);\n        '+loop+'\n            const Equation* authored')
 ui=edit(ui,'prepared[i]=cloneNode(_eqRowData[j]);','pageprobe::Span cloneProbe(pageprobe::clone); prepared[i]=cloneNode(_eqRowData[j]);')
 ui=edit(ui,'if(!prepared[i])prepared[i]=tutorview::build(_derivation,refs[i],calls);','if(!prepared[i]){pageprobe::Span buildProbe(pageprobe::build);prepared[i]=tutorview::build(_derivation,refs[i],calls);}')
 ui=edit(ui,'const auto title=page.kind','formulaProbe.stop(); pageprobe::Span publishProbe(pageprobe::publish);\n        const auto title=page.kind')
 ui=edit(ui,'header(title.c_str(),hint.c_str());','pageprobe::Span proseProbe(pageprobe::prose);header(title.c_str(),hint.c_str());')
 ui=edit(ui,'auto placeProse=[&] {','proseProbe.stop();auto placeProse=[&] {')
 ui=edit(ui,'lv_label_set_text(_stepLabels[i],captions[i].c_str());','pageprobe::Span captionProbe(pageprobe::caption);lv_label_set_text(_stepLabels[i],captions[i].c_str());')
-ui=edit(ui,'_canvas[i].setExpression(nullptr,nullptr);_viewNodes[i].reset();\n            auto row','captionProbe.stop();_canvas[i].setExpression(nullptr,nullptr);_viewNodes[i].reset();\n            auto row')
+if 'auto& canvas=_canvas[i];' in ui:
+ ui=edit(ui,'auto& canvas=_canvas[i];','captionProbe.stop();auto& canvas=_canvas[i];')
+else:
+ ui=edit(ui,'_canvas[i].setExpression(nullptr,nullptr);_viewNodes[i].reset();\n            auto row','captionProbe.stop();_canvas[i].setExpression(nullptr,nullptr);_viewNodes[i].reset();\n            auto row')
 ui=edit(ui,'lv_obj_update_layout(_body);lv_obj_scroll_to_y','pageprobe::Span bodyProbe(pageprobe::body);lv_obj_update_layout(_body);lv_obj_scroll_to_y')
 ui=edit(ui,'canvas.setExpression(r,nullptr);','{pageprobe::Span attachProbe(pageprobe::attach);canvas.setExpression(r,nullptr);}')
 ui=edit(ui,'r->calculateLayout(canvas.normalMetrics());','{pageprobe::Span layoutProbe(pageprobe::layout);r->calculateLayout(canvas.normalMetrics());}')
@@ -74,7 +78,7 @@ else:
 (scratch/'GiacTutor.inc').write_text(head+'StructuredEngineResult GiacEngine::tutorFormula('+tail,encoding='utf-8')
 database=json.loads((source/a.database).read_text(encoding='utf-8'))
 for file in ['EquationsApp.cpp','GiacEngine.cpp']:
- record=next(x for x in database if x['file'].endswith(file));original=source/record['file']
+ record=next(x for x in database if x['file'].endswith(file) and 'NATIVE_SIM' in x['command']);original=source/record['file']
  (scratch/file).write_text('#include "PageProbe.h"\n'+original.read_text(encoding='utf-8'),encoding='utf-8')
  args=shlex.split(record['command'].replace('\\','/'));args[0]=a.compiler
  args[args.index('-o')+1]=str(scratch/(file+'.o'));args[args.index(record['file'].replace('\\','/'))]=str(scratch/file)

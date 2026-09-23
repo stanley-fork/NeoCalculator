@@ -57,12 +57,26 @@ bool hasTrans(const Equation& e,Algebra& a,bool openOnly=false) {
     for(const auto& f:found)if(!openOnly||solveVariable(f.inner,a.input))return true;
     return false;
 }
+bool exactAlgebraicTarget(Algebra& a,const gen& g){
+    if(a.rational(g))return true;
+    if(transExponent(g))return false;
+    composition::Work w{a.ctx,a.calls,Limits::symbolicCalls};return composition::sign(w,g)!=2;
+}
 bool exactPositive(Algebra& a,const gen& g){
     const gen value=a.normal(g);
     if(a.rational(value)){a.tick();return giac::is_strictly_positive(value,a.ctx);}
+    if(!transExponent(value)){
+        composition::Work w{a.ctx,a.calls,Limits::symbolicCalls};
+        const int sign=composition::sign(w,value);
+        if(sign!=2)return sign==1;
+    }
     const auto f=transFunction(value);
-    if(f.kind==TransKind::Exp && a.rational(a.normal(f.inner)))return true;
-    if(f.kind==TransKind::Power && a.rational(a.normal(f.inner)))return exactPositive(a,f.base);
+    if(f.kind==TransKind::Exp || f.kind==TransKind::Power){
+        const auto inner=a.normal(f.inner);
+        composition::Work w{a.ctx,a.calls,Limits::symbolicCalls};
+        if(a.rational(inner)||(!transExponent(inner)&&composition::sign(w,inner)!=2))
+            return f.kind==TransKind::Exp||exactPositive(a,f.base);
+    }
     if(f.kind==TransKind::Ln && a.rational(a.normal(f.inner)))return exactPositive(a,f.inner-gen(1));
     if(value.type==giac::_SYMB && value._SYMBptr->sommet==giac::at_inv)return exactPositive(a,value._SYMBptr->feuille);
     throw UnsupportedInput{__LINE__,"exact positivity theorem unavailable"};
@@ -158,7 +172,11 @@ bool captureTranscendental(Algebra& a,Vector<Condition>& conditions) {
         if(!a.same(form.coefficient,gen(1))||!a.zero(form.remainder))throw UnsupportedInput{__LINE__,"same-function equality must be isolated"};
     }else {
         const gen target=a.normal((form.other-form.remainder)/form.coefficient);
-        if(solveVariable(target,a.input)||!a.rational(target))throw UnsupportedInput{__LINE__,"inverse target must be an exact rational constant"};
+        if(solveVariable(target,a.input))throw UnsupportedInput{__LINE__,"inverse target must be an exact real constant"};
+        if(!a.rational(target)){
+            composition::Work w{a.ctx,a.calls,Limits::symbolicCalls};
+            if(transExponent(target)||composition::sign(w,target)==2)throw UnsupportedInput{__LINE__,"exact algebraic target undecided"};
+        }
     }
     return true;
 }

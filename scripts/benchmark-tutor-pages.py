@@ -16,6 +16,9 @@ for name in ['exp-common-base','log-domain','log-isolate']:
  CASES[name]=teaching.CASES[name]
 for name in ['trig-sine','trig-affine','trig-tangent','trig-unfamiliar']:
  CASES[name]=teaching.CASES[name]
+spec=importlib.util.spec_from_file_location('composition',ROOT/'scripts/test-tutor-composition-ui.py')
+composition=importlib.util.module_from_spec(spec);spec.loader.exec_module(composition)
+CASES.update(composition.t.CASES)
 def main():
  p=argparse.ArgumentParser();p.add_argument('--bin',required=True);p.add_argument('--out',required=True);p.add_argument('--samples',type=int,default=30);p.add_argument('--warmup',type=int,default=5);p.add_argument('--cases',nargs='+',choices=list(CASES));p.add_argument('--expect-no-polynomial-scan',action='store_true');a=p.parse_args()
  out=Path(a.out).resolve();out.mkdir(parents=True,exist_ok=True);env=os.environ.copy();env['PATH']='C:/SDL2/x86_64-w64-mingw32/bin;C:/mingw64/bin;'+env['PATH']
@@ -30,6 +33,8 @@ def main():
   if a.cases and name not in a.cases:continue
   start=(eq.single(expressions[0]) if len(expressions)==1 else eq.system(expressions))+eq.keys('tools')
   if name.startswith('abs-'):start=start.replace('key SHIFT\nkey sqrt\n','equations_physical 4 0\nequations_physical 2 2\n')
+  if name.startswith('exp-composition'):start=start.replace('key SHIFT\nkey ln\n','equations_physical 4 0\nequations_physical 3 3\n')
+  if name.endswith('-deg'):start='set_angle_mode deg\n'+start
   if name=='complex':start=start.replace('policy real','policy complex')
   found=run(name+'-discover',start+'assert_equations view dump\n')
   view=json.loads(next(x.split('[TUTOR_VIEW] ',1)[1] for x in found.splitlines() if '[TUTOR_VIEW] ' in x));count=view['count']

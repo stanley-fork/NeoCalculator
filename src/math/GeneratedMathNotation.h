@@ -11,8 +11,8 @@ enum class ProductNotation : uint8_t { Explicit, ScalarNatural };
 namespace generatednotation {
 enum class Shape : uint8_t { Other, Number, Symbol, Group, Root, Function, Fraction };
 struct Factor { Shape shape = Shape::Other; char symbol = 0; };
-inline bool knownScalar(char c) {
-    return c == 'k' || c == 'a' || c == 'b' || c == 'c' || c == 'x' || c == 'y' || c == 'z' ||
+inline bool knownScalar(char c, char auxiliary = 0) {
+    return (auxiliary && c == auxiliary) || c == 'k' || c == 'a' || c == 'b' || c == 'c' || c == 'x' || c == 'y' || c == 'z' ||
            (c >= 'A' && c <= 'F');
 }
 inline const vpam::MathNode* unwrap(const vpam::MathNode* n, unsigned depth = 0) {
@@ -22,18 +22,18 @@ inline const vpam::MathNode* unwrap(const vpam::MathNode* n, unsigned depth = 0)
 }
 // Reject unknown symbols, functions, units and non-scalar node kinds. The
 // finite whitelist is a caller contract, not type inference from typography.
-inline bool scalarWalk(const vpam::MathNode* n, bool& hasSymbol, unsigned& budget, unsigned depth = 0) {
+inline bool scalarWalk(const vpam::MathNode* n, bool& hasSymbol, unsigned& budget, unsigned depth = 0, char auxiliary = 0) {
     using namespace vpam;
     n = unwrap(n);
     if (!n || depth > 32 || !budget) return false;
     --budget;
     switch (n->type()) {
     case NodeType::Variable:
-        hasSymbol = true; return knownScalar(static_cast<const NodeVariable*>(n)->name());
+        hasSymbol = true; return knownScalar(static_cast<const NodeVariable*>(n)->name(), auxiliary);
     case NodeType::Symbol: {
         const auto& s = static_cast<const NodeSymbol*>(n)->name();
         if (s == "-" || s == "+") return true;
-        hasSymbol = true; return s.size() == 1 && knownScalar(s[0]);
+        hasSymbol = true; return s.size() == 1 && knownScalar(s[0], auxiliary);
     }
     case NodeType::Number: case NodeType::Constant: return true;
     case NodeType::Operator: {
@@ -43,16 +43,16 @@ inline bool scalarWalk(const vpam::MathNode* n, bool& hasSymbol, unsigned& budge
     case NodeType::Row: case NodeType::Paren: case NodeType::Power:
     case NodeType::Fraction: case NodeType::Root: case NodeType::Function:
         for (int i = 0; i < n->childCount(); ++i)
-            if (!scalarWalk(n->child(i), hasSymbol, budget, depth + 1)) return false;
+            if (!scalarWalk(n->child(i), hasSymbol, budget, depth + 1, auxiliary)) return false;
         return true;
     default: return false;
     }
 }
-inline bool scalar(const vpam::MathNode* n, bool& hasSymbol) {
+inline bool scalar(const vpam::MathNode* n, bool& hasSymbol, char auxiliary = 0) {
     unsigned budget = 512;
-    return scalarWalk(n, hasSymbol, budget);
+    return scalarWalk(n, hasSymbol, budget, 0, auxiliary);
 }
-inline Factor classify(const vpam::MathNode* n) {
+inline Factor classify(const vpam::MathNode* n, char auxiliary = 0) {
     using namespace vpam;
     n = unwrap(n);
     if (!n) return {};
@@ -66,19 +66,19 @@ inline Factor classify(const vpam::MathNode* n) {
         return {Shape::Symbol, 'p'};
     if (n->type() == NodeType::Variable) {
         char c = static_cast<const NodeVariable*>(n)->name();
-        return knownScalar(c) ? Factor{Shape::Symbol, c} : Factor{};
+        return knownScalar(c, auxiliary) ? Factor{Shape::Symbol, c} : Factor{};
     }
     if (n->type() == NodeType::Symbol) {
         const auto& s = static_cast<const NodeSymbol*>(n)->name();
-        return s.size() == 1 && knownScalar(s[0]) ? Factor{Shape::Symbol, s[0]} : Factor{};
+        return s.size() == 1 && knownScalar(s[0], auxiliary) ? Factor{Shape::Symbol, s[0]} : Factor{};
     }
     bool algebraic = false;
-    if (!scalar(n, algebraic)) return {};
+    if (!scalar(n, algebraic, auxiliary)) return {};
     if (n->type() == NodeType::Power) {
         auto base = unwrap(n->child(0));
         if (base && (base->type() == NodeType::Variable || base->type() == NodeType::Symbol ||
                      base->type() == NodeType::Constant))
-            return classify(base);
+            return classify(base, auxiliary);
         return {};
     }
     if (n->type() == NodeType::Paren && algebraic) {
@@ -95,8 +95,8 @@ inline Factor classify(const vpam::MathNode* n) {
     if (n->type() == NodeType::Function) return {Shape::Function, 0};
     return {};
 }
-inline bool juxtapose(const vpam::MathNode* left, const vpam::MathNode* right) {
-    const auto l = classify(left), r = classify(right);
+inline bool juxtapose(const vpam::MathNode* left, const vpam::MathNode* right, char auxiliary = 0) {
+    const auto l = classify(left, auxiliary), r = classify(right, auxiliary);
     if (l.shape == Shape::Other || r.shape == Shape::Other ||
         r.shape == Shape::Number || r.shape == Shape::Fraction) return false;
     if (r.shape == Shape::Symbol)
@@ -107,7 +107,7 @@ inline bool juxtapose(const vpam::MathNode* left, const vpam::MathNode* right) {
 }
 // Called during formula construction, never in layout/draw. The source-node
 // budget bounds the traversal; exhaustion safely retains explicit operators.
-inline void apply(vpam::MathNode* n, unsigned& budget, unsigned depth = 0) {
+inline void apply(vpam::MathNode* n, unsigned& budget, unsigned depth = 0, char auxiliary = 0) {
     using namespace vpam;
     if (!n || !budget || depth > 32) return;
     --budget;
@@ -117,7 +117,7 @@ inline void apply(vpam::MathNode* n, unsigned& budget, unsigned depth = 0) {
     case NodeType::Paren: case NodeType::Root: case NodeType::Function: break;
     default: return;
     }
-    for (int i = 0; i < n->childCount(); ++i) apply(n->child(i), budget, depth + 1);
+    for (int i = 0; i < n->childCount(); ++i) apply(n->child(i), budget, depth + 1, auxiliary);
     if (n->type() != NodeType::Row) return;
     auto* row = static_cast<NodeRow*>(n);
     // A leading signed scalar coefficient needs no enclosing parentheses.
@@ -141,7 +141,7 @@ inline void apply(vpam::MathNode* n, unsigned& budget, unsigned depth = 0) {
         const auto* op = row->child(i);
         if (op->type() != NodeType::Operator ||
             static_cast<const NodeOperator*>(op)->op() != OpKind::Mul ||
-            !juxtapose(row->child(i - 1), row->child(i + 1))) continue;
+            !juxtapose(row->child(i - 1), row->child(i + 1), auxiliary)) continue;
         auto* right = const_cast<MathNode*>(unwrap(row->child(i + 1)));
         if (right->type() == NodeType::Function)
             static_cast<NodeFunction*>(right)->setGeneratedOperatorSpacing(true);
@@ -149,10 +149,10 @@ inline void apply(vpam::MathNode* n, unsigned& budget, unsigned depth = 0) {
     }
 }
 } // namespace generatednotation
-inline void applyGeneratedProductNotation(vpam::MathNode* root, ProductNotation policy) {
+inline void applyGeneratedProductNotation(vpam::MathNode* root, ProductNotation policy, char scopedAuxiliary = 0) {
     if (policy == ProductNotation::ScalarNatural) {
         unsigned budget = 512;
-        generatednotation::apply(root, budget);
+        generatednotation::apply(root, budget, 0, scopedAuxiliary);
     }
 }
 } // namespace numos

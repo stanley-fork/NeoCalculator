@@ -99,8 +99,12 @@ async function run(browserName, browserType) {
     const periodicZero = await math.solve("sin(x)=0", "x");
     const periodicPole = await math.solve("tan(3*x)=1", "x");
     const periodicRestricted = await math.solve("sin(x)=0*x/x", "x");
+    // Ordinary Giac boundary only: no tutor is built by this headless API.
+    const composition = await math.solve("6*sin(x)^2-5*sin(x)+1=0", "x");
+    const compositionPole = await math.solve("tan(2*x)^2=3", "x");
     await math.setAngleMode("degree");
     const periodicDegree = await math.solve("sin(2*x)=1/2", "x");
+    const compositionDegree = await math.solve("6*sin(3*x-1)^2-5*sin(3*x-1)+1=0", "x");
     await math.setAngleMode("radian");
 
     await math.setVariable("A", "1/3");
@@ -200,7 +204,7 @@ async function run(browserName, browserType) {
       browserName, timings, f7, twoPlusTwo, large, rational, radical, simplified,
       complex, infinity, undefinedValue, list, matrix, piecewise, derivative,
       degreeDerivative, integral, unevaluated, linear, polynomial, system,
-      noSolution, identity, parameter, periodic, periodicZero, periodicPole, periodicRestricted, periodicDegree, variableRead, variableDiagnostics,
+      noSolution, identity, parameter, periodic, periodicZero, periodicPole, periodicRestricted, periodicDegree, composition, compositionPole, compositionDegree, variableRead, variableDiagnostics,
       isolatedA, removed, scalar, batchLength: batch.length, gap, trigDegree,
       staleCode,
       disposedCode, circle, grid, bounds, beforeCancel, cancelled, afterCancel,
@@ -240,6 +244,19 @@ async function run(browserName, browserType) {
   assert.equal(result.periodicZero.result.families.length, 1);
   assert.equal(result.periodicPole.result.restrictions[0].kind, "nonzero");
   assert.notEqual(result.periodicRestricted.result.coverage, "periodic_complete");
+  for (const [answer, count, angle] of [[result.composition, 4, "radian"],
+      [result.compositionPole, 2, "radian"], [result.compositionDegree, 4, "degree"]]) {
+    assert.equal(answer.result.coverage, "periodic_complete");
+    assert.equal(answer.result.origin, "giac_all_trig");
+    assert.equal(answer.result.families.length, count);
+    for (const family of answer.result.families) {
+      assert.equal(family.parameter.domain, "integers");
+      assert.notEqual(family.parameter.scope, "0");
+      assert.equal(family.angleMode, angle);
+      assert.notEqual(family.period.kind, "approximate");
+    }
+  }
+  assert.equal(result.compositionPole.result.restrictions[0].kind, "nonzero");
   for (const family of result.periodic.result.families) {
     assert.equal(family.parameter.domain, "integers");
     assert.equal(typeof family.parameter.scope, "string");

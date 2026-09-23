@@ -24,6 +24,7 @@ def main():
     p.add_argument('--transcendental', action='store_true')
     p.add_argument('--trig', action='store_true')
     p.add_argument('--i18n', action='store_true')
+    p.add_argument('--composition', action='store_true')
     args=p.parse_args()
     os.chdir(ROOT)
     args.out.mkdir(parents=True, exist_ok=True)
@@ -42,6 +43,18 @@ def main():
                 eq.single('sin x RIGHT = 1 / 2 RIGHT'),eq.single('cos x RIGHT = 1 / 2 RIGHT'),
                 eq.single('tan 3 x RIGHT = 1'),eq.single('sin 2 x RIGHT = 1 / 2 RIGHT')]
         starts=[('set_angle_mode deg\n' if i==6 else 'set_angle_mode rad\n')+s for i,s in enumerate(starts)]
+    if args.composition:
+        starts=[eq.single(s) for s in [
+            '2 x ^ 2 RIGHT + 3 x - 4 = 0',
+            'sqrt x + 1 RIGHT = x - 1',
+            'x ^ 4 RIGHT - 5 x ^ 2 RIGHT + 4 = 0',
+            'SHIFT ln 2 x RIGHT - 3 SHIFT ln x RIGHT + 2 = 0',
+            'ln x - 1 RIGHT ^ 2 RIGHT - 3 ln x - 1 RIGHT + 2 = 0',
+            '6 sin x RIGHT ^ 2 RIGHT - 5 sin x RIGHT + 1 = 0',
+            'tan 2 x RIGHT ^ 2 RIGHT = 3',
+            '6 sin 3 x - 1 RIGHT ^ 2 RIGHT - 5 sin 3 x - 1 RIGHT + 1 = 0']]
+        starts=[('set_angle_mode deg\n' if i==7 else 'set_angle_mode rad\n')+s for i,s in enumerate(starts)]
+        starts=[s.replace('key SHIFT\nkey ln\n','equations_physical 4 0\nequations_physical 3 3\n') for s in starts]
     env=dict(os.environ,NUMOS_EQUATIONS_BOUNDS='1')
     dll=eq.helper.sdl2_dll_dir(args.bin)
     if dll:env['PATH']=dll+os.pathsep+env.get('PATH','')

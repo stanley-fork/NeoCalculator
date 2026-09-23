@@ -1643,6 +1643,7 @@ StructuredSolveResult rejectedSolveReentrant() {
     return result;
 }
 
+#include "GiacComposition.inc"
 #include "GiacPeriodic.inc"
 
 StructuredSolveResult solveFailure(MathEngineStatus status,const char* diagnostic=nullptr) {

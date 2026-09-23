@@ -50,7 +50,9 @@ enum class Rule : uint8_t {
     PositiveDomain, BaseDomain, ExpRange, ExpInjective, ExpInverse, ExpExactPower,
     LogInverse, LogInjective, PositiveImpossible,
     TrigRange, TrigPrincipal, TrigFamilies, FamilyShift, FamilyDivide,
-    FamilyNormalize, FamilyFinish, TrigImpossible
+    FamilyNormalize, FamilyFinish, TrigImpossible,
+    SubstitutionDefine, SubstitutionRewrite, SubstitutionAuxiliary,
+    SubstitutionReject, SubstitutionPullback, SubstitutionFinish, SquarePreimage
 };
 enum class Message : uint8_t {
     Domain,
@@ -142,6 +144,12 @@ enum class Message : uint8_t {
     ViewPeriodicAgreement, ViewPeriodicIndependent, ViewPeriodicResults, ViewOr,
     ViewSteps, ViewResult, ViewResultHint, ViewPeriodicHint, ViewResultPagesHint, ViewRecoveryHint, ViewSolveAgain, ViewInvalidEquation, ViewUnresolved, ViewNoMemory, ViewSolveFailed, ViewSolveError, ViewPresentationUnavailable, ViewNoComplex, ViewNoReal, ViewConditionalFamily, ViewDependentSystem, ViewTuple2, ViewTuple3, ViewFamilyRelations, ViewUnresolvedExclusions, ViewConditionalIdentity, ViewConditionalExplanation, ViewAllValues, ViewEveryComplex, ViewEveryReal, ViewUnresolvedResult, ViewNumericalCandidates, ViewNumericalNote, ViewCandidateNumber, ViewExactText, ViewDisplayLimit, ViewPageReal, ViewPageComplex, ViewCountRealOne, ViewCountRealMany, ViewCountComplexOne, ViewCountComplexMany, ViewLanguage, ViewEnglish, ViewSpanish,
     ViewSolving, ViewWait, ViewSettingsHint,
+    SubstitutionDefine, SubstitutionRewrite, SubstitutionAuxiliary,
+    SubstitutionRejectSquare, SubstitutionRejectExp, SubstitutionRejectTrig,
+    SubstitutionPullback, SubstitutionFinish, SubstitutionSquare,
+    ViewAuxiliary, ViewPullback, ViewSubstitutionRange,
+    ViewDefineSubstitution, ViewAuxiliaryEquation, ViewAuxiliaryNumber,
+    ViewReturnEquation, SubstitutionFinishEmpty, ViewPeriodicGroupsHint, ViewPeriodicPage,
     Count
 };
 enum class ParameterKind : uint8_t { Expression, Variable, Row, Integer };
@@ -162,13 +170,17 @@ struct Snapshot {
     Vector<Binding> contextValues; // solve-variable assignments/assumptions, never overwritten
     uint32_t inputEpoch = 0, engineGeneration = 0;
     bool complex = false, degrees = false;
+    // Only private composition children carry a scope. Public requests cannot
+    // author an auxiliary by spelling its display letter.
+    uint64_t parentScope = 0;
+    uint8_t childRole = 0; // 1: auxiliary t, 2: pullback, 3: affine-square pullback
 };
 struct Path {
     uint8_t equation = 0, side = 0;
     Vector<uint8_t> children;
 };
 enum class ConditionKind : uint8_t { Nonzero, Nonnegative, Positive, NotOne };
-enum class ConditionRole : uint8_t { Denominator, Radicand, IsolatedRange, LogArgument, ExponentialBase, LogarithmBase, ExponentialTarget, TangentPole };
+enum class ConditionRole : uint8_t { Denominator, Radicand, IsolatedRange, LogArgument, ExponentialBase, LogarithmBase, ExponentialTarget, TangentPole, AuxiliaryRange };
 struct Condition {
     std::string nonzero;
     Path source;
@@ -238,6 +250,7 @@ struct Metrics {
     uint32_t retainedBytes = 0, symbolicCalls = 0, elapsedMicros = 0, vectorHeapBytes = 0,
              peakVectorHeapBytes = 0;
 };
+struct Composition;
 struct Derivation {
     Snapshot input;
     Vector<State> states;
@@ -247,6 +260,23 @@ struct Derivation {
             candidates = Verdict::Unknown, reconciliation = Verdict::Unknown;
     Metrics metrics;
     std::string diagnostic; // developer diagnostic; UI uses semantic status key
+    std::shared_ptr<Composition> composition; // absent in every existing method
+};
+struct Preimage {
+    std::string value;
+    uint8_t child = 0; // 0 means a checked range rejection; child 0 is auxiliary
+    Verdict range = Verdict::Unknown;
+};
+struct Composition {
+    uint64_t scope = 0;
+    uint16_t auxiliaryId = 1;
+    uint8_t kind = 0;
+    uint8_t sourceSide = 0;
+    std::string definition;
+    std::array<std::string,3> coefficients;
+    Vector<Condition> originalConditions, auxiliaryConditions;
+    Vector<Derivation> children; // one auxiliary and at most two pullbacks
+    Vector<Preimage> preimages;
 };
 const char *ruleId(Rule rule);
 const char *messageKey(Message key);

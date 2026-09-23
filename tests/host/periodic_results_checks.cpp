@@ -53,7 +53,10 @@ int main(){try{
     cmp({family("pi/6","2*pi")},{renamed},SetComparison::Equivalent,"alpha-renamed binder");
     cmp({family("0","2*pi"),family("pi","2*pi")},{family("0","2*pi")},SetComparison::Different,"deleted family");
     cmp({family("pi","2*pi"),family("0","2*pi")},{family("0","pi")},SetComparison::Equivalent,"branch order irrelevant");
-    cmp({family("0","pi"),family("0","pi"),family("0","pi")},{family("0","pi")},SetComparison::Unknown,"family cap cannot be bypassed");
+    cmp({family("0","4*pi"),family("pi","4*pi"),family("2*pi","4*pi"),family("3*pi","4*pi")},
+        {family("0","pi")},SetComparison::Equivalent,"four exact residue classes");
+    cmp({family("0","pi"),family("0","pi"),family("0","pi"),family("0","pi"),family("0","pi")},
+        {family("0","pi")},SetComparison::Unknown,"four-family cap cannot be bypassed");
     // Public entries synchronize the selected product angle before entering
     // the scoped request. Establish that expected boundary state first.
     e.evaluate("0");

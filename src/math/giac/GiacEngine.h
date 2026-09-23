@@ -338,7 +338,7 @@ public:
                                    const tutor::Snapshot& expectedInput);
     bool tutorSnapshotCurrent(const tutor::Snapshot& input, uint32_t epoch,
                               bool complexDomain);
-    StructuredEngineResult tutorFormula(const tutor::Equation& equation);
+    StructuredEngineResult tutorFormula(const tutor::Equation& equation, bool scopedAuxiliary = false);
 
     /// Idempotent. Returns false only if the context could not be created.
     bool begin();

@@ -83,7 +83,13 @@ int main(){try{
     }
     engine.evaluate("k:=27");auto collision=solve("sin(x)","1/2");require(collision.status==Status::Complete,"stored k collision");require(engine.evaluate("k").exactText=="27","binder did not assign user k");engine.evaluate("purge(k)");
     engine.evaluate("A:=3");auto stored=solve("sin(A*x-1)","1/3");require(stored.status==Status::Complete,"stored rational");engine.evaluate("A:=2");require(!engine.tutorSnapshotCurrent(stored.input,71,false),"stored invalidation");engine.evaluate("purge(A)");
-    for(const char* lhs:{"sin(x)+cos(x)","sin(x)*sin(x)","sin(sin(x))","sin(x^2)","asin(x)","sin(x)/x","sin(0*x)"})require(solve(lhs,"1/2").status==Status::Unsupported,"unsupported admission");
+    // 03B admits a repeated single atom and keeps all four preimage families.
+    auto squared=solve("sin(x)*sin(x)","1/2");
+    require(squared.status==Status::Complete && squared.composition &&
+            squared.states.back().families.size()==4 &&
+            engine.verifyDerivation(squared,squared.input)==Verdict::Verified,
+            "repeated sine now has four checked preimages");
+    for(const char* lhs:{"sin(x)+cos(x)","sin(sin(x))","sin(x^2)","asin(x)","sin(x)/x","sin(0*x)"})require(solve(lhs,"1/2").status==Status::Unsupported,"unsupported admission");
     // Authored target domains must be checked before zero/cancellation hides them.
     for(bool degrees:{false,true})for(const char* rhs:{"0*x/x","x/x","0*ln(-1)","0*sqrt(-1)","(x-1)/(x-1)"}){
         require(solve("sin(x)",rhs,degrees).status==Status::Unsupported,"domain-bearing target admission");

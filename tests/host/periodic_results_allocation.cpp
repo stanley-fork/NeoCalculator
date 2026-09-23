@@ -22,7 +22,8 @@ void operator delete[](void* p,size_t)noexcept{::operator delete(p);}
 bool setting_complex_enabled=false;
 int main(){using namespace numos;auto& e=GiacEngine::instance();if(!e.begin())return 2;
     unsigned bad=0,total=0;
-    for(const SolveEquation input: {SolveEquation{"sin(3*x-1)","1/3"},SolveEquation{"tan(3*x)","1"},SolveEquation{"sin(x)","2"}}){
+    for(const SolveEquation input: {SolveEquation{"sin(3*x-1)","1/3"},SolveEquation{"tan(3*x)","1"},SolveEquation{"sin(x)","2"},
+        SolveEquation{"6*sin(x)^2-5*sin(x)+1","0"},SolveEquation{"tan(2*x)^2","3"}}){
         size_t count=SIZE_MAX;
         for(unsigned i=0;i<3;++i){attempts=0;failAt=SIZE_MAX;armed=true;{auto a=e.solveStructured(input,"x",SolveDomainPolicy::RealOnly);armed=false;if(a.coverage!=SolveCoverage::PeriodicComplete)return 3;}if(attempts<count)count=attempts;}
         const auto state=e.debugPeriodicContextState();

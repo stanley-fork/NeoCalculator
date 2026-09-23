@@ -29,7 +29,7 @@ case Rule::ExpInjective:case Rule::LogInverse:case Rule::LogInjective: {
         if(function.logarithm())ok=ok&&condition(function.inner,ConditionKind::Positive,ConditionRole::LogArgument)&&condition(other.inner,ConditionKind::Positive,ConditionRole::LogArgument);
         result=other.inner;
     }else if(s.rule==Rule::LogInverse){
-        ok=ok&&function.logarithm()&&condition(function.inner,ConditionKind::Positive,ConditionRole::LogArgument)&&!solveVariable(rhs,a.input)&&a.rational(a.normal(rhs))&&s.operand==eq.rhs&&s.auxiliaries==Vector<std::string>{function.natural()?"ln":a.print(function.base)};
+        ok=ok&&function.logarithm()&&condition(function.inner,ConditionKind::Positive,ConditionRole::LogArgument)&&!solveVariable(rhs,a.input)&&exactAlgebraicTarget(a,a.normal(rhs))&&s.operand==eq.rhs&&s.auxiliaries==Vector<std::string>{function.natural()?"ln":a.print(function.base)};
         result=function.natural()?gen(giac::symbolic(giac::at_exp,rhs)):gen(giac::symbolic(giac::at_pow,giac::makevecteur(function.base,rhs)));result=a.normal(result);
     }else {
         ok=ok&&!function.logarithm()&&condition(rhs,ConditionKind::Positive,ConditionRole::ExponentialTarget)&&!solveVariable(rhs,a.input)&&exactPositive(a,rhs)&&s.operand==eq.rhs&&s.auxiliaries==Vector<std::string>{function.natural()?"exp":a.print(function.base)};

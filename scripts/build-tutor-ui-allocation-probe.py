@@ -37,7 +37,7 @@ else:
 stem='EquationsApp-'+options.label+'-probe'
 (scratch/(stem+'.cpp')).write_text(source,encoding='utf-8')
 (out/(stem+'.cpp')).write_text(source,encoding='utf-8')
-record=next(x for x in json.loads((Path(options.database) if options.database else baseline/'compile_commands.json').read_text()) if x['file'].endswith('EquationsApp.cpp'))
+record=next(x for x in json.loads((Path(options.database) if options.database else baseline/'compile_commands.json').read_text()) if x['file'].endswith('EquationsApp.cpp') and 'NATIVE_SIM' in x['command'])
 args=shlex.split(record['command'].replace('\\','/'))
 args+=['-I'+str(scratch),'-Isrc/apps','-Isrc/math']
 math_source=(baseline/'src/math/MathAST.cpp').read_text(encoding='utf-8')

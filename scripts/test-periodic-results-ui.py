@@ -37,6 +37,11 @@ def main():
     def shot(name):
         images.append(name)
         return 'wait 4\nscreenshot '+rel(out/(name+'.ppm'))+'\n'
+    # These additions exercise the same ordinary producer and bounded Results
+    # widgets; no tutor state is used to populate the ordinary answer.
+    CASES.update({'composition-four':'6 sin x RIGHT ^ 2 RIGHT - 5 sin x RIGHT + 1 = 0',
+                  'composition-four-deg':'6 sin 3 x - 1 RIGHT ^ 2 RIGHT - 5 sin 3 x - 1 RIGHT + 1 = 0',
+                  'composition-tangent':'tan 2 x RIGHT ^ 2 RIGHT = 3'})
     for name,keys in CASES.items():
         if a.cases and name not in a.cases:continue
         start='set_angle_mode '+('deg' if name.endswith('-deg') else 'rad')+'\n'+eq.single(keys)
@@ -45,6 +50,9 @@ def main():
         pageCount=discovery['views'][0]['count']
         bottom=discovery['results'][0]['maxScroll'] if discovery['results'] else 112
         script=start+ordinary+shot(name+'-results-top')
+        if name.startswith('composition-four') and not a.baseline:
+            script+=eq.keys('VAR')+ordinary+shot(name+'-results-second-group')
+            script+=eq.keys('VAR')+ordinary
         if not a.baseline and name=='sine':
             for locale in ['es','fr','pseudo','en']:
                 script+='assert_equations locale '+locale+'\n'+ordinary+shot(name+'-results-'+locale)

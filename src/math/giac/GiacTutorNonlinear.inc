@@ -19,7 +19,7 @@ void findSpecial(const gen& g, Special& out, Path path={}, unsigned depth=0) {
     if(depth>Limits::depth)throw LimitReached{__LINE__};
     if(g.type==giac::_SYMB) {
         auto op=g._SYMBptr->sommet;
-        if(op==giac::at_abs || op==giac::at_sqrt) {
+        if((op==giac::at_abs || op==giac::at_sqrt) && transExponent(g._SYMBptr->feuille)) {
             if(++out.count>1)throw UnsupportedInput{__LINE__,"nested or multiple special functions"};
             out.radical=op==giac::at_sqrt;out.node=g;out.inner=g._SYMBptr->feuille;out.path=path;
         }

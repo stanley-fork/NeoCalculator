@@ -16,7 +16,7 @@ struct AffinePeriodicFamily {
 };
 enum class SetComparison : uint8_t { Unknown, Equivalent, Different };
 struct PeriodicLimits {
-    static constexpr unsigned families = 2;
+    static constexpr unsigned families = 4;
     static constexpr unsigned residues = 64;
     static constexpr unsigned nodes = 512;
     static constexpr unsigned depth = 32;

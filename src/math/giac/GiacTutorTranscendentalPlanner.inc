@@ -44,7 +44,7 @@ void Planner::transcendental() {
         equation(Rule::Collect,a.normal(a.parse(e.lhs)),a.normal(a.parse(e.rhs)));
         r=a.parse(current().branches[0].equations[0].rhs);
     }
-    auto reason=candidateFailure(a,current(),r);State checked=current();Step check;check.operand=a.print(r);
+    auto reason=candidateFailure(a,current(),r);State checked=current();Step check;check.operand=current().branches[0].equations[0].rhs;
     if(reason.empty()){check.rule=Rule::CheckOriginal;checked.branches[0].originalCheck=Verdict::Verified;}
     else {check.rule=Rule::RejectOriginal;check.auxiliaries={reason};checked.branches[0].status=BranchStatus::Rejected;checked.branches[0].originalCheck=Verdict::Rejected;}
     ++group;add(check,std::move(checked));terminal(Rule::Finish,reason.empty()?Conclusion::Finite:Conclusion::Empty);

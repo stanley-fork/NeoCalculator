@@ -19,7 +19,9 @@ int main(){using namespace numos;using namespace numos::tutor;
     auto& engine=GiacEngine::instance();if(!engine.begin())return 1;
     unsigned tested=0,bad=0;
     for(const auto& eq:std::initializer_list<Equation>{{"2*abs(x-1)+3","11"},{"abs(x^2-5)","4"},{"sqrt(x+1)","x-1"},
-            {"2*exp(x)+1","7"},{"4^x","2"},{"ln(x-1)","2"},{"logb(x,2)","3"},{"2^(x+0)","8"},{"sin(3*x-1)","1/3"},{"cos(-2*x)","1"},{"tan(3*x)","1"}}) {
+            {"2*exp(x)+1","7"},{"4^x","2"},{"ln(x-1)","2"},{"logb(x,2)","3"},{"2^(x+0)","8"},{"sin(3*x-1)","1/3"},{"cos(-2*x)","1"},{"tan(3*x)","1"},
+            {"(2*x-1)^4-5*(2*x-1)^2+4","0"},{"exp(2*x)-3*exp(x)+2","0"},
+            {"ln(x-1)^2-3*ln(x-1)+2","0"},{"6*sin(x)^2-5*sin(x)+1","0"},{"tan(2*x)^2","3"}}) {
         Snapshot input;input.authored={eq};input.variables={"x"};input.inputEpoch=1;
         auto answer=engine.solveStructured({eq.lhs,eq.rhs},"x",SolveDomainPolicy::RealOnly);
         size_t total=SIZE_MAX;

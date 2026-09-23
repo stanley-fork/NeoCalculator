@@ -10,7 +10,12 @@ enum class TeachingKind : uint8_t { Start, Transition, Chain, Coefficients,
 struct TeachingPage {
     uint16_t first = 0, last = 0;
     TeachingKind kind = TeachingKind::Transition;
+    uint8_t child = 0, section = 0;
 };
+inline const Derivation& teachingTrace(const Derivation& d,TeachingPage page){
+    return page.child && d.composition && page.child<=d.composition->children.size()
+        ?d.composition->children[page.child-1]:d;
+}
 inline bool teachingNeedsOperand(const Step& s) {
     if(s.rule!=Rule::AddBoth && s.rule!=Rule::DivideBoth)return false;
     for(const auto& p:s.parameters)if(p.kind==ParameterKind::Expression)return false;
@@ -36,7 +41,7 @@ inline std::string teachingOperationText(const Step& s, Locale locale) {
 }
 inline bool terminalRule(Rule rule) {
     return rule == Rule::AlreadySolved || rule == Rule::Identity ||
-           rule == Rule::Contradiction || rule == Rule::Finish || rule == Rule::SystemFinish || rule == Rule::NonnegativeImpossible || rule == Rule::PositiveImpossible || rule == Rule::FamilyFinish || rule == Rule::TrigImpossible;
+           rule == Rule::Contradiction || rule == Rule::Finish || rule == Rule::SystemFinish || rule == Rule::NonnegativeImpossible || rule == Rule::PositiveImpossible || rule == Rule::FamilyFinish || rule == Rule::TrigImpossible || rule==Rule::SubstitutionFinish;
 }
 
 inline bool quadraticHasUnchangedFinish(const Derivation& d, size_t index) {
@@ -72,7 +77,7 @@ inline bool quadraticHasUnchangedFinish(const Derivation& d, size_t index) {
     }
     return true;
 }
-template<class Visit> inline unsigned visitTeachingPages(const Derivation& d, bool guided, Visit visit) {
+template<class Visit> inline unsigned visitLocalTeachingPages(const Derivation& d, bool guided, Visit visit) {
     unsigned count = 0;
     auto emit = [&](size_t first, size_t last, TeachingKind kind) {
         visit(count++, TeachingPage{uint16_t(first), uint16_t(last), kind});
@@ -127,6 +132,28 @@ template<class Visit> inline unsigned visitTeachingPages(const Derivation& d, bo
     }
     return count;
 }
+template<class Visit> inline unsigned visitTeachingPages(const Derivation& d,bool guided,Visit visit){
+    if(!d.composition)return visitLocalTeachingPages(d,guided,visit);
+    unsigned count=0;
+    auto childPages=[&](unsigned child,bool auxiliary){
+        if(child>=d.composition->children.size())return;
+        const auto& proof=d.composition->children[child];
+        visitLocalTeachingPages(proof,guided,[&](unsigned,TeachingPage page){
+            if(page.kind==TeachingKind::Final && (proof.steps[page.first].rule==Rule::Finish||proof.steps[page.first].rule==Rule::FamilyFinish))return;
+            page.child=uint8_t(child+1);visit(count++,page);
+        });
+    };
+    visitLocalTeachingPages(d,guided,[&](unsigned,TeachingPage page){
+        const auto& step=d.steps[page.first];
+        if(step.rule==Rule::SubstitutionAuxiliary)childPages(0,true);
+        visit(count++,page);
+        if(step.rule==Rule::SubstitutionFinish && d.states[step.after].families.size()>2){page.section=1;visit(count++,page);}
+        if(step.rule==Rule::SubstitutionPullback && step.branch<d.composition->preimages.size()){
+            const auto child=d.composition->preimages[step.branch].child;if(child)childPages(child,false);
+        }
+    });
+    return count;
+}
 inline unsigned teachingPageCount(const Derivation& d, bool guided) {
     return visitTeachingPages(d, guided, [](unsigned, TeachingPage) {});
 }
@@ -138,7 +165,7 @@ inline TeachingPage teachingPageAt(const Derivation& d, bool guided, unsigned in
 inline unsigned teachingPageFor(const Derivation& d, bool guided, TeachingPage old) {
     unsigned result = 0; bool found = false;
     visitTeachingPages(d, guided, [&](unsigned n, TeachingPage page) {
-        if (old.first >= page.first && old.first <= page.last) {
+        if (old.child==page.child && old.section==page.section && old.first >= page.first && old.first <= page.last) {
             if (!found || page.kind == old.kind) { result = n; found = true; }
         }
     });

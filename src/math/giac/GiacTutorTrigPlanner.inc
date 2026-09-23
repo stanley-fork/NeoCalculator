@@ -1,6 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 void Planner::trigonometric() {
     const auto f=trigForm(a);
+    if(f.outer){
+        auto e=current().branches[0].equations[0];
+        if(!trigSyntax(a.parse(e.lhs))){equation(Rule::SwapSides,a.parse(e.rhs),a.parse(e.lhs));e=current().branches[0].equations[0];}
+        if(trigSyntax(a.parse(e.rhs))){const auto rhs=a.parse(e.rhs);equation(Rule::AddBoth,a.normal(a.parse(e.lhs)-rhs),gen(0),-rhs);e=current().branches[0].equations[0];}
+        OpaqueScope quote(a.ctx);const auto masked=replaceTree(a.bound(a.parse(e.lhs)),f.node,quote.value);
+        const auto constant=a.normal(a.sub(masked,quote.value,gen(0)));
+        a.tick();const auto coefficient=a.normal(giac::derive(masked,quote.value,a.ctx));
+        if(!a.rational(constant)||!a.rational(coefficient)||a.zero(coefficient))throw UnsupportedInput{__LINE__};
+        if(!a.zero(constant)){equation(Rule::AddBoth,a.normal(a.parse(e.lhs)-constant),a.normal(a.parse(e.rhs)-constant),-constant);e=current().branches[0].equations[0];}
+        if(!a.same(coefficient,gen(1)))equation(Rule::DivideBoth,a.normal(a.parse(e.lhs)/coefficient),a.normal(a.parse(e.rhs)/coefficient),coefficient);
+    }
     auto append=[&](Rule rule,State next,std::string operand={},Vector<std::string> aux={}){
         Step s;s.rule=rule;s.operand=std::move(operand);s.auxiliaries=std::move(aux);
         s.explanation=trigMessage(rule,f.kind);

@@ -1,0 +1,236 @@
+[
+  {
+    "id": "biquadratic",
+    "equation": "x^4-5*x^2+4=0",
+    "count": 4
+  },
+  {
+    "id": "nested-constant-root",
+    "equation": "x^4-2*x^2-1=0",
+    "count": 2
+  },
+  {
+    "id": "affine-square",
+    "equation": "(2*x-1)^4-5*(2*x-1)^2+4=0",
+    "count": 4
+  },
+  {
+    "id": "zero-square",
+    "equation": "x^4=0",
+    "count": 1
+  },
+  {
+    "id": "no-real-square",
+    "equation": "x^4+1=0",
+    "count": 0
+  },
+  {
+    "id": "exp-double",
+    "equation": "exp(2*x)-3*exp(x)+2=0",
+    "count": 2
+  },
+  {
+    "id": "exp-values",
+    "equation": "exp(2*x)-5*exp(x)+6=0",
+    "count": 2
+  },
+  {
+    "id": "exp-empty",
+    "equation": "exp(2*x)+exp(x)=0",
+    "count": 0
+  },
+  {
+    "id": "exp-duplicate",
+    "equation": "exp(2*x)-2*exp(x)+1=0",
+    "count": 1
+  },
+  {
+    "id": "common-base",
+    "equation": "4^x-3*2^x+2=0",
+    "count": 2
+  },
+  {
+    "id": "log-shift",
+    "equation": "ln(x-1)^2-3*ln(x-1)+2=0",
+    "count": 2
+  },
+  {
+    "id": "log-surd",
+    "equation": "ln(x)^2-2=0",
+    "count": 2
+  },
+  {
+    "id": "log-zero",
+    "equation": "ln(x)^2=0",
+    "count": 1
+  },
+  {
+    "id": "log-ten",
+    "equation": "log10(x)^2-3*log10(x)+2=0",
+    "count": 2
+  },
+  {
+    "id": "sine-three",
+    "equation": "2*sin(x)^2-3*sin(x)+1=0",
+    "count": 3
+  },
+  {
+    "id": "sine-four",
+    "equation": "6*sin(x)^2-5*sin(x)+1=0",
+    "count": 4
+  },
+  {
+    "id": "cosine-surd",
+    "equation": "cos(x)^2=3/4",
+    "count": 4
+  },
+  {
+    "id": "tangent-surd",
+    "equation": "tan(2*x)^2=3",
+    "count": 2
+  },
+  {
+    "id": "sine-empty",
+    "equation": "sin(x)^2=2",
+    "count": 0
+  },
+  {
+    "id": "sine-duplicate",
+    "equation": "(sin(x)-1)^2=0",
+    "count": 1
+  },
+  {
+    "id": "outer-sine",
+    "equation": "2*sin(x)+1=0",
+    "count": 2
+  },
+  {
+    "id": "outer-cosine",
+    "equation": "3*cos(2*x)-1=0",
+    "count": 2
+  },
+  {
+    "id": "outer-tangent",
+    "equation": "(tan(x)-1)/2=0",
+    "count": 1
+  },
+  {
+    "id": "direct-sine-surd",
+    "equation": "sin(x)=sqrt(2)/2",
+    "count": 2
+  },
+  {
+    "id": "direct-tangent-surd",
+    "equation": "tan(x)=sqrt(3)",
+    "count": 1
+  },
+  {
+    "id": "four-deg",
+    "equation": "6*sin(3*x-1)^2-5*sin(3*x-1)+1=0",
+    "degrees": true,
+    "count": 4
+  },
+  {
+    "id": "pole",
+    "equation": "(x^4-5*x^2+4)/(x-1)=0",
+    "unsupported": true
+  },
+  {
+    "id": "cancelled-domain",
+    "equation": "sin(x)=0*x/x",
+    "unsupported": true
+  },
+  {
+    "id": "stored-zero-domain",
+    "equation": "sin(x)=A*x/x",
+    "assign": [
+      "A:=0"
+    ],
+    "unsupported": true
+  },
+  {
+    "id": "unsafe-base",
+    "equation": "-6*2^x+(2+0*ln(x))^(2*x)+8=0",
+    "unsupported": true
+  },
+  {
+    "id": "restricted-identity",
+    "equation": "ln(x)^2-ln(x)^2=0",
+    "unsupported": true
+  },
+  {
+    "id": "different-atoms",
+    "equation": "ln(x-1)^2+ln(x)-1=0",
+    "unsupported": true
+  },
+  {
+    "id": "non-affine-trig",
+    "equation": "sin(x^2)^2=1",
+    "unsupported": true
+  },
+  {
+    "id": "complex-composition",
+    "equation": "exp(2*x)-3*exp(x)+2=0",
+    "complex": true,
+    "unsupported": true
+  },
+  {
+    "id": "stored-square",
+    "equation": "(A*x+B)^4-5*(A*x+B)^2+4=0",
+    "assign": [
+      "A:=-2",
+      "B:=1/2"
+    ],
+    "count": 4
+  },
+  {
+    "id": "stored-exp",
+    "equation": "exp(2*A*x)-3*exp(A*x)+2=0",
+    "assign": [
+      "A:=-1/2"
+    ],
+    "count": 2
+  },
+  {
+    "id": "stored-log-base",
+    "equation": "logb(A*x+1,2)^2-3*logb(A*x+1,2)+2=0",
+    "assign": [
+      "A:=1/2"
+    ],
+    "count": 2
+  },
+  {
+    "id": "stored-trig",
+    "equation": "6*sin(A*x+B)^2-5*sin(A*x+B)+1=0",
+    "assign": [
+      "A:=-2",
+      "B:=1/2"
+    ],
+    "count": 4
+  },
+  {
+    "id": "degenerate-outer",
+    "equation": "0*sin(x)^2+2*sin(x)+1=0",
+    "count": 2
+  },
+  {
+    "id": "constant-auxiliary",
+    "equation": "sin(x)^2-sin(x)^2+1=0",
+    "count": 0
+  },
+  {
+    "id": "power-surd",
+    "equation": "4^x-4*2^x+1=0",
+    "count": 2
+  },
+  {
+    "id": "different-bases",
+    "equation": "ln(x)^2-log10(x)=0",
+    "unsupported": true
+  },
+  {
+    "id": "double-angle-not-square",
+    "equation": "sin(2*x)-sin(x)^2=0",
+    "unsupported": true
+  }
+]

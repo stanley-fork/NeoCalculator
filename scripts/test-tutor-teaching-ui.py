@@ -78,8 +78,11 @@ CASES = {
 }
 
 def stable(d):
-    return {k: ([{x: y for x, y in s.items() if x != "text"} for s in v] if k == "steps" else v)
+    result={k: ([{x: y for x, y in s.items() if x != "text"} for s in v] if k == "steps" else v)
             for k, v in d.items() if k not in ("micros",)}
+    if 'composition' in result:
+        result['composition']={**result['composition'],'children':[stable(c) for c in result['composition']['children']]}
+    return result
 
 def ast_nodes(node):
     """Inspect the existing typed display AST; this does not parse mathematics."""
@@ -327,7 +330,7 @@ def main():
             start = eq.OPEN + physical("EXE", "EXE", "VAR_X", "EQUAL", "NEGATE", "NUM_3", "EXE", "DOWN", "DOWN", "EXE", "TOOLBOX")
         if name in ("complex", "quadratic-complex"):
             start = start.replace("policy real", "policy complex")
-        if name.startswith("trig-"):
+        if name.startswith("trig-") or name.endswith("-deg"):
             start = "set_angle_mode " + ("deg" if name.endswith("-deg") else "rad") + "\n" + start
         modes = [("guided", "")]
         if name in ("linear", "quadratic", "rational", "system", "linear-unfamiliar", "abs-variable", "radical-extraneous", "exp-injective", "log-domain", "exp-isolate", "log-isolate", "trig-unfamiliar", "trig-unfamiliar-deg"):

@@ -92,9 +92,29 @@ bool periodicTreeEqual(const EngineResultNode& a,const EngineResultNode& b){
     for(size_t i=0;i<a.children.size();++i)if(!periodicTreeEqual(a.children[i],b.children[i]))return false;
     return true;
 }
+// Each raw branch has exactly one producer-owned integer parameter. Distinct
+// solver locals may be alpha-renamed to one displayed binder after conversion.
+giac::gen periodicBranchParameter(const giac::gen& branch,const giac::vecteur& parameters){
+    giac::gen selected;unsigned count=0;
+    for(const auto& p:parameters)if(composition::containsVariable(branch,p)){selected=p;++count;}
+    if(count!=1)throw PeriodicDeclined{};return selected;
+}
+// Bind stored rational leaves without evaluating/cancelling the authored tree.
+giac::gen periodicBind(PeriodicWork& w,const giac::gen& g,const giac::gen& variable,
+                       std::vector<SolveBinding>& bindings,unsigned depth=0){
+    if(depth>PeriodicLimits::depth)throw PeriodicDeclined{};
+    if(g.type==giac::_IDNT){
+        if(g==variable||g==giac::gen(giac::_IDNT_pi()))return g;
+        if(!periodicSource(w,g,variable,false,bindings))throw PeriodicDeclined{};
+        w.tick();return g.eval(1,w.ctx);
+    }
+    if(g.type==giac::_VECT){giac::vecteur values;values.reserve(g._VECTptr->size());for(const auto& c:*g._VECTptr)values.push_back(periodicBind(w,c,variable,bindings,depth+1));return giac::gen(values,g.subtype);}
+    if(g.type==giac::_SYMB)return giac::symbolic(g._SYMBptr->sommet,periodicBind(w,g._SYMBptr->feuille,variable,bindings,depth+1));
+    return g;
+}
 // Replay the conversion against EVERY unmodified solver branch before it can
 // acquire complete scope. The permitted loss is only an exactly duplicate coset.
-bool periodicConversionReplay(PeriodicWork& w,const giac::vecteur& raw,const giac::gen& parameter,
+bool periodicConversionReplay(PeriodicWork& w,const giac::vecteur& raw,const giac::vecteur& parameters,
         const giac::gen& variable,uint64_t scope,bool degrees,const StructuredSolveResult& answer,
         const PeriodicRestriction* restriction){
     if(answer.origin!=SolveOrigin::GiacAllTrig||answer.coverage!=SolveCoverage::PeriodicComplete||
@@ -105,6 +125,7 @@ bool periodicConversionReplay(PeriodicWork& w,const giac::vecteur& raw,const gia
        !periodicTreeEqual(answer.restrictions[0].expression,restriction->expression)))return false;
     unsigned covered=0;
     for(const auto& branch:raw){
+        const auto parameter=periodicBranchParameter(branch,parameters);
         giac::gen p,o;w.tick();if(!giac::is_linear_wrt(branch,parameter,p,o,w.ctx))return false;
         p=w.normal(p);o=w.normal(o);if(giac::is_strictly_positive(-p,w.ctx))p=-p;
         bool found=false;
@@ -129,16 +150,32 @@ bool tryPeriodicSolve(giac::context* ctx,const giac::gen& authoredLeft,const gia
         PeriodicScope scope(ctx);scope.quote(variable);PeriodicWork w(ctx);
         StructuredSolveResult result;result.engineGeneration=generation;result.degrees=degrees;
         auto node=authoredLeft,target=authoredRight;unsigned side=0;
+        giac::gen argument;bool composed=false;
         if(!periodicAtom(node)){std::swap(node,target);side=1;}
-        if(!periodicAtom(node)||!periodicSource(w,target,variable,false,result.bindings)||
-           !periodicSource(w,node._SYMBptr->feuille,variable,true,result.bindings))return false;
+        if(periodicAtom(node)&&periodicSource(w,node._SYMBptr->feuille,variable,true,result.bindings)){
+            composition::Work cw{ctx,w.calls,256};
+            // Constant algebraic targets still pass the authored-domain walk.
+            composition::source(cw,target,variable);
+            target=periodicBind(w,target,variable,result.bindings);
+            if(composition::containsVariable(target,variable))return false;
+            std::vector<SolveBinding> unusedTarget;
+            if(!periodicSource(w,target,variable,false,unusedTarget)&&!composition::closedAlgebraic(cw,target))return false;
+            if(composition::sign(cw,target)==2)return false;
+            argument=node._SYMBptr->feuille.eval(1,ctx);target=w.normal(target.eval(1,ctx));
+            giac::gen slope,intercept;w.tick();
+            if(!giac::is_linear_wrt(argument,variable,slope,intercept,ctx)||!w.rational(slope)||w.equal(slope,0))return false;
+            std::vector<SolveBinding> unused;if(!periodicSource(w,intercept,variable,false,unused))return false;
+        }else{
+            composition::Work cw{ctx,w.calls,256};
+            composition::source(cw,authoredLeft,variable);composition::source(cw,authoredRight,variable);
+            const auto l=periodicBind(w,authoredLeft,variable,result.bindings),r=periodicBind(w,authoredRight,variable,result.bindings);
+            const giac::gen temporary(giac::identificateur(" t03b"));scope.quote(temporary);
+            const auto form=composition::admit(cw,l,r,variable,temporary);
+            if(!form.periodic()||(w.equal(form.coefficients[1],0)&&w.equal(form.coefficients[2],0)))return false;
+            node=form.atom;argument=form.inner;side=form.side;composed=true;
+        }
         // Current solve-variable assumptions are not an unrestricted real domain.
         if(ctx->tabptr&&ctx->tabptr->find(variable.print(ctx).c_str())!=ctx->tabptr->end())return false;
-        w.tick();const auto argument=node._SYMBptr->feuille.eval(1,ctx);
-        w.tick();target=target.eval(1,ctx);target=w.normal(target);
-        giac::gen slope,intercept;w.tick();
-        if(!giac::is_linear_wrt(argument,variable,slope,intercept,ctx)||!w.rational(slope)||w.equal(slope,0)||!w.rational(target))return false;
-        std::vector<SolveBinding> unused;if(!periodicSource(w,intercept,variable,false,unused))return false;
         const auto kind=node._SYMBptr->sommet;
         giac::gen left=authoredLeft,right=authoredRight;
         if(degrees){int budget=kSolveWalkBudget;left=explicitDegreeTrig(left,0,budget);budget=kSolveWalkBudget;right=explicitDegreeTrig(right,0,budget);}
@@ -151,20 +188,21 @@ bool tryPeriodicSolve(giac::context* ctx,const giac::gen& authoredLeft,const gia
         result.binderScope=periodicHash(periodicHash(1469598103934665603ull,authoredLeft.print(ctx)),authoredRight.print(ctx));
         result.binderScope=periodicHash(result.binderScope,variable.print(ctx)+std::to_string(generation)+(degrees?"deg":"rad"));
         for(const auto& b:result.bindings)result.binderScope=periodicHash(result.binderScope,b.name+"="+b.value);
-        const bool impossible=kind!=giac::at_tan&&(giac::is_strictly_positive(target-1,ctx)||giac::is_strictly_positive(-1-target,ctx));
+        const bool impossible=!composed&&kind!=giac::at_tan&&(giac::is_strictly_positive(target-1,ctx)||giac::is_strictly_positive(-1-target,ctx));
         if(raw._VECTptr->empty()){
-            if(!impossible)throw PeriodicDeclined{};
+            if(!impossible&&!composed)throw PeriodicDeclined{};
             result.status=MathEngineStatus::Ok;result.setKind=SolutionSetKind::NoSolution;result.periodicCalls=w.calls;output=std::move(result);return true;
         }
-        if(impossible||parameters.size()!=1)throw PeriodicDeclined{};
+        if(impossible||parameters.empty()||parameters.size()>2)throw PeriodicDeclined{};
         for(const auto& p:parameters)scope.quote(p);
         for(const auto& rawBranch:*raw._VECTptr){
             periodicOutputSymbols(rawBranch,parameters);
+            const auto parameter=periodicBranchParameter(rawBranch,parameters);
             giac::gen period,offset;w.tick();
-            if(!giac::is_linear_wrt(rawBranch,parameters.front(),period,offset,ctx))throw PeriodicDeclined{};
+            if(!giac::is_linear_wrt(rawBranch,parameter,period,offset,ctx))throw PeriodicDeclined{};
             period=w.normal(period);offset=w.normal(offset);
             periodicOutputSymbols(period,{});periodicOutputSymbols(offset,{});
-            if(!w.equal(rawBranch,offset+period*parameters.front())||w.equal(period,0))throw PeriodicDeclined{};
+            if(!w.equal(rawBranch,offset+period*parameter)||w.equal(period,0))throw PeriodicDeclined{};
             if(giac::is_strictly_positive(-period,ctx))period=-period;
             if(!giac::is_strictly_positive(period,ctx))throw PeriodicDeclined{};
             StructuredPeriodicFamily f;f.variable=variable.print(ctx);f.lhs=f.variable;f.offset=offset.print(ctx);f.period=period.print(ctx);f.degrees=degrees;f.binderScope=result.binderScope;
@@ -196,7 +234,7 @@ bool tryPeriodicSolve(giac::context* ctx,const giac::gen& authoredLeft,const gia
         default:break;
         }
 #endif
-        if(!periodicConversionReplay(w,*raw._VECTptr,parameters.front(),variable,result.binderScope,
+        if(!periodicConversionReplay(w,*raw._VECTptr,parameters,variable,result.binderScope,
                                     degrees,result,kind==giac::at_tan?&condition:nullptr))throw PeriodicDeclined{};
         size_t bytes=sizeof(result)+result.rawExactText.capacity()+result.families.capacity()*sizeof(StructuredPeriodicFamily)+result.restrictions.capacity()*sizeof(PeriodicRestriction)+result.bindings.capacity()*sizeof(SolveBinding);
         for(const auto& f:result.families)bytes+=f.variable.capacity()+f.lhs.capacity()+f.offset.capacity()+f.period.capacity()+4+periodicTreeBytes(f.offsetValue)+periodicTreeBytes(f.periodValue);
@@ -205,7 +243,8 @@ bool tryPeriodicSolve(giac::context* ctx,const giac::gen& authoredLeft,const gia
         if(bytes>PeriodicLimits::payload)throw PeriodicDeclined{};
         result.periodicPayload=unsigned(bytes);result.periodicCalls=w.calls;result.status=MathEngineStatus::Ok;result.setKind=SolutionSetKind::Periodic;
         output=std::move(result);return true;
-    }catch(const PeriodicDeclined&){return false;}
+    }catch(const PeriodicDeclined&){return false;}catch(const composition::Declined&){return false;}
+    catch(const composition::BudgetExceeded&){return false;}
 }
 
 // Exact common-period quotient proof. These are residue classes of a proved
@@ -213,7 +252,7 @@ bool tryPeriodicSolve(giac::context* ctx,const giac::gen& authoredLeft,const gia
 SetComparison comparePeriodic(giac::context* ctx,const std::vector<AffinePeriodicFamily>& left,
                               const std::vector<AffinePeriodicFamily>& right){
     try {
-        if(left.empty()||right.empty()||left.size()>2||right.size()>2)return SetComparison::Unknown;
+        if(left.empty()||right.empty()||left.size()>PeriodicLimits::families||right.size()>PeriodicLimits::families)return SetComparison::Unknown;
         size_t inputBytes=0;
         for(const auto* set:{&left,&right})for(const auto& f:*set){
             const size_t bytes=f.offset.size()+f.period.size()+f.variable.size()+f.lhs.size();
@@ -228,7 +267,7 @@ SetComparison comparePeriodic(giac::context* ctx,const std::vector<AffinePeriodi
             return p;
         };
         const auto base=positivePeriod(left.front().period);
-        std::array<unsigned,4> numerator{},denominator{};unsigned count=0,multiple=1;
+        std::array<unsigned,2*PeriodicLimits::families> numerator{},denominator{};unsigned count=0,multiple=1;
         auto gcd=[](unsigned a,unsigned b){while(b){auto t=a%b;a=b;b=t;}return a;};
         for(const auto* set:{&left,&right})for(const auto& f:*set){
             if(f.variable!=left.front().variable||f.lhs!=f.variable||f.degrees!=left.front().degrees||f.domain!=IntegerDomain::AllIntegers)return SetComparison::Unknown;

@@ -239,6 +239,25 @@ constexpr CatalogEntry catalog[] = {
     {"view.solving", "Solving with Giac...", "", "Resolviendo con Giac...", nullptr},
     {"view.wait", "Please wait", "", "Espera un momento", nullptr},
     {"view.settings_hint", "Navigate   Left/Right Adjust   MODE Back", "", "^v Elige  </> Cambia  MODE Vuelve", nullptr},
+    {"substitution.define", "Use an auxiliary variable for the repeated expression. Its definition preserves the original domain.", "", "Sustituye la expresión que se repite por una variable auxiliar. Su definición conserva el dominio original.", nullptr},
+    {"substitution.rewrite", "Rewrite the equation in the auxiliary variable using the checked power identities.", "", "Reescribe la ecuación en la variable auxiliar mediante las identidades de potencias comprobadas.", nullptr},
+    {"substitution.auxiliary", "Solve the auxiliary equation completely. These are values of the auxiliary variable, not yet solutions for the original unknown.", "", "Resuelve por completo la ecuación auxiliar. Estos son valores de la variable auxiliar, no las soluciones de la incógnita original.", nullptr},
+    {"substitution.reject_square", "Discard this auxiliary value: a real square cannot be negative.", "", "Descarta este valor auxiliar: un cuadrado real no puede ser negativo.", nullptr},
+    {"substitution.reject_exp", "Discard this auxiliary value: a real exponential is strictly positive, so zero and negative values are impossible.", "", "Descarta este valor auxiliar: una exponencial real es positiva y no puede valer cero ni tomar valores negativos.", nullptr},
+    {"substitution.reject_trig", "Discard this auxiliary value: sine and cosine take values only between -1 and 1, including both endpoints.", "", "Descarta este valor auxiliar: el seno y el coseno solo toman valores entre −1 y 1, incluidos ambos extremos.", nullptr},
+    {"substitution.pullback", "Return to the original unknown. Solve the displayed equation for this auxiliary value, keeping every preimage.", "", "Vuelve a la incógnita original. Resuelve la ecuación indicada para este valor auxiliar sin perder ninguna preimagen.", nullptr},
+    {"substitution.finish", "Every auxiliary value has been accounted for. Combine the checked preimages, counting each solution only once and keeping the original restrictions.", "", "Se han considerado todos los valores auxiliares. Reúne sus preimágenes comprobadas, cuenta cada solución una sola vez y conserva las restricciones originales.", nullptr},
+    {"substitution.square", "Consider both signs of the square root. When the square is zero, both signs give the same case.", "", "Considera ambos signos de la raíz cuadrada. Si el cuadrado es cero, ambos signos dan el mismo caso.", nullptr},
+    {"view.auxiliary", "Auxiliary values", "", "Valores de la variable auxiliar", nullptr},
+    {"view.pullback", "Return to the original unknown", "", "Vuelve a la incógnita original", nullptr},
+    {"view.substitution_range", "Possible auxiliary values", "", "Valores posibles de la auxiliar", nullptr},
+    {"view.define_substitution", "Define an auxiliary variable", "", "Define una variable auxiliar", nullptr},
+    {"view.auxiliary_equation", "Auxiliary equation", "", "Ecuación auxiliar", nullptr},
+    {"view.auxiliary_number", "Auxiliary value {0}", "i", "Valor auxiliar {0}", nullptr},
+    {"view.return_equation", "Equation for this auxiliary value", "", "Ecuación para este valor auxiliar", nullptr},
+    {"substitution.finish_empty", "Every auxiliary value has been considered. None has a valid real preimage, so the original equation has no real solution.", "", "Se han considerado todos los valores auxiliares. Ninguno tiene una preimagen real válida, por lo que la ecuación original no tiene solución real.", nullptr},
+    {"view.periodic_groups_hint", "Arrows Scroll/Pan  VAR Page  BACK  TOOLBOX Steps", "", "^v Despl. <> Horiz. VAR Página BACK TOOLBOX Pasos", nullptr},
+    {"view.periodic_page", "Periodic solutions {0}/{1}", "ii", "Soluciones periódicas {0}/{1}", nullptr},
 };
 static_assert(sizeof(catalog) / sizeof(catalog[0]) == unsigned(Message::Count), "catalog coverage");
 char schemaType(ParameterKind p) {
@@ -276,7 +295,8 @@ const char *ruleId(Rule r) {
         "candidate.excluded", "terminal.isolated", "terminal.identity", "terminal.contradiction",
         "terminal.finish",    "system.swap",       "system.scale",      "system.add",
         "system.finish", "condition.range", "abs.cases", "radical.candidates", "terminal.nonnegative",
-        "candidate.original_valid", "candidate.original_invalid", "candidate.duplicate", "domain.radicand_nonnegative", "domain.positive", "domain.base", "exponential.range", "exponential.injective", "exponential.inverse", "exponential.exact_power", "logarithm.inverse", "logarithm.injective", "terminal.positive_range", "trig.range", "trig.principal", "trig.families", "family.shift", "family.divide", "family.normalize", "family.finish", "trig.impossible"};
+        "candidate.original_valid", "candidate.original_invalid", "candidate.duplicate", "domain.radicand_nonnegative", "domain.positive", "domain.base", "exponential.range", "exponential.injective", "exponential.inverse", "exponential.exact_power", "logarithm.inverse", "logarithm.injective", "terminal.positive_range", "trig.range", "trig.principal", "trig.families", "family.shift", "family.divide", "family.normalize", "family.finish", "trig.impossible",
+        "substitution.define", "substitution.rewrite", "substitution.solve_auxiliary", "substitution.reject_range", "substitution.pullback", "substitution.finish", "square.preimage"};
     return unsigned(r) < sizeof(ids) / sizeof(ids[0]) ? ids[unsigned(r)] : "unknown";
 }
 const char *messageKey(Message k) {
@@ -437,6 +457,7 @@ uint64_t fingerprint(const Snapshot &s) {
     hashBytes(h, std::to_string(s.engineGeneration));
     hashBytes(h, s.complex ? "complex" : "real");
     hashBytes(h, s.degrees ? "deg" : "rad");
+    if(s.parentScope){hashBytes(h,std::to_string(s.parentScope));hashBytes(h,std::to_string(s.childRole));}
     return h;
 }
 size_t retainedBytes(const Derivation &d) {
@@ -479,6 +500,22 @@ size_t retainedBytes(const Derivation &d) {
             n += p.value.capacity() + 1;
         for (const auto &p : s.affected)
             n += p.children.capacity();
+    }
+    if(d.composition){
+        const auto& c=*d.composition;
+        // One composition layer only. Reject cycles before recursive accounting.
+        if(c.children.size()>3||c.preimages.size()>2)return Limits::retainedBytes+1;
+        size_t steps=d.steps.size();
+        for(const auto& child:c.children){if(child.composition)return Limits::retainedBytes+1;steps+=child.steps.size();}
+        if(steps>Limits::steps)return Limits::retainedBytes+1;
+        n+=sizeof(c)+32+c.definition.capacity()+1+c.children.capacity()*sizeof(Derivation)+c.preimages.capacity()*sizeof(Preimage);
+        for(const auto& text:c.coefficients)n+=text.capacity()+1;
+        for(const auto& p:c.preimages)n+=p.value.capacity()+1;
+        for(const auto& child:c.children)n+=retainedBytes(child)-sizeof(Derivation);
+        for(const auto* conditions:{&c.originalConditions,&c.auxiliaryConditions}){
+            n+=conditions->capacity()*sizeof(Condition);
+            for(const auto& condition:*conditions){n+=condition.nonzero.capacity()+1+condition.source.children.capacity();if(condition.expression)n+=sizeof(EngineResultNode)+32+treeBytes(*condition.expression);}
+        }
     }
     return n; // Conservative retained C++ capacity accounting; allocator overhead is measured
               // separately.
@@ -647,8 +684,18 @@ std::string replayJson(const Derivation &d, Locale locale) {
         }
         o << "]}";
     }
-    o << "]}";
-    return o.str();
+    o << "]";
+    if(d.input.parentScope)o<<",\"parentScope\":"<<d.input.parentScope<<",\"childRole\":"<<unsigned(d.input.childRole);
+    if(d.composition){const auto& c=*d.composition;
+        o<<",\"composition\":{\"scope\":"<<c.scope<<",\"auxiliaryId\":"<<c.auxiliaryId<<",\"kind\":"<<unsigned(c.kind)<<",\"sourceSide\":"<<unsigned(c.sourceSide)<<",\"definition\":"<<quote(c.definition)<<",\"coefficients\":";
+        strings(c.coefficients);o<<",\"preimages\":[";
+        for(size_t i=0;i<c.preimages.size();++i){if(i)o<<',';const auto& p=c.preimages[i];o<<"{\"value\":"<<quote(p.value)<<",\"child\":"<<unsigned(p.child)<<",\"range\":"<<unsigned(p.range)<<'}';}
+        o<<"],\"auxiliaryConditions\":[";
+        for(size_t i=0;i<c.auxiliaryConditions.size();++i){if(i)o<<',';const auto& p=c.auxiliaryConditions[i];o<<"{\"expression\":"<<quote(p.nonzero)<<",\"kind\":"<<unsigned(p.kind)<<",\"role\":"<<unsigned(p.role)<<",\"sourceState\":"<<p.sourceState<<",\"verification\":"<<unsigned(p.verification)<<",\"path\":";path(p.source);o<<'}';}
+        o<<"],\"children\":[";
+        for(size_t i=0;i<c.children.size();++i){if(i)o<<',';o<<replayJson(c.children[i],locale);}o<<"]}";
+    }
+    o<<'}';return o.str();
 }
 
 } // namespace tutor

@@ -23,18 +23,34 @@ bool trigConstant(Algebra& a,const gen& value,unsigned depth=0,bool authoredBind
     if(value.type==giac::_VECT){for(const auto& child:*value._VECTptr)if(!trigConstant(a,child,depth+1,authoredBindings))return false;return true;}
     if(value.type!=giac::_SYMB)return false;
     const auto op=value._SYMBptr->sommet;const auto& leaf=value._SYMBptr->feuille;
+    if(op==giac::at_sqrt){
+        if(!trigConstant(a,leaf,depth+1,authoredBindings))return false;
+        composition::Work w{a.ctx,a.calls,Limits::symbolicCalls};const int sign=composition::sign(w,authoredBindings?a.bound(leaf):leaf);
+        return sign==0||sign==1;
+    }
     if(op==giac::at_inv)return trigConstant(a,leaf,depth+1,authoredBindings)&&!a.zero(authoredBindings?a.bound(leaf):leaf);
     if(op==giac::at_division){return leaf.type==giac::_VECT&&leaf._VECTptr->size()==2&&trigConstant(a,leaf,depth+1,authoredBindings)&&!a.zero(authoredBindings?a.bound(leaf._VECTptr->back()):leaf._VECTptr->back());}
     return (op==giac::at_plus||op==giac::at_neg||op==giac::at_binary_minus||op==giac::at_prod)&&trigConstant(a,leaf,depth+1,authoredBindings);
 }
-struct TrigForm {gen node,argument,target,coefficient,constant;unsigned kind=0,side=0;};
+gen compositionBound(Algebra&,const gen&,unsigned);
+struct TrigForm {gen node,argument,target,coefficient,constant;unsigned kind=0,side=0;bool outer=false;};
 TrigForm trigForm(Algebra& a) {
     if(a.input.complex||a.input.variables.size()!=1||a.input.authored.size()!=1)
         throw UnsupportedInput{__LINE__,"real single trigonometric equation required"};
     const auto& e=a.input.authored[0];gen left=a.parse(e.lhs),right=a.parse(e.rhs);
     TrigForm f;
     if(!trigAtom(left)){std::swap(left,right);f.side=1;}
-    if(!trigAtom(left)||trigSyntax(right))throw UnsupportedInput{__LINE__,"one isolated sine, cosine or tangent with exact rational target"};
+    if(!trigAtom(left)||trigSyntax(right)){
+        composition::Work w{a.ctx,a.calls,Limits::symbolicCalls};
+        const auto l=a.parse(e.lhs),r=a.parse(e.rhs),x=a.parse(a.input.variables[0]);
+        try{
+            composition::source(w,l,x);composition::source(w,r,x);OpaqueScope quote(a.ctx);
+            const auto form=composition::admit(w,compositionBound(a,l,0),compositionBound(a,r,0),x,quote.value);
+            if(!form.periodic()||!w.same(form.coefficients[2],0)||w.same(form.coefficients[1],0))throw UnsupportedInput{__LINE__};
+            f.node=form.atom;f.argument=form.inner;f.target=a.normal(-form.coefficients[0]/form.coefficients[1]);
+            f.coefficient=form.slope;f.constant=form.intercept;f.side=form.side;f.kind=unsigned(form.kind)-unsigned(composition::Kind::Sin);f.outer=true;return f;
+        }catch(const composition::Declined&){throw UnsupportedInput{__LINE__,"single rational outer trigonometric operation required"};}
+    }
     // WHY: cancellation must not erase authored target domains (0*x/x,
     // 0*ln(-1)). Periodic unions do not implement target-domain filtering.
     // Replay uses this same structural admission before any normalization.
@@ -45,7 +61,10 @@ TrigForm trigForm(Algebra& a) {
     left=a.bound(left);right=a.bound(right);
     if(!trigAtom(left))throw UnsupportedInput{__LINE__,"bound trigonometric argument must remain defined and nonconstant"};
     f.node=left;f.argument=left._SYMBptr->feuille;f.target=a.normal(right);
-    if(!a.rational(f.target))throw UnsupportedInput{__LINE__,"exact rational trigonometric target required"};
+    if(!a.rational(f.target)){
+        composition::Work w{a.ctx,a.calls,Limits::symbolicCalls};
+        if(transExponent(f.target)||composition::sign(w,f.target)==2)throw UnsupportedInput{__LINE__,"exact real trigonometric target required"};
+    }
     affineSource(a,f.argument);const gen variable=a.parse(a.input.variables[0]);
     a.tick();f.coefficient=a.normal(giac::derive(f.argument,variable,a.ctx));
     f.constant=a.normal(a.sub(f.argument,variable,gen(0)));
@@ -56,7 +75,14 @@ TrigForm trigForm(Algebra& a) {
     return f;
 }
 gen trigHalfTurn(Algebra& a){return a.input.degrees?gen(180):gen(giac::_IDNT_pi());}
-bool trigInRange(Algebra& a,const TrigForm& f){return f.kind==2||(!a.negative(f.target+1)&&!a.negative(1-f.target));}
+bool trigInRange(Algebra& a,const TrigForm& f){
+    if(f.kind==2)return true;
+    if(a.rational(f.target))return !a.negative(f.target+1)&&!a.negative(1-f.target);
+    composition::Work w{a.ctx,a.calls,Limits::symbolicCalls};
+    const int lower=composition::sign(w,f.target+1),upper=composition::sign(w,1-f.target);
+    if(lower==2||upper==2)throw UnsupportedInput{__LINE__,"exact trigonometric range unknown"};
+    return lower>=0&&upper>=0;
+}
 gen trigPrincipal(Algebra& a,const TrigForm& f) {
     // Principal domains: asin [-pi/2,pi/2], acos [0,pi], atan (-pi/2,pi/2).
     // Admission established a real rational target and the required range.

@@ -89,9 +89,9 @@ NodePtr converted(const EngineResultNode& n, unsigned depth = 0, ProductNotation
     compactScalarSigns(value);
     return value;
 }
-NodePtr typedTerm(const std::string& source, unsigned& calls) {
+NodePtr typedTerm(const std::string& source, unsigned& calls, bool auxiliary = false) {
     if (++calls > 16) throw std::bad_alloc();
-    auto value = GiacEngine::instance().tutorFormula({source, "0"});
+    auto value = GiacEngine::instance().tutorFormula({source, "0"},auxiliary);
     if (!value.hasTree || value.tree.kind != EngineNodeKind::Equation || value.tree.children.size() != 2)
         throw std::bad_alloc();
     auto result = converted(value.tree.children[0]);
@@ -137,9 +137,9 @@ NodePtr symbol(const char* value) { return makeSymbol(value); }
 NodePtr variable(const std::string& value) {
     return value.size() == 1 ? makeVariable(value[0]) : makeSymbol(value);
 }
-NodePtr equation(const Equation& e, unsigned& calls, ProductNotation notation = ProductNotation::ScalarNatural) {
+NodePtr equation(const Equation& e, unsigned& calls, ProductNotation notation = ProductNotation::ScalarNatural, bool auxiliary = false) {
     if (++calls > 16) return nullptr;
-    auto value = GiacEngine::instance().tutorFormula(e);
+    auto value = GiacEngine::instance().tutorFormula(e,auxiliary);
     return value.hasTree ? converted(value.tree, 0, notation) : nullptr;
 }
 // Semantic display role, never a user identifier or a Giac context binding.
@@ -156,7 +156,12 @@ unsigned nodeCount(const MathNode* node, unsigned depth = 0) {
     return count;
 }
 
-NodePtr build(const Derivation& d, FormulaRef ref, unsigned& calls) {
+NodePtr buildFormula(const Derivation& root, FormulaRef ref, unsigned& calls) {
+    if(ref.child && (!root.composition || ref.child>root.composition->children.size()))return nullptr;
+    const auto& d=ref.child?root.composition->children[ref.child-1]:root;
+    const bool auxiliary=d.input.childRole==1||bool(d.composition);
+    auto typedTerm=[&](const std::string& source,unsigned& count){return tutorview::typedTerm(source,count,auxiliary);};
+    auto equation=[&](const Equation& e,unsigned& count,ProductNotation notation=ProductNotation::ScalarNatural){return tutorview::equation(e,count,notation,auxiliary);};
     if (ref.step >= d.steps.size()) return nullptr;
     const auto& step = d.steps[ref.step];
     if (step.verification != Verdict::Verified) return nullptr;
@@ -179,10 +184,12 @@ NodePtr build(const Derivation& d, FormulaRef ref, unsigned& calls) {
     }
     if (ref.kind == FormulaKind::Authored)
         return ref.row < d.input.authored.size() ? equation(d.input.authored[ref.row], calls, ProductNotation::Explicit) : nullptr;
-    if (ref.kind == FormulaKind::Conditions) {
+    if (ref.kind == FormulaKind::Conditions || ref.kind==FormulaKind::AuxiliaryConditions) {
         if (ref.state >= d.states.size()) return nullptr;
+        if(ref.kind==FormulaKind::AuxiliaryConditions && !d.composition)return nullptr;
+        const auto& conditions=ref.kind==FormulaKind::AuxiliaryConditions?d.composition->auxiliaryConditions:d.states[ref.state].conditions;
         auto list = makeRow(); auto* row = static_cast<NodeRow*>(list.get());
-        for (const auto& condition : d.states[ref.state].conditions) {
+        for (const auto& condition : conditions) {
             auto term = condition.expression ? converted(*condition.expression) : typedTerm(condition.nonzero, calls);
             if (!term) return nullptr;
             if (row->childCount()) row->appendChild(makeSymbol("; "));
@@ -209,7 +216,7 @@ NodePtr build(const Derivation& d, FormulaRef ref, unsigned& calls) {
     if(ref.kind==FormulaKind::PeriodicFamily||ref.kind==FormulaKind::FamilyOperation) {
         if(ref.state>=d.states.size()||ref.branch>=d.states[ref.state].families.size())return nullptr;
         const auto& f=d.states[ref.state].families[ref.branch];
-        if(f.binderScope!=fingerprint(d.input)||f.binderId!=1||f.domain!=IntegerDomain::AllIntegers||f.degrees!=d.input.degrees)return nullptr;
+        if(f.binderScope!=fingerprint(d.input)||!f.binderId||f.binderId>(d.composition?2:1)||f.domain!=IntegerDomain::AllIntegers||f.degrees!=d.input.degrees)return nullptr;
         auto left=typedTerm(f.lhs,calls);
         auto term=rowOf(periodicTerm(f.period,f.degrees,calls),makeSymbol("k"));
         auto right=f.offset=="0"?std::move(term):rowOf(periodicTerm(f.offset,f.degrees,calls),makeOperator(OpKind::Add),std::move(term));
@@ -330,5 +337,13 @@ NodePtr build(const Derivation& d, FormulaRef ref, unsigned& calls) {
         return relation(variable(name), makeFraction(std::move(numerator), std::move(denominator)));
     }
     return nullptr;
+}
+NodePtr build(const Derivation& root, FormulaRef ref, unsigned& calls) {
+    auto result=buildFormula(root,ref,calls);
+    // Only a checked substitution certificate admits the display scalar t.
+    // This does not broaden editable identifiers or substitute user variables.
+    if(root.composition && !(ref.kind==FormulaKind::Authored && !ref.child))
+        applyGeneratedProductNotation(result.get(),ProductNotation::ScalarNatural,'t');
+    return result;
 }
 } // namespace tutorview
