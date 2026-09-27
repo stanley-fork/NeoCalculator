@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { NUMOS_LOGICAL_KEYS, NUMOS_WEB_KEYPAD_LAYOUT } from "../../wasm/numos-keypad.js";
+import { NUMOS_LOGICAL_KEYS, NUMOS_WEB_KEYPAD_LAYOUT, NUMOS_LOGICAL_KEY_MAX } from "../../wasm/numos-keypad.js";
 
 const source = await readFile(
   new URL("../../src/input/KeyCodes.h", import.meta.url), "utf8");
@@ -23,6 +23,8 @@ for (const token of tokens) {
 }
 
 const actual = NUMOS_LOGICAL_KEYS.map(({ id, code }) => [id, code]);
+assert.equal(NUMOS_LOGICAL_KEY_MAX, Math.max(...expected.map(([,code])=>code)),
+  "the public bridge must accept the whole audited catalog");
 assert.deepEqual(actual, expected,
   "web logical-key catalog must exactly match the C++ enum");
 assert.equal(new Set(actual.map(([, code]) => code)).size, actual.length,

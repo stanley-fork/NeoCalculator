@@ -47,6 +47,9 @@ const createElement = async (attributes = {}) => page.evaluate((attrs) => {
 }, attributes);
 const canvas = () => page.locator("numos-emulator").locator("canvas");
 const diagnostics = () => page.evaluate(() => window.emulator.diagnosticState());
+const waitForInputPoll = async (before) => page.waitForFunction(
+  frame => window.emulator.diagnosticState().frameCount >= frame + 2,
+  before.frameCount, {timeout:10000});
 const start = async () => {
   const result = await page.evaluate(async () => {
     try {
@@ -160,6 +163,10 @@ try {
   await page.evaluate(() => { window.emulator.controls = "hidden"; });
 
   // Keyboard events are bound to the focused Shadow DOM canvas, not window.
+  await page.waitForFunction(() => {
+    const r=window.emulator.diagnosticState().render;
+    return r.transitionIdle && !r.pending;
+  },null,{timeout:10000});
   const initialFocus = (await diagnostics()).menuFocus;
   await page.evaluate(() => {
     const input = document.createElement("input");
@@ -167,13 +174,15 @@ try {
     document.body.prepend(input);
     input.focus();
   });
+  let beforeKeyboard = await diagnostics();
   await page.keyboard.press("ArrowRight");
-  await delay(60);
+  await waitForInputPoll(beforeKeyboard);
   assert.equal((await diagnostics()).menuFocus, initialFocus,
     "unfocused component must not capture physical keyboard input");
   await canvas().focus();
+  beforeKeyboard = await diagnostics();
   await page.keyboard.press("ArrowRight");
-  await delay(60);
+  await waitForInputPoll(beforeKeyboard);
   assert.notEqual((await diagnostics()).menuFocus, initialFocus);
 
   // Integer and fractional CSS scales preserve logical pointer coordinates.

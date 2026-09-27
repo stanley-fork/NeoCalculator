@@ -103,6 +103,9 @@ target_compile_definitions(emulator_web PRIVATE
     _LIBCPP_ENABLE_CXX17_REMOVED_BINDERS
 )
 target_compile_options(emulator_web PRIVATE
+    # SDL headers are needed while compiling, even with an empty SDK cache.
+    # Link-only USE_SDL happened to work after an earlier port installation.
+    -sUSE_SDL=2
     -fexceptions -fwasm-exceptions -include unistd.h -UEMCC
     -Wno-register -Wno-c++11-narrowing -ffunction-sections -fdata-sections
 )

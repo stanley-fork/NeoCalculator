@@ -105,6 +105,7 @@
     #include <emscripten.h>
     #include <emscripten/heap.h>
     #include <malloc.h>
+    #include <src/display/lv_display_private.h>
 #endif
 
 #ifdef _WIN32
@@ -284,6 +285,17 @@ static bool          g_pointerPressObserved = false;
 static uint32_t      g_pointerReadCount = 0;
 static uint32_t      g_pointerPressReadCount = 0;
 static uint32_t      g_pointerDownEventCount = 0;
+#ifdef __EMSCRIPTEN__
+// Browser diagnostics only. These counters observe delivery/completion and the
+// actual SDL presentation boundary; they never force a refresh or an app state.
+static uint32_t g_pointerReleaseReadCount = 0;
+static uint32_t g_pointerCompletedClickCount = 0;
+static bool g_pointerReadWasPressed = false;
+static uint32_t g_publishedFrameCount = 0;
+static uint32_t g_logicalEventCount = 0;
+static uint32_t g_logicalPressCount = 0;
+static uint32_t g_logicalEventHash = 2166136261u;
+#endif
 
 // ── Teardown diferido al volver al launcher (Phase 9F) ───────────────────────
 // El firmware NO destruye la app inmediatamente al volver al menu: arranca la
@@ -397,6 +409,11 @@ static void sdl_pointer_read_cb(lv_indev_t*, lv_indev_data_t* data)
         ++g_pointerPressReadCount;
         g_pointerPressObserved = true;
     }
+#ifdef __EMSCRIPTEN__
+    else ++g_pointerReleaseReadCount;
+    if (g_pointerReadWasPressed && !g_pointerPressed) ++g_pointerCompletedClickCount;
+    g_pointerReadWasPressed = g_pointerPressed;
+#endif
     data->point = g_pointerPoint;
     data->state = g_pointerPressed ? LV_INDEV_STATE_PRESSED
                                    : LV_INDEV_STATE_RELEASED;
@@ -3963,6 +3980,13 @@ static int emulatorInitialize(int argc, char** argv)
     g_pointerReadCount = 0;
     g_pointerPressReadCount = 0;
     g_pointerDownEventCount = 0;
+#ifdef __EMSCRIPTEN__
+    g_pointerReleaseReadCount = g_publishedFrameCount = 0;
+    g_pointerCompletedClickCount = 0;
+    g_pointerReadWasPressed = false;
+    g_logicalEventCount = g_logicalPressCount = 0;
+    g_logicalEventHash = 2166136261u;
+#endif
     g_frameTimeCount = 0;
     g_frameTimeCursor = 0;
     g_initialized = true;
@@ -4015,6 +4039,9 @@ static void emulatorRunFrame()
             SDL_RenderClear(g_renderer);
             SDL_RenderCopy(g_renderer, g_texture, nullptr, nullptr);
             SDL_RenderPresent(g_renderer);
+#ifdef __EMSCRIPTEN__
+            ++g_publishedFrameCount;
+#endif
         }
 
         // Phase 4A: captura diferida pedida por el script, DESPUES del render
@@ -4233,12 +4260,21 @@ extern "C" EMSCRIPTEN_KEEPALIVE int numos_send_logical_key(int keyCode,
     if (!g_initialized || g_shutdownComplete || keyCode <= 0 ||
         // The public catalog includes the append-only semantic keys after
         // GREATER (HOME/BACK/TOOLBOX and VPAM templates). Accept the full enum.
-        keyCode > static_cast<int>(KeyCode::RBRACKET) ||
+        keyCode > static_cast<int>(KeyCode::FORMAT_MENU) ||
         actionCode < static_cast<int>(KeyAction::PRESS) ||
         actionCode > static_cast<int>(KeyAction::REPEAT)) {
         return 0;
     }
     const KeyAction action = static_cast<KeyAction>(actionCode);
+    struct CompletedInput {
+        int key, action;
+        ~CompletedInput() {
+            ++g_logicalEventCount;
+            if (action == static_cast<int>(KeyAction::PRESS)) ++g_logicalPressCount;
+            g_logicalEventHash = (g_logicalEventHash ^ static_cast<uint32_t>(key)) * 16777619u;
+            g_logicalEventHash = (g_logicalEventHash ^ static_cast<uint32_t>(action)) * 16777619u;
+        }
+    } completed{keyCode, actionCode};
     // Equations' physical SHIFT + SQRT/LN produces absolute value / Euler power.
     // The browser's logical bridge otherwise drops that semantic identity and
     // inserts an ordinary root/logarithm. Reuse the production resolver for this
@@ -4285,6 +4321,11 @@ extern "C" EMSCRIPTEN_KEEPALIVE const char* numos_diagnostic_state()
         g_menu->debugFocusedCardCenter(menuFocusX, menuFocusY);
     }
     std::ostringstream out;
+    const auto* display = lv_display_get_default();
+    // WHY: a completed key/click is not a published frame. Read LVGL's pinned
+    // 9.5 invalidation state; never call its refresh handler from diagnostics.
+    const bool drawPending = g_needsPresent || (display &&
+        (display->inv_p != 0 || display->rendering_in_progress));
     out << "{\"ready\":" << (numos_is_ready() ? "true" : "false")
         << ",\"running\":" << (!g_quit ? "true" : "false")
         << ",\"shutdown\":" << (g_shutdownComplete ? "true" : "false")
@@ -4294,6 +4335,16 @@ extern "C" EMSCRIPTEN_KEEPALIVE const char* numos_diagnostic_state()
         << ",\"logicalWidth\":" << SCREEN_W
         << ",\"logicalHeight\":" << SCREEN_H
         << ",\"frameCount\":" << g_loopCount
+        << ",\"render\":{\"published\":" << g_publishedFrameCount
+        << ",\"pending\":" << (drawPending ? "true" : "false")
+        << ",\"transitionIdle\":" << (screenTransitionIdle() ? "true" : "false") << "}"
+        << ",\"input\":{\"events\":" << g_logicalEventCount
+        << ",\"presses\":" << g_logicalPressCount
+        << ",\"hash\":" << g_logicalEventHash << "}"
+        << ",\"presentation\":{\"formatMenu\":"
+        << (g_calcApp && g_calcApp->debugFormatMenuOpen() ? "true" : "false")
+        << ",\"format\":" << (g_calcApp ? g_calcApp->debugFormatMode() : 0)
+        << ",\"choice\":" << (g_calcApp ? g_calcApp->debugFormatChoice() : 0) << "}"
         << ",\"launcherMs\":" << g_launcherReadyTicks
         << ",\"appLaunches\":" << g_appLaunchCount
         << ",\"menuReturns\":" << g_menuReturnCount
@@ -4322,7 +4373,10 @@ extern "C" EMSCRIPTEN_KEEPALIVE const char* numos_diagnostic_state()
         << ",\"pressed\":" << (g_pointerPressed ? "true" : "false")
         << ",\"reads\":" << g_pointerReadCount
         << ",\"pressReads\":" << g_pointerPressReadCount
-        << ",\"downEvents\":" << g_pointerDownEventCount << "}"
+        << ",\"downEvents\":" << g_pointerDownEventCount
+        << ",\"releaseReads\":" << g_pointerReleaseReadCount
+        << ",\"completedClicks\":" << g_pointerCompletedClickCount
+        << ",\"releasePending\":" << (g_pointerReleasePending ? "true" : "false") << "}"
         << ",\"heapBytes\":" << heapBytes
         << ",\"usedHeapBytes\":" << memory.uordblks
         << ",\"frameMs\":{\"samples\":" << g_frameTimeCount

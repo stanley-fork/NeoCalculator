@@ -120,6 +120,13 @@ public:
     const char* debugCalcStatus() const;       // "ok"|"undefined"|"parse_error"|...
     const std::string& debugCalcExactText() const;
     bool debugInput(const std::string& expected) const;
+#ifdef __EMSCRIPTEN__
+    // Read-only presentation state for the browser's existing diagnostics.
+    // Kept separate from the canonical result so format changes remain testable.
+    bool debugFormatMenuOpen() const { return _formatMenu != nullptr; }
+    unsigned debugFormatMode() const { return static_cast<unsigned>(_resultMode); }
+    unsigned debugFormatChoice() const { return _formatChoice; }
+#endif
 #endif // NATIVE_SIM
 
 private:

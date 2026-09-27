@@ -146,4 +146,6 @@ export const NUMOS_WEB_KEYPAD_LAYOUT = Object.freeze([
   }),
 ]);
 
-export const NUMOS_LOGICAL_KEY_MAX = 79;
+// Keep the public range in step with the audited C++/JS catalog, including
+// bracket grouping and the explicit FORMAT menu entry.
+export const NUMOS_LOGICAL_KEY_MAX = Math.max(...NUMOS_LOGICAL_KEYS.map(key => key.code));

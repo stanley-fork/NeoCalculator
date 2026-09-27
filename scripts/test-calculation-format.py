@@ -21,6 +21,9 @@ cases = {
  'surd-sum': [('exact','[ SQRT 2 ] + [ SQRT 3 ] ENTER',0),('decimal','FORMAT',1),('back','FORMAT',0)],
  'complex': [('exact','[ SQRT neg 1 ] + 1 ENTER',0),('decimal','FORMAT',1),('back','FORMAT',0),('menu',menu,0),('polar','DOWN DOWN ENTER',8),('polar-back','FORMAT',0)],
  'mixed': [('exact','7 / 3 ENTER',0),('menu',menu,0),('mixed','DOWN '*6+'ENTER',6),('back','FORMAT',0)],
+ 'mixed-negative': [('exact','neg 7 / 3 ENTER',0),('menu',menu,0),('mixed','DOWN '*6+'ENTER',6),('back','FORMAT',0)],
+ 'symbolic-complex': [('exact','x + [ SQRT neg 1 ] ENTER',0),('menu',menu,0),('close','BACK',0)],
+ 'scientific': [('exact','0 . 1 ENTER',0),('menu',menu,0),('scientific','DOWN '*4+'ENTER',4),('back','FORMAT',0)],
  'periodic': [('exact','1 / 9 7 ENTER',0),('menu',menu,0),('periodic','DOWN DOWN ENTER',2),('back','FORMAT',0)],
  'extended': [('exact','1 / 7 ENTER',0),('menu',menu,0),('extended','DOWN DOWN DOWN ENTER',3),('back','FORMAT',0)],
  'engineering': [('exact','1 2 3 4 ENTER',0),('eng','SHIFT EXP',5),('eng-shift','SHIFT EXP',5),('eng-left','LEFT',5),('back','FORMAT',0)],
@@ -32,8 +35,10 @@ cases = {
  'complex-exponential': [('exact','[ SQRT neg 1 ] + 1 ENTER',0),('menu',menu,0),('exponential','DOWN DOWN DOWN ENTER',9),('back','FORMAT',0)],
  'complex-phase-deg': [('exact','[ SQRT neg 1 ] + 1 ENTER',0),('polar',menu+' DOWN DOWN ENTER',8),('menu',menu,8),('degrees','DOWN DOWN DOWN ENTER',8),('back','FORMAT',0)],
  'fix-round': [('exact','9 . 9 9 5 ENTER',0),('menu',menu,0),('digits','DOWN '*8+'ENTER',0),('fixed','ENTER',10),('back','FORMAT',0)],
+ 'fix-negative-tie': [('exact','neg 9 . 9 9 5 ENTER',0),('menu',menu,0),('digits','DOWN '*8+'ENTER',0),('fixed','ENTER',10),('back','FORMAT',0)],
  'angle-units': [('exact','SHIFT sin 0 . 5 ENTER',0),('menu',menu,0),('degrees','DOWN '*6+'ENTER',12),('gradians',menu+' DOWN ENTER',13),('radians',menu+' UP UP ENTER',11),('back','FORMAT',0)],
  'empty-menu': [('input','SHIFT ALPHA FORMAT',0),('evaluate','2 ENTER',0)],
+ 'shift-format-table': [('exact','2 ENTER',0),('table','SHIFT FORMAT',0)],
  'plain-half': [('exact','1 / 2 ENTER',0),('menu',menu,0),('close','BACK',0)],
  'sine-ratio': [('exact','sin 0 ENTER',0),('menu',menu,0),('close','BACK',0)],
  'angle-from-deg': [('exact','SHIFT sin 0 . 5 ENTER',0),('radians',menu+' DOWN '*5+'ENTER',11),('back','FORMAT',0)],
@@ -46,6 +51,8 @@ for name, stages in cases.items():
  if name.endswith('from-deg'):script+='set_angle_mode deg\n'
  for stage,sequence,mode in stages:
   script+=keys(sequence)+'wait 3\nlog PHASE_'+stage+'\nassert_calc_input dump\nscreenshot '+(d/(stage+'.ppm')).as_posix()+'\n'
+ if name in ('scientific','engineering'):
+  script+=keys('AC ans ENTER')+'assert_calc_exact '+('1/10' if name=='scientific' else '1234')+'\n'
  script+='assert_angle_mode '+('deg' if name.endswith('from-deg') else 'rad')+'\nlog FORMAT_DONE\n'; replay=d/'repro.numos';replay.write_text(script)
  frames=sum(int(l.split()[1])+1 if l.startswith('wait ') else 1 for l in script.splitlines())+100
  r=subprocess.run([str(a.bin.resolve()),'--headless','--deterministic','--quiet','--frames',str(frames),'--script',str(replay)],env=env,capture_output=True,timeout=60)
@@ -65,7 +72,19 @@ for name, stages in cases.items():
  if name in ('plain-half','decimal','sine-ratio','pi','mixed'):
   if capability('exact') & {8,9,11,12,13}:errors.append('unrelated complex/angle format offered')
  if name=='symbolic-menu' and capability('exact')!={0,1}:errors.append('unsupported symbolic conversion offered')
+ # x+i has no numeric approximation; a real symbolic x+1 can retain one.
+ if name=='symbolic-complex' and capability('exact')!={0}:errors.append('numeric format offered for symbolic complex')
  if name.startswith('complex') and capability('exact')!={0,1,8,9}:errors.append('complex format choices incomplete or unrelated')
+ if name=='shift-format-table':
+  # Read the real physical dispatch, not just the resolver in isolation.
+  enum=(ROOT/'src/input/KeyCodes.h').read_text(encoding='utf-8').split('enum class KeyCode',1)[1].split('{',1)[1].split('}',1)[0]
+  enum=re.sub(r'//[^\n]*|/\*.*?\*/','',enum,flags=re.S)
+  value=-1;codes={}
+  for token in enum.split(','):
+   match=re.fullmatch(r'\s*(\w+)(?:\s*=\s*(\d+))?\s*',token)
+   if match:value=int(match[2]) if match[2] else value+1;codes[match[1]]=value
+  if f'[CALC-PHYSICAL] row=4 col=5 code={codes["TABLE"]} ' not in log:errors.append('SHIFT FORMAT no longer dispatches TABLE')
+  if '[FORMAT-LABEL]' in log:errors.append('SHIFT FORMAT opened the format menu')
  if name=='angle-units' and not {11,12,13}<=capability('exact'):errors.append('angle conversions missing')
  # Independent known values, read from the actual displayed tree. The input
  # tree follows CALC-INPUT and is deliberately excluded from these assertions.
@@ -76,6 +95,9 @@ for name, stages in cases.items():
   'complex-phase-deg':{'degrees':['Number "2"','Number "45"','∠','Symbol "°"']},
   'complex-exponential':{'exponential':['Constant e','Constant i','Constant π','Number "4"']},
   'fix-round':{'fixed':['Number "10.00"']},
+  'fix-negative-tie':{'fixed':['Number "10.00"','Operator -']},
+  'mixed-negative':{'mixed':['Number "2"','Number "1"','Number "3"','Operator -']},
+  'scientific':{'scientific':['Number "1"','Number "10"','Operator -']},
   'angle-from-deg':{'radians':['Constant π','Number "6"','rad']},
   'complex-from-deg':{'polar':['Number "45"','Symbol "°"'],
                        'exponential':['Constant π','Number "4"','Constant e']},

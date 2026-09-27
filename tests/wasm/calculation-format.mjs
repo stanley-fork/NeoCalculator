@@ -3,11 +3,9 @@ import {mkdir,writeFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
 import {chromium,firefox,webkit} from 'playwright';
 import {startStaticServer} from './test-server.mjs';
-import {NUMOS_LOGICAL_KEYS} from '../../wasm/numos-keypad.js';
-const codes=Object.fromEntries(NUMOS_LOGICAL_KEYS.map(k=>[k.id,k.code]));
-const alias={'.':'DOT','^':'POW','/':'FRAC','+':'ADD',pi:'CONST_PI',neg:'NEGATE'};
+import {calculationDriver} from './calculation-driver.mjs';
 const out=resolve(process.env.NUMOS_FORMAT_OUT),server=await startStaticServer(resolve(process.env.NUMOS_WEB_ROOT),8897);
-const results=[];
+const results=[],trace=[];
 try {for(const [name,type] of Object.entries({chromium,firefox,webkit})) {
  if(process.env.NUMOS_BROWSER&&process.env.NUMOS_BROWSER!==name)continue;
  const browser=await type.launch({headless:true});
@@ -22,11 +20,8 @@ try {for(const [name,type] of Object.entries({chromium,firefox,webkit})) {
   }
   await page.waitForFunction(()=>document.querySelector('numos-emulator')?.diagnosticState()?.ready,null,{timeout:60000});
   const el=page.locator('numos-emulator'),folder=resolve(out,name,surface);await mkdir(folder,{recursive:true});
-  const keys=async text=>{
-   const values=text.trim().split(/\s+/).map(k=>codes[/^\d$/.test(k)?'NUM_'+k:alias[k]||k]);assert.ok(values.every(Number.isInteger));
-   await el.evaluate(async(e,values)=>{for(const v of values){if(!e.pressLogicalKey(v))throw Error('key rejected');await new Promise(requestAnimationFrame);}},values);
-   await page.waitForTimeout(40);
-  };
+  if(!await el.locator('[data-physical-id=r9c4]').isVisible())await el.locator('[data-action=controls]').click();
+  const driver=calculationDriver(page,el,trace),keys=driver.keys;
   const shot=async id=>{
    const data=await el.locator('canvas').evaluate(c=>{
     if(c.width!==320||c.height!==240)throw Error('unexpected framebuffer size');
@@ -43,7 +38,7 @@ try {for(const [name,type] of Object.entries({chromium,firefox,webkit})) {
   await keys('ENTER');
   // Wait for the existing launcher-to-app transition before taking a golden
   // candidate; otherwise the first formula is blended with launcher icons.
-  await page.waitForTimeout(350);
+  await driver.settled('launcher-transition');
   for(const [id,input] of [['decimal','0 . 1'],['pi','2 pi'],['root','SQRT '.repeat(24)+'2']]) {
    await keys('AC '+input+' ENTER');const exact=await shot(id+'-exact');
    const semantic=await el.evaluate(e=>e.diagnosticState().calculation);
@@ -77,15 +72,29 @@ try {for(const [name,type] of Object.entries({chromium,firefox,webkit})) {
   await keys('AC SQRT NEGATE 1 RIGHT + 1 ENTER');
   const clickExact=await shot('click-exact');
   await keys('SHIFT ALPHA FORMAT');
-  const canvas=el.locator('canvas'),bounds=await canvas.boundingBox();
   // Third row of the four-row complex menu in the 320x240 framebuffer.
-  await canvas.click({position:{x:bounds.width/2,y:bounds.height*155/240}});
-  await page.waitForTimeout(80);
+  await driver.clickCanvas(160,155,'select-polar');
+  const selected=await driver.state();assert.equal(selected.presentation.formatMenu,false);assert.equal(selected.presentation.format,8);
   const clicked=await shot('click-polar');
   const keyboardPolar=results.find(r=>r.browser===name&&r.surface===surface&&r.id==='polar').formatted;
   assert.equal(clicked.hash,keyboardPolar.hash,'pointer and keyboard selected different results');
   assert.notEqual(clicked.hash,clickExact.hash,'row click did not apply polar');
   await keys('FORMAT');assert.equal((await shot('click-back')).hash,clickExact.hash);
+  // Deliberately omit per-key barriers: detect loss, duplication and order in
+  // a real-keypad burst, independently of the synchronized functional path.
+  for(let round=0;round<5;++round) {
+   await keys('AC 1 2 3 4 DEL 5 + 6 ENTER SHIFT ALPHA FORMAT DOWN BACK FORMAT FORMAT',{rapid:true});
+   const s=await driver.state();assert.equal(s.calculation.exact,'1241');
+   assert.equal(s.presentation.formatMenu,false);assert.equal(s.presentation.format,0);
+   assert.equal(s.modifier,'');
+  }
+  // The declared public logical catalog also exposes FORMAT_MENU (82).
+  // This is an additional bridge-boundary detector, never a substitute for
+  // the physical SHIFT/ALPHA/FORMAT and pointer journeys above.
+  assert.equal(await el.evaluate(e=>e.pressLogicalKey(82)),true);
+  await driver.settled('public-format-menu');
+  assert.equal((await driver.state()).presentation.formatMenu,true);
+  await keys('BACK');
   assert.deepEqual(errors,[]);await context.close();console.log('PASS',name,surface,'formats, S+A, ENG');
  }} finally {await browser.close();}
-}}finally{await server.close();await mkdir(out,{recursive:true});await writeFile(resolve(out,'results.json'),JSON.stringify(results,null,2));}
+}}finally{await server.close();await mkdir(out,{recursive:true});await writeFile(resolve(out,'results.json'),JSON.stringify(results,null,2));await writeFile(resolve(out,'events.json'),JSON.stringify(trace,null,2));}
