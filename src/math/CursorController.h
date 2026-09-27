@@ -141,6 +141,10 @@ public:
      *  · El cursor salta automáticamente al exponente (NodeEmpty).
      */
     void insertPower();
+    bool insertFactorial();
+    /// Explicit base 10; multiply only after an operand. Failure leaves the
+    /// expression/cursor untouched. Never changes generic power capture.
+    bool insertPowerOfTen();
 
     /**
      * Inserta una raíz cuadrada √.
@@ -154,7 +158,10 @@ public:
      *  · Crea NodeParen con contenido vacío.
      *  · El cursor entra dentro.
      */
-    void insertParen();
+    void insertParen(DelimKind kind = DelimKind::Paren);
+    /// Close the nearest authored square group, including from a nested slot.
+    /// Pending placeholders remain in the tree and still reject evaluation.
+    void closeBracket();
 
     /**
      * Inserta una función matemática (sin, cos, tan, ln, log, etc.).
@@ -213,7 +220,8 @@ public:
      *    Si el número queda vacío, elimina el nodo.
      *  · A la derecha de una estructura (Fraction/Power/Root/Paren):
      *    deshace la estructura → extrae el contenido a la fila padre.
-     *  · Sobre un NodeEmpty: sube al padre (sale de la ranura).
+     *  · En una ranura final vacía: deshace la plantilla conservando su base
+     *    o numerador. En otras ranuras vacías, sale sin perder contenido.
      *  · A la derecha de un Operator: elimina el operador.
      */
     void backspace();
@@ -270,6 +278,10 @@ private:
 
     /// Si la fila queda vacía tras un borrado, inserta un NodeEmpty
     void ensureNotEmpty(NodeRow* row);
+
+    // Undo a template without losing its retained slot or allocating after
+    // mutation begins. Used both beside a template and in its empty last slot.
+    bool unwrapStructure(NodeRow* row, int index, NodeRow* retained);
 };
 
 } // namespace vpam

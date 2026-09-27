@@ -1,0 +1,432 @@
+[
+  {
+    "id": "decimal-sum",
+    "round": 1,
+    "keys": "0 . 1 + 0 . 2",
+    "number": 0.3
+  },
+  {
+    "id": "decimal-cancel",
+    "round": 1,
+    "keys": "0 . 3 - 0 . 2 - 0 . 1",
+    "number": 0
+  },
+  {
+    "id": "rational-sum",
+    "round": 1,
+    "keys": "[ 1 / 3 ] + [ 1 / 6 ]",
+    "number": 0.5
+  },
+  {
+    "id": "radical-square",
+    "round": 1,
+    "keys": "[ SQRT 2 ] ^ 2",
+    "number": 2
+  },
+  {
+    "id": "radical-product",
+    "round": 1,
+    "keys": "[ SQRT 2 ] * [ SQRT 8 ]",
+    "number": 4
+  },
+  {
+    "id": "radical-cancel",
+    "round": 1,
+    "keys": "[ SQRT 1 2 ] - 2 * [ SQRT 3 ]",
+    "number": 0
+  },
+  {
+    "id": "rational-power",
+    "round": 1,
+    "keys": "2 7 ^ [ 1 / 3 ]",
+    "number": 3
+  },
+  {
+    "id": "negative-rational-power",
+    "round": 1,
+    "keys": "[ neg 8 ] ^ [ 1 / 3 ]",
+    "note": "Record principal-branch behavior; do not assume real cube root for a power."
+  },
+  {
+    "id": "root-negative",
+    "round": 1,
+    "keys": "SQRT neg 1",
+    "note": "Separate real/complex policy from missing evaluation."
+  },
+  {
+    "id": "log-ten",
+    "round": 1,
+    "keys": "log 1 0 0 0",
+    "number": 3
+  },
+  {
+    "id": "log-base-two",
+    "round": 1,
+    "keys": "logbase 2 RIGHT 8",
+    "number": 3
+  },
+  {
+    "id": "log-base-half",
+    "round": 1,
+    "keys": "logbase 0 . 5 RIGHT 8",
+    "number": -3
+  },
+  {
+    "id": "ln-e",
+    "round": 1,
+    "keys": "ln e",
+    "number": 1
+  },
+  {
+    "id": "exp-ln",
+    "round": 1,
+    "keys": "e ^ [ ln 2 ]",
+    "number": 2
+  },
+  {
+    "id": "sin-pi",
+    "round": 1,
+    "keys": "sin pi",
+    "number": 0
+  },
+  {
+    "id": "cos-pi-third",
+    "round": 1,
+    "keys": "cos pi / 3",
+    "number": 0.5
+  },
+  {
+    "id": "sin-pi-sixth",
+    "round": 1,
+    "keys": "sin pi / 6",
+    "number": 0.5
+  },
+  {
+    "id": "tan-pi-quarter",
+    "round": 1,
+    "keys": "tan pi / 4",
+    "number": 1
+  },
+  {
+    "id": "asin-half",
+    "round": 1,
+    "keys": "SHIFT sin 0 . 5",
+    "number": 0.5235987755982988
+  },
+  {
+    "id": "acos-minus-one",
+    "round": 1,
+    "keys": "SHIFT cos neg 1",
+    "number": 3.141592653589793
+  },
+  {
+    "id": "atan-one",
+    "round": 1,
+    "keys": "SHIFT tan 1",
+    "number": 0.7853981633974483
+  },
+  {
+    "id": "cos-asin-half",
+    "round": 1,
+    "keys": "cos SHIFT sin 0 . 5",
+    "number": 0.8660254037844386
+  },
+  {
+    "id": "trig-identity-numeric",
+    "round": 1,
+    "keys": "[ sin 1 ] ^ 2 RIGHT + [ cos 1 ] ^ 2",
+    "number": 1
+  },
+  {
+    "id": "zero-power-zero",
+    "round": 1,
+    "keys": "0 ^ 0",
+    "note": "Policy control, not automatically a bug."
+  },
+  {
+    "id": "symbol-cancel",
+    "round": 2,
+    "keys": "x - x",
+    "number": 0
+  },
+  {
+    "id": "symbol-collect",
+    "round": 2,
+    "keys": "2 x + 3 x",
+    "exact": "5*x"
+  },
+  {
+    "id": "symbol-quotient",
+    "round": 2,
+    "keys": "[ x ^ 2 RIGHT - 1 ] / [ x - 1 ]",
+    "note": "Check simplification and x=1 condition, without assuming implicit domain changes."
+  },
+  {
+    "id": "symbol-root-square",
+    "round": 2,
+    "keys": "SQRT x ^ 2",
+    "note": "Domain-sensitive; abs(x) under real assumption."
+  },
+  {
+    "id": "trig-identity-symbolic",
+    "round": 2,
+    "keys": "[ sin x ] ^ 2 RIGHT + [ cos x ] ^ 2",
+    "number": 1
+  },
+  {
+    "id": "log-power-symbolic",
+    "round": 2,
+    "keys": "ln e ^ x",
+    "note": "Power is inside ln, x remains a free symbol."
+  },
+  {
+    "id": "sin-asin-symbolic",
+    "round": 2,
+    "keys": "sin SHIFT sin x",
+    "exact": "x"
+  },
+  {
+    "id": "asin-sin-symbolic",
+    "round": 2,
+    "keys": "SHIFT sin sin x",
+    "note": "Must not discard principal-interval conditions."
+  },
+  {
+    "id": "ln-negative-complex",
+    "round": 2,
+    "setup": "set_equations_complex_policy complex\n",
+    "keys": "ln neg 1",
+    "note": "Expected principal i*pi in complex mode."
+  },
+  {
+    "id": "sqrt-negative-complex",
+    "round": 2,
+    "setup": "set_equations_complex_policy complex\n",
+    "keys": "SQRT neg 1",
+    "exact": "i"
+  },
+  {
+    "id": "complex-square",
+    "round": 2,
+    "setup": "set_equations_complex_policy complex\n",
+    "keys": "[ SQRT neg 1 ] ^ 2",
+    "number": -1
+  },
+  {
+    "id": "acos-two-complex",
+    "round": 2,
+    "setup": "set_equations_complex_policy complex\n",
+    "keys": "SHIFT cos 2",
+    "note": "Finite complex principal value exists."
+  },
+  {
+    "id": "deg-sin-30",
+    "round": 2,
+    "setup": "set_angle_mode deg\n",
+    "keys": "sin 3 0",
+    "number": 0.5
+  },
+  {
+    "id": "deg-cos-60",
+    "round": 2,
+    "setup": "set_angle_mode deg\n",
+    "keys": "cos 6 0",
+    "number": 0.5
+  },
+  {
+    "id": "deg-asin-half",
+    "round": 2,
+    "setup": "set_angle_mode deg\n",
+    "keys": "SHIFT sin 0 . 5",
+    "number": 30
+  },
+  {
+    "id": "deg-atan-one",
+    "round": 2,
+    "setup": "set_angle_mode deg\n",
+    "keys": "SHIFT tan 1",
+    "number": 45
+  },
+  {
+    "id": "deg-inverse-roundtrip",
+    "round": 2,
+    "setup": "set_angle_mode deg\n",
+    "keys": "sin SHIFT sin 0 . 5",
+    "number": 0.5
+  },
+  {
+    "id": "real-ln-negative-control",
+    "round": 2,
+    "setup": "set_equations_complex_policy real\n",
+    "keys": "ln neg 1",
+    "note": "Real-domain control."
+  },
+  {
+    "id": "log-base-one-control",
+    "round": 2,
+    "keys": "logbase 1 RIGHT 2",
+    "note": "Undefined logarithm base; expected error."
+  },
+  {
+    "id": "zero-division-control",
+    "round": 2,
+    "keys": "1 / 0",
+    "note": "Undefined finite scalar; expected error/infinity policy."
+  },
+  {
+    "id": "ans-radical",
+    "round": 3,
+    "keys": "[ SQRT 2 ] + [ SQRT 3 ]",
+    "tail": "AC ans ^ 2 ENTER",
+    "tailNote": "Expected 5+2*sqrt(6)."
+  },
+  {
+    "id": "ans-symbolic",
+    "round": 3,
+    "keys": "5 ENTER AC x + 1",
+    "tail": "AC ans ENTER",
+    "tailNote": "Inspect missing symbolic Ans reuse vs declared numeric-only policy."
+  },
+  {
+    "id": "ans-complex",
+    "round": 3,
+    "setup": "set_equations_complex_policy complex\n",
+    "keys": "5 ENTER AC SQRT neg 1",
+    "tail": "AC ans ^ 2 ENTER",
+    "tailNote": "If complex Ans updated, result should be -1; old numeric Ans would yield 25."
+  },
+  {
+    "id": "preans-chain",
+    "round": 3,
+    "keys": "2 ENTER AC 3 ENTER AC 4",
+    "tail": "AC preans ENTER",
+    "tailNumber": 3
+  },
+  {
+    "id": "factor-prime",
+    "round": 3,
+    "keys": "1 0 1",
+    "tail": "FACT",
+    "tailNote": "101 is prime; FACT means prime factorization, not factorial."
+  },
+  {
+    "id": "factor-composite",
+    "round": 3,
+    "keys": "3 6 0",
+    "tail": "FACT",
+    "tailNote": "Expected 2^3*3^2*5 in the result AST."
+  },
+  {
+    "id": "factor-rational",
+    "round": 3,
+    "keys": "1 2 / 5",
+    "tail": "FACT",
+    "tailNote": "Record rational handling; no arbitrary expectation of polynomial factoring."
+  },
+  {
+    "id": "factor-symbolic",
+    "round": 3,
+    "keys": "x + 1",
+    "tail": "FACT",
+    "tailNote": "Must not replace a symbolic expression with 0."
+  },
+  {
+    "id": "factor-complex",
+    "round": 3,
+    "setup": "set_equations_complex_policy complex\n",
+    "keys": "SQRT neg 1",
+    "tail": "FACT",
+    "tailNote": "Must not replace i with 0."
+  },
+  {
+    "id": "history-symbolic",
+    "round": 3,
+    "keys": "x + 1 ENTER AC 7",
+    "tail": "UP UP sd",
+    "tailNote": "Inspect exact symbolic result and S-to-D history restoration."
+  },
+  {
+    "id": "history-complex",
+    "round": 3,
+    "setup": "set_equations_complex_policy complex\n",
+    "keys": "SQRT neg 1 ENTER AC 7",
+    "tail": "UP UP sd",
+    "tailNote": "Inspect exact complex result and approximate tree."
+  },
+  {
+    "id": "sd-surd-sum",
+    "round": 3,
+    "keys": "[ SQRT 2 ] + [ SQRT 3 ]",
+    "tail": "sd sd sd",
+    "number": 3.1462643699419726
+  },
+  {
+    "id": "decimal-cancellation-large-relative",
+    "round": 3,
+    "keys": "[ 1 + 1 0 ^ neg 1 5 ] - 1",
+    "number": 1e-15,
+    "note": "Small, finite answer; precision issue is not a screen overflow."
+  },
+  {
+    "id": "near-pole-log",
+    "round": 3,
+    "keys": "ln 1 . 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1",
+    "note": "Tiny finite logarithm; inspect precision without timing/heap stress."
+  },
+  {
+    "id": "factorial-five",
+    "round": 3,
+    "keys": "5 FACT",
+    "number": 120,
+    "note": "Physical SHIFT+multiply has factorial semantic."
+  },
+  {
+    "id": "factorial-zero",
+    "round": 3,
+    "keys": "0 FACT",
+    "number": 1
+  },
+  {
+    "id": "factorial-sum",
+    "round": 3,
+    "keys": "3 FACT + 2",
+    "number": 8
+  },
+  {
+    "id": "log-base-one-unit",
+    "round": 4,
+    "keys": "logbase 1 RIGHT 1",
+    "note": "No unique logarithm exists with base 1, even for argument 1."
+  },
+  {
+    "id": "log-base-one-half",
+    "round": 4,
+    "keys": "logbase 1 RIGHT 0 . 5",
+    "note": "Invalid logarithm base; not a physical overflow."
+  },
+  {
+    "id": "log-base-zero-two",
+    "round": 4,
+    "keys": "logbase 0 RIGHT 2",
+    "note": "Base 0 is outside the logarithm domain; must not produce a finite number."
+  },
+  {
+    "id": "log-base-two-unit",
+    "round": 4,
+    "keys": "logbase 2 RIGHT 1",
+    "number": 0
+  },
+  {
+    "id": "ans-real-control",
+    "round": 4,
+    "keys": "5 ENTER AC 3",
+    "tail": "AC ans ^ 2 ENTER",
+    "tailNumber": 9
+  },
+  {
+    "id": "complex-direct-control",
+    "round": 4,
+    "keys": "[ SQRT neg 1 ] ^ 2",
+    "number": -1
+  }
+]

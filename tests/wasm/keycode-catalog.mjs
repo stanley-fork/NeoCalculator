@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { NUMOS_LOGICAL_KEYS } from "../../wasm/numos-keypad.js";
+import { NUMOS_LOGICAL_KEYS, NUMOS_WEB_KEYPAD_LAYOUT } from "../../wasm/numos-keypad.js";
 
 const source = await readFile(
   new URL("../../src/input/KeyCodes.h", import.meta.url), "utf8");
@@ -28,3 +28,5 @@ assert.deepEqual(actual, expected,
 assert.equal(new Set(actual.map(([, code]) => code)).size, actual.length,
   "web logical-key codes must be unique");
 console.log(`NumOS web logical-key catalog: ${actual.length}/${expected.length}`);
+const scientific = NUMOS_WEB_KEYPAD_LAYOUT.flatMap(group=>group.keys).find(key=>key.physicalId==='r9c2');
+assert.equal(scientific?.logicalId,'EXP','the visible ×10^ key must not dispatch generic POW');

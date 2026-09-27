@@ -759,12 +759,58 @@ static void syncAngleMode(giac::context* ctx) {
     giac::angle_radian(!numos::angleModeIsDeg(), ctx);
 }
 
+// Calculation validates log bases before evaluation rewrites logb into a
+// quotient. Giac resolves base expressions and variables, not the renderer.
+static bool invalidLogBase(const giac::gen& g, giac::context* ctx, int depth = 0) {
+    if (depth > 2 * enginecontract::kMaxTreeDepth + 2) return true;
+    if (g.type == giac::_SYMB) {
+        const auto& leaf = g._SYMBptr->feuille;
+        if (g._SYMBptr->sommet == giac::at_logb && leaf.type == giac::_VECT &&
+            leaf._VECTptr->size() == 2) {
+            const auto base = giac::eval((*leaf._VECTptr)[1], giac::eval_level(ctx), ctx);
+            if (giac::is_zero(base) || giac::is_zero(base - 1)) return true;
+        }
+        return invalidLogBase(leaf, ctx, depth + 1);
+    }
+    if (g.type == giac::_VECT)
+        for (const auto& c : *g._VECTptr)
+            if (invalidLogBase(c, ctx, depth + 1)) return true;
+    return false;
+}
+
+static bool symbolicDenominator(const giac::gen& g, giac::context* ctx, int depth = 0) {
+    if (depth > 2 * enginecontract::kMaxTreeDepth + 2) return true;
+    const giac::gen* denominator = nullptr;
+    if (g.type == giac::_FRAC) denominator = &g._FRACptr->den;
+    if (g.type == giac::_SYMB) {
+        const auto& leaf = g._SYMBptr->feuille;
+        if (g._SYMBptr->sommet == giac::at_inv) denominator = &leaf;
+        if (g._SYMBptr->sommet == giac::at_pow && leaf.type == giac::_VECT &&
+            leaf._VECTptr->size() == 2 && leaf._VECTptr->back().type == giac::_INT_ &&
+            leaf._VECTptr->back().val < 0) denominator = &leaf._VECTptr->front();
+    }
+    if (denominator) {
+        int budget = enginecontract::kMaxTreeNodes;
+        std::string name;
+        if (findDisallowedIdent(*denominator, nullptr, 0, 0, budget, name, ctx)) return true;
+    }
+    if (g.type == giac::_SYMB) return symbolicDenominator(g._SYMBptr->feuille, ctx, depth + 1);
+    if (g.type == giac::_VECT)
+        for (const auto& child : *g._VECTptr)
+            if (symbolicDenominator(child, ctx, depth + 1)) return true;
+    if (g.type == giac::_FRAC)
+        return symbolicDenominator(g._FRACptr->num, ctx, depth + 1) ||
+               symbolicDenominator(g._FRACptr->den, ctx, depth + 1);
+    return false;
+}
+
 static MathEngineResult runTextual(giac::context* ctx, const char* expression,
                                    bool simplifyMode,
                                    EngineResultNode* outTree = nullptr,
                                    bool* outHasTree = nullptr,
                                    EngineResultNode* outApproximateTree = nullptr,
-                                   bool* outHasApproximateTree = nullptr) {
+                                   bool* outHasApproximateTree = nullptr,
+                                   bool calculationPolicy = false) {
     MathEngineResult r;
     if (outHasTree) *outHasTree = false;
     if (outHasApproximateTree) *outHasApproximateTree = false;
@@ -777,16 +823,30 @@ static MathEngineResult runTextual(giac::context* ctx, const char* expression,
         DiagnosticCapture capture(ctx);
 
         giac::gen parsed(std::string(expression), ctx);
-        if (giac::is_undef(parsed)) {
+        if (giac::is_undef(parsed) || (calculationPolicy && parsed.type == giac::_STRNG)) {
             r.status = MathEngineStatus::ParseError;
             r.diagnostic = capture.text();
             if (r.diagnostic.empty()) r.diagnostic = parsed.print(ctx);
             return r;
         }
 
+        if (calculationPolicy && invalidLogBase(parsed, ctx)) {
+            r.status = MathEngineStatus::Undefined;
+            r.diagnostic = "logarithm base must differ from zero and one";
+            return r;
+        }
         giac::gen out = giac::eval(parsed, giac::eval_level(ctx), ctx);
-        if (simplifyMode && !giac::is_undef(out)) {
-            out = giac::_simplify(out, ctx);
+        if (simplifyMode && !giac::is_undef(out) &&
+            // No implicit cancellation of a variable denominator: Calculation
+            // has no conditions surface on which to retain the removed hole.
+            (!calculationPolicy || !symbolicDenominator(out, ctx))) {
+            const auto simplified = giac::_simplify(out, ctx);
+            // Calculation's default is a compact exact answer. Do not expand
+            // asin(sin(x)) into a long floor/piecewise identity just to display
+            // it. Explicit Simplify elsewhere keeps its existing policy.
+            if (!calculationPolicy || (!giac::is_undef(simplified) &&
+                simplified.print(ctx).size() <= out.print(ctx).size()))
+                out = simplified;
         }
 
         if (giac::is_undef(out)) {
@@ -1120,7 +1180,8 @@ MathEngineResult GiacEngine::simplify(const char* expression) {
     return runTextual(_state->ctx, expression, /*simplifyMode=*/true);
 }
 
-StructuredEngineResult GiacEngine::evaluateStructured(const char* expression) {
+StructuredEngineResult GiacEngine::evaluateStructured(const char* expression, bool calculationPolicy,
+                                                       EvaluationAngle angle) {
 #ifdef NATIVE_SIM
     ++g_runtimeDiagnostics.structuredEvaluations;
 #endif
@@ -1136,9 +1197,10 @@ StructuredEngineResult GiacEngine::evaluateStructured(const char* expression) {
         return sr;
     }
     syncAngleMode(_state->ctx);
-    sr.base = runTextual(_state->ctx, expression, /*simplifyMode=*/false,
+    ScopedRadianMode radianMode(_state->ctx, angle == EvaluationAngle::Radians);
+    sr.base = runTextual(_state->ctx, expression, calculationPolicy,
                          &sr.tree, &sr.hasTree,
-                         &sr.approximateTree, &sr.hasApproximateTree);
+                         &sr.approximateTree, &sr.hasApproximateTree, calculationPolicy);
     if (sr.hasTree) sr.fallbackReason = firstFallbackReason(sr.tree);
     return sr;
 }

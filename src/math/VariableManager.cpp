@@ -95,6 +95,7 @@ void VariableManager::setVariable(char name, const ExactVal& val) {
     int idx = nameToIndex(name);
     if (idx < 0) return;
     _vars[idx] = val;
+    ++_revisions[idx];
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -104,6 +105,8 @@ void VariableManager::setVariable(char name, const ExactVal& val) {
 void VariableManager::updateAns(const ExactVal& newVal) {
     _vars[nameToIndex(VAR_PREANS)] = _vars[nameToIndex(VAR_ANS)];
     _vars[nameToIndex(VAR_ANS)]    = newVal;
+    ++_revisions[nameToIndex(VAR_ANS)];
+    ++_revisions[nameToIndex(VAR_PREANS)];
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -111,6 +114,7 @@ void VariableManager::updateAns(const ExactVal& newVal) {
 // ════════════════════════════════════════════════════════════════════════════
 
 void VariableManager::resetAll() {
+    for (auto& revision : _revisions) ++revision;
     for (auto& v : _vars) {
         v = ExactVal::fromInt(0);
     }
@@ -299,6 +303,7 @@ bool VariableManager::loadFromFlash() {
             continue;
         }
         _vars[i] = value;
+        ++_revisions[i];
     }
 
     f.close();
@@ -324,6 +329,7 @@ bool VariableManager::loadFromFlash() {
     for (int i = 0; i < toRead; ++i) {
         if (f.read(buf, EXACTVAL_SIZE) != EXACTVAL_SIZE) break;
         _vars[i] = deserializeExactVal(buf);
+        ++_revisions[i];
     }
     f.close();
     return true;

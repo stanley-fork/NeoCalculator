@@ -1,0 +1,210 @@
+[
+  {
+    "id": "minus-five",
+    "keys": "neg 5",
+    "latex": "-5",
+    "expected": -5
+  },
+  {
+    "id": "plus-five",
+    "keys": "+ 5",
+    "latex": "+5",
+    "expected": 5
+  },
+  {
+    "id": "subtraction",
+    "keys": "5 - 6",
+    "latex": "5-6",
+    "expected": -1
+  },
+  {
+    "id": "relation-negative",
+    "keys": "x = neg 5",
+    "latex": "x=-5"
+  },
+  {
+    "id": "group-negative",
+    "keys": "x + ( neg y )",
+    "latex": "x+\\left(-y\\right)"
+  },
+  {
+    "id": "product-negative",
+    "keys": "x * neg y",
+    "latex": "x\\times -y"
+  },
+  {
+    "id": "power-negative",
+    "keys": "2 ^ neg 2",
+    "latex": "2^{-2}",
+    "expected": 0.25
+  },
+  {
+    "id": "ten-negative",
+    "keys": "1 0 ^ neg 3",
+    "latex": "10^{-3}",
+    "expected": 0.001
+  },
+  {
+    "id": "script-sum",
+    "keys": "x ^ x + y",
+    "latex": "x^{x+y}"
+  },
+  {
+    "id": "script-negative-difference",
+    "keys": "x ^ neg x - y",
+    "latex": "x^{-x-y}"
+  },
+  {
+    "id": "five-linear-exponent",
+    "keys": "5 ^ neg 5 - 6",
+    "latex": "5^{-5-6}",
+    "expected": 2.048e-08
+  },
+  {
+    "id": "five-nested-exponent",
+    "keys": "5 ^ neg 5 ^ neg 6",
+    "latex": "5^{-5^{-6}}",
+    "expected": 0.9998970012783368,
+    "numericTolerance": 5.05e-11,
+    "numericToleranceReason": "Historical ExactVal::fromDouble mirror rounds to 10 decimal places after Giac prints 12 significant digits; exact Giac tree/text separately compared"
+  },
+  {
+    "id": "grouped-power",
+    "keys": "( 5 ^ neg 5 RIGHT ) ^ neg 6",
+    "latex": "\\left(5^{-5}\\right)^{-6}",
+    "expected": 931322574615478515625,
+    "numericTolerance": 500000000.0,
+    "numericToleranceReason": "Integer exceeds int64 bridge; Giac companion prints 12 significant digits, quantum 1e9; exact integer separately compared"
+  },
+  {
+    "id": "negative-denominator",
+    "keys": "1 / neg 2",
+    "latex": "\\dfrac{1}{-2}",
+    "expected": -0.5
+  },
+  {
+    "id": "user-linear-control",
+    "keys": "8 / 5 ^ neg 5 - 6 RIGHT - 5 + 5 * 6",
+    "latex": "\\dfrac{8}{5^{-5-6}-5+5\\times6}",
+    "expected": 0.319999999737856
+  },
+  {
+    "id": "user-nested-control",
+    "keys": "8 / 5 ^ neg 5 ^ neg 6 RIGHT RIGHT - 5 + 5 * 6",
+    "latex": "\\dfrac{8}{5^{-5^{-6}}-5+5\\times6}",
+    "expected": 0.30769352661691945,
+    "numericTolerance": 5.05e-11,
+    "numericToleranceReason": "Historical ExactVal::fromDouble mirror rounds to 10 decimal places after Giac prints 12 significant digits; exact Giac tree/text separately compared"
+  },
+  {
+    "id": "scientific-fraction",
+    "keys": "6 6 . 6 3 / 2 exp neg 3",
+    "latex": "\\dfrac{66.63}{2\\times10^{-3}}",
+    "expected": 33315
+  },
+  {
+    "id": "fraction-in-exponent",
+    "keys": "2 ^ 1 / neg 2",
+    "latex": "2^{\\frac{1}{-2}}",
+    "expected": 0.7071067811865476,
+    "numericTolerance": 5.05e-11,
+    "numericToleranceReason": "Historical ExactVal::fromDouble mirror rounds to 10 decimal places after Giac prints 12 significant digits; exact Giac tree/text separately compared"
+  },
+  {
+    "id": "function-in-exponent",
+    "keys": "2 ^ sin neg x",
+    "latex": "2^{\\sin\\left(-x\\right)}"
+  },
+  {
+    "id": "implicit-variable",
+    "keys": "2 x",
+    "latex": "2x"
+  },
+  {
+    "id": "implicit-group",
+    "keys": "2 ( x + 1 )",
+    "latex": "2\\left(x+1\\right)"
+  },
+  {
+    "id": "two-groups",
+    "keys": "( 2 x + 5 ) ( x - 1 )",
+    "latex": "\\left(2x+5\\right)\\left(x-1\\right)"
+  },
+  {
+    "id": "multiply",
+    "keys": "5 * 6",
+    "latex": "5\\times6",
+    "expected": 30
+  },
+  {
+    "id": "implicit-function",
+    "keys": "2 sin x",
+    "latex": "2\\sin\\left(x\\right)"
+  },
+  {
+    "id": "negative-function",
+    "keys": "sin neg x",
+    "latex": "\\sin\\left(-x\\right)"
+  },
+  {
+    "id": "quadratic",
+    "keys": "x ^ 2 RIGHT + 1 = 0",
+    "latex": "x^2+1=0"
+  },
+  {
+    "id": "decimal",
+    "keys": "3 . 1 4",
+    "latex": "3.14",
+    "expected": 3.14
+  },
+  {
+    "id": "constant",
+    "keys": "pi + 1",
+    "latex": "\\pi+1",
+    "expected": 4.141592653589793,
+    "numericTolerance": 5.05e-11,
+    "numericToleranceReason": "Historical ExactVal::fromDouble mirror rounds to 10 decimal places after Giac prints 12 significant digits; exact Giac tree/text separately compared"
+  },
+  {
+    "id": "pending-sign",
+    "keys": "neg",
+    "latex": "-\\square"
+  },
+  {
+    "id": "pending-exponent",
+    "keys": "2 ^",
+    "latex": "2^{\\square}"
+  },
+  {
+    "id": "pending-base",
+    "keys": "^ neg 2",
+    "latex": "\\square^{-2}"
+  },
+  {
+    "id": "pending-final-operator",
+    "keys": "5 +",
+    "latex": "5+"
+  },
+  {
+    "id": "sign-reentry",
+    "keys": "2 ^ neg 2 DEL DEL neg 3",
+    "latex": "2^{-3}",
+    "expected": 0.125
+  },
+  {
+    "id": "nested-incomplete",
+    "keys": "2 ^ ^ neg 2",
+    "latex": "2^{\\square^{-2}}"
+  },
+  {
+    "id": "long-row",
+    "keys": "5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5",
+    "latex": "5+5+5+5+5+5+5+5+5+5+5+5+5+5+5+5+5+5+5+5+5+5+5+5+5+5+5+5+5+5+5+5",
+    "expected": 160
+  },
+  {
+    "id": "minimum-font",
+    "keys": "2 ^ 2 ^ 2 ^ neg 3",
+    "latex": "2^{2^{2^{-3}}}"
+  }
+]

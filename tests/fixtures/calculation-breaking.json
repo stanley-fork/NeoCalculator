@@ -1,0 +1,614 @@
+[
+  {
+    "round": 1,
+    "id": "ordinary",
+    "keys": "2 + 3 * 4",
+    "description": "ordinary",
+    "evaluate": true
+  },
+  {
+    "round": 1,
+    "id": "decimal",
+    "keys": "6 6 . 6 3 / 2 exp neg 3",
+    "description": "decimal",
+    "evaluate": true
+  },
+  {
+    "round": 1,
+    "id": "negative-power",
+    "keys": "5 ^ neg 5 - 6",
+    "description": "negative-power",
+    "evaluate": true
+  },
+  {
+    "round": 1,
+    "id": "nested-negative",
+    "keys": "5 ^ neg 5 ^ neg 6",
+    "description": "nested-negative",
+    "evaluate": true
+  },
+  {
+    "round": 1,
+    "id": "negative-base",
+    "keys": "( neg 5 ) ^ 2",
+    "description": "negative-base",
+    "evaluate": true
+  },
+  {
+    "round": 1,
+    "id": "implicit-product",
+    "keys": "2 ( 3 + 4 )",
+    "description": "implicit-product",
+    "evaluate": true
+  },
+  {
+    "round": 1,
+    "id": "fraction-power",
+    "keys": "( 2 / 3 RIGHT ) ^ neg 2",
+    "description": "fraction-power",
+    "evaluate": true
+  },
+  {
+    "round": 1,
+    "id": "sqrt-negative",
+    "keys": "SQRT neg 1",
+    "description": "sqrt-negative",
+    "evaluate": true
+  },
+  {
+    "round": 1,
+    "id": "zero-divisor",
+    "keys": "1 / 0",
+    "description": "zero-divisor",
+    "evaluate": true
+  },
+  {
+    "round": 1,
+    "id": "zero-over-zero",
+    "keys": "0 / 0",
+    "description": "zero-over-zero",
+    "evaluate": true
+  },
+  {
+    "round": 1,
+    "id": "log-zero",
+    "keys": "LN 0",
+    "description": "log-zero",
+    "evaluate": true
+  },
+  {
+    "round": 1,
+    "id": "tangent-pole",
+    "keys": "TAN 9 0",
+    "description": "tangent-pole",
+    "evaluate": true
+  },
+  {
+    "round": 1,
+    "id": "factorial",
+    "keys": "7 SHIFT TABLE",
+    "description": "factorial",
+    "evaluate": true
+  },
+  {
+    "round": 1,
+    "id": "periodic",
+    "keys": "1 / 7",
+    "description": "periodic",
+    "evaluate": true
+  },
+  {
+    "round": 1,
+    "id": "huge-result",
+    "keys": "9 ^ 9 ^ 2",
+    "description": "huge-result",
+    "evaluate": false
+  },
+  {
+    "round": 1,
+    "id": "small-result",
+    "keys": "1 0 ^ neg 9 9",
+    "description": "small-result",
+    "evaluate": true
+  },
+  {
+    "round": 1,
+    "id": "symbolic",
+    "keys": "x ^ 2 RIGHT + 2 x + 1",
+    "description": "symbolic",
+    "evaluate": true
+  },
+  {
+    "round": 1,
+    "id": "trig-fraction",
+    "keys": "SIN 1 / 2",
+    "description": "trig-fraction",
+    "evaluate": true
+  },
+  {
+    "round": 1,
+    "id": "log-base",
+    "keys": "SHIFT log 2 RIGHT 8",
+    "description": "log-base",
+    "evaluate": true
+  },
+  {
+    "round": 1,
+    "id": "empty-exp",
+    "keys": "2 ^",
+    "description": "empty-exp",
+    "evaluate": true
+  },
+  {
+    "round": 1,
+    "id": "empty-base",
+    "keys": "^ 2",
+    "description": "empty-base",
+    "evaluate": true
+  },
+  {
+    "round": 1,
+    "id": "unary-only",
+    "keys": "neg",
+    "description": "unary-only",
+    "evaluate": true
+  },
+  {
+    "round": 1,
+    "id": "trailing-op",
+    "keys": "2 +",
+    "description": "trailing-op",
+    "evaluate": true
+  },
+  {
+    "round": 1,
+    "id": "double-neg",
+    "keys": "2 - neg 3",
+    "description": "double-neg",
+    "evaluate": true
+  },
+  {
+    "round": 1,
+    "id": "bracket-text",
+    "keys": "",
+    "description": "bracket-text",
+    "events": "sdl_text [2+3]*4\n",
+    "expected": "20; bracket group preserved"
+  },
+  {
+    "round": 1,
+    "id": "bracket-physical",
+    "keys": "",
+    "description": "bracket-physical",
+    "events": "calc_physical 4 0\ncalc_physical 1 4\nkey 2\nkey +\nkey 3\ncalc_physical 4 0\ncalc_physical 0 4\nkey *\nkey 4\n",
+    "expected": "20; bracket group preserved"
+  },
+  {
+    "round": 2,
+    "id": "fraction-depth-2",
+    "keys": "( 1 / 1 / 2 RIGHT RIGHT RIGHT ",
+    "description": "fraction-depth-2",
+    "navigate": 4
+  },
+  {
+    "round": 2,
+    "id": "root-depth-2",
+    "keys": "SQRT SQRT 2",
+    "description": "root-depth-2",
+    "navigate": 3
+  },
+  {
+    "round": 2,
+    "id": "power-depth-2",
+    "keys": "2 ^ 2 ^ neg 3",
+    "description": "power-depth-2",
+    "evaluate": true,
+    "navigate": 2
+  },
+  {
+    "round": 2,
+    "id": "paren-depth-2",
+    "keys": "( ( 1 / 2 RIGHT RIGHT RIGHT ",
+    "description": "paren-depth-2",
+    "navigate": 2
+  },
+  {
+    "round": 2,
+    "id": "fraction-depth-3",
+    "keys": "( 1 / 1 / 1 / 2 RIGHT RIGHT RIGHT RIGHT ",
+    "description": "fraction-depth-3",
+    "navigate": 5
+  },
+  {
+    "round": 2,
+    "id": "root-depth-3",
+    "keys": "SQRT SQRT SQRT 2",
+    "description": "root-depth-3",
+    "navigate": 4
+  },
+  {
+    "round": 2,
+    "id": "power-depth-3",
+    "keys": "2 ^ 2 ^ 2 ^ neg 3",
+    "description": "power-depth-3",
+    "evaluate": true,
+    "navigate": 3
+  },
+  {
+    "round": 2,
+    "id": "paren-depth-3",
+    "keys": "( ( ( 1 / 2 RIGHT RIGHT RIGHT RIGHT ",
+    "description": "paren-depth-3",
+    "navigate": 3
+  },
+  {
+    "round": 2,
+    "id": "fraction-depth-5",
+    "keys": "( 1 / 1 / 1 / 1 / 1 / 2 RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT ",
+    "description": "fraction-depth-5",
+    "navigate": 7
+  },
+  {
+    "round": 2,
+    "id": "root-depth-5",
+    "keys": "SQRT SQRT SQRT SQRT SQRT 2",
+    "description": "root-depth-5",
+    "navigate": 6
+  },
+  {
+    "round": 2,
+    "id": "power-depth-5",
+    "keys": "2 ^ 2 ^ 2 ^ 2 ^ 2 ^ neg 3",
+    "description": "power-depth-5",
+    "evaluate": false,
+    "navigate": 5
+  },
+  {
+    "round": 2,
+    "id": "paren-depth-5",
+    "keys": "( ( ( ( ( 1 / 2 RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT ",
+    "description": "paren-depth-5",
+    "navigate": 5
+  },
+  {
+    "round": 2,
+    "id": "fraction-depth-8",
+    "keys": "( 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 2 RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT ",
+    "description": "fraction-depth-8",
+    "navigate": 10
+  },
+  {
+    "round": 2,
+    "id": "root-depth-8",
+    "keys": "SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT 2",
+    "description": "root-depth-8",
+    "navigate": 9
+  },
+  {
+    "round": 2,
+    "id": "power-depth-8",
+    "keys": "2 ^ 2 ^ 2 ^ 2 ^ 2 ^ 2 ^ 2 ^ 2 ^ neg 3",
+    "description": "power-depth-8",
+    "evaluate": false,
+    "navigate": 8
+  },
+  {
+    "round": 2,
+    "id": "paren-depth-8",
+    "keys": "( ( ( ( ( ( ( ( 1 / 2 RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT ",
+    "description": "paren-depth-8",
+    "navigate": 8
+  },
+  {
+    "round": 2,
+    "id": "fraction-depth-12",
+    "keys": "( 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 2 RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT ",
+    "description": "fraction-depth-12",
+    "navigate": 14
+  },
+  {
+    "round": 2,
+    "id": "root-depth-12",
+    "keys": "SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT 2",
+    "description": "root-depth-12",
+    "navigate": 13
+  },
+  {
+    "round": 2,
+    "id": "power-depth-12",
+    "keys": "2 ^ 2 ^ 2 ^ 2 ^ 2 ^ 2 ^ 2 ^ 2 ^ 2 ^ 2 ^ 2 ^ 2 ^ neg 3",
+    "description": "power-depth-12",
+    "evaluate": false,
+    "navigate": 12
+  },
+  {
+    "round": 2,
+    "id": "paren-depth-12",
+    "keys": "( ( ( ( ( ( ( ( ( ( ( ( 1 / 2 RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT ",
+    "description": "paren-depth-12",
+    "navigate": 12
+  },
+  {
+    "round": 2,
+    "id": "wide-20",
+    "keys": "1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1",
+    "description": "wide-20",
+    "navigate": 20
+  },
+  {
+    "round": 2,
+    "id": "wide-63",
+    "keys": "1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1",
+    "description": "wide-63",
+    "navigate": 63
+  },
+  {
+    "round": 2,
+    "id": "wide-64",
+    "keys": "1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1",
+    "description": "wide-64",
+    "navigate": 64
+  },
+  {
+    "round": 2,
+    "id": "wide-65",
+    "keys": "1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1",
+    "description": "wide-65",
+    "navigate": 65
+  },
+  {
+    "round": 2,
+    "id": "wide-100",
+    "keys": "1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1",
+    "description": "wide-100",
+    "navigate": 100
+  },
+  {
+    "round": 2,
+    "id": "periodic-97",
+    "keys": "1 / 9 7",
+    "description": "periodic-97",
+    "tail": "sd sd"
+  },
+  {
+    "round": 2,
+    "id": "radical-result",
+    "keys": "SQRT 1 2 3 4 5 6 7 8 9",
+    "description": "radical-result"
+  },
+  {
+    "round": 2,
+    "id": "scientific-mixed",
+    "keys": "9 . 9 9 exp 9 9 RIGHT + 1",
+    "description": "scientific-mixed"
+  },
+  {
+    "round": 2,
+    "id": "nested-empty",
+    "keys": "( SQRT 2 ^ / ^",
+    "description": "nested-empty",
+    "navigate": 8
+  },
+  {
+    "round": 2,
+    "id": "history-pending",
+    "keys": "2 ^",
+    "description": "history-pending",
+    "tail": "AC 5 ENTER UP UP"
+  },
+  {
+    "round": 3,
+    "id": "tall-fraction-20",
+    "keys": "( 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 2",
+    "description": "tall-fraction-20",
+    "evaluate": false,
+    "navigate": 20
+  },
+  {
+    "round": 3,
+    "id": "deep-root-20",
+    "keys": "SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT 2",
+    "description": "deep-root-20",
+    "evaluate": false,
+    "navigate": 20
+  },
+  {
+    "round": 3,
+    "id": "deep-paren-20",
+    "keys": "( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( 2",
+    "description": "deep-paren-20",
+    "evaluate": true,
+    "navigate": 20
+  },
+  {
+    "round": 3,
+    "id": "tall-fraction-40",
+    "keys": "( 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 2",
+    "description": "tall-fraction-40",
+    "evaluate": false,
+    "navigate": 40
+  },
+  {
+    "round": 3,
+    "id": "deep-root-40",
+    "keys": "SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT 2",
+    "description": "deep-root-40",
+    "evaluate": false,
+    "navigate": 40
+  },
+  {
+    "round": 3,
+    "id": "deep-paren-40",
+    "keys": "( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( 2",
+    "description": "deep-paren-40",
+    "evaluate": true,
+    "navigate": 40
+  },
+  {
+    "round": 3,
+    "id": "tall-fraction-65",
+    "keys": "( 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 2",
+    "description": "tall-fraction-65",
+    "evaluate": false,
+    "navigate": 65
+  },
+  {
+    "round": 3,
+    "id": "deep-root-65",
+    "keys": "SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT 2",
+    "description": "deep-root-65",
+    "evaluate": false,
+    "navigate": 65
+  },
+  {
+    "round": 3,
+    "id": "deep-paren-65",
+    "keys": "( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( 2",
+    "description": "deep-paren-65",
+    "evaluate": true,
+    "navigate": 65
+  },
+  {
+    "round": 3,
+    "id": "tall-fraction-90",
+    "keys": "( 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 1 / 2",
+    "description": "tall-fraction-90",
+    "evaluate": false,
+    "navigate": 90
+  },
+  {
+    "round": 3,
+    "id": "deep-root-90",
+    "keys": "SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT 2",
+    "description": "deep-root-90",
+    "evaluate": false,
+    "navigate": 90
+  },
+  {
+    "round": 3,
+    "id": "deep-paren-90",
+    "keys": "( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( 2",
+    "description": "deep-paren-90",
+    "evaluate": true,
+    "navigate": 90
+  },
+  {
+    "round": 3,
+    "id": "row-limit-199",
+    "keys": "1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1",
+    "description": "row-limit-199",
+    "navigate": 199,
+    "evaluate": true
+  },
+  {
+    "round": 3,
+    "id": "row-limit-200",
+    "keys": "1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1",
+    "description": "row-limit-200",
+    "navigate": 200,
+    "evaluate": true
+  },
+  {
+    "round": 3,
+    "id": "row-limit-399",
+    "keys": "1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1",
+    "description": "row-limit-399",
+    "navigate": 399,
+    "evaluate": true
+  },
+  {
+    "round": 3,
+    "id": "row-limit-400",
+    "keys": "1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1",
+    "description": "row-limit-400",
+    "navigate": 400,
+    "evaluate": true
+  },
+  {
+    "round": 3,
+    "id": "number-500",
+    "keys": "9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 ",
+    "description": "number-500",
+    "evaluate": true,
+    "navigate": 250
+  },
+  {
+    "round": 3,
+    "id": "decimal-250",
+    "keys": "0 . 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1",
+    "description": "decimal-250",
+    "evaluate": true
+  },
+  {
+    "round": 3,
+    "id": "delete-reenter",
+    "keys": "( 2 / 3 RIGHT ) ^ neg 2 LEFT DEL DEL neg 5",
+    "description": "delete-reenter",
+    "tail": "DEL DEL DEL 4 ENTER"
+  },
+  {
+    "round": 3,
+    "id": "many-empty",
+    "keys": "^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ",
+    "description": "many-empty",
+    "evaluate": true,
+    "navigate": 48
+  },
+  {
+    "round": 4,
+    "id": "exact-wide",
+    "keys": "2 ^ 2 0 0",
+    "description": "Exact integer wider than viewport; try both arrows",
+    "tail": "RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT "
+  },
+  {
+    "round": 4,
+    "id": "extended-overscroll",
+    "keys": "1 / 7",
+    "description": "Extended result can be scrolled beyond its bounds",
+    "tail": "sd sd RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT "
+  },
+  {
+    "round": 4,
+    "id": "periodic-wide",
+    "keys": "1 / 9 7",
+    "description": "Long periodic result; cursor navigation versus output panning",
+    "tail": "sd RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT "
+  },
+  {
+    "round": 4,
+    "id": "nested-root-minimal",
+    "keys": "SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT 2",
+    "description": "Deep radical clipping within existing input structures",
+    "evaluate": false,
+    "navigate": 0
+  },
+  {
+    "round": 4,
+    "id": "power-nesting-gaps",
+    "keys": "2 ^ 2 ^ 2 ^ 2 ^ 2 ^ neg 3",
+    "description": "Successive min-font exponents nearly touch",
+    "evaluate": false
+  },
+  {
+    "round": 4,
+    "id": "root-boundary-13",
+    "keys": "SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT 2",
+    "description": "Find first accepted radical hidden by the draw-depth guard",
+    "evaluate": true
+  },
+  {
+    "round": 4,
+    "id": "root-boundary-14",
+    "keys": "SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT 2",
+    "description": "Find first accepted radical hidden by the draw-depth guard",
+    "evaluate": true
+  },
+  {
+    "round": 4,
+    "id": "root-boundary-15",
+    "keys": "SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT SQRT 2",
+    "description": "Find first accepted radical hidden by the draw-depth guard",
+    "evaluate": true
+  }
+]

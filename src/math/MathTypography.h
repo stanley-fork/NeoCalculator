@@ -90,19 +90,21 @@ enum class MathClass : uint8_t {
 //    9 = impossible (error)
 //   -1/-2/-3 = absolute space in display/text only, zero in script/scriptscript
 //
-// Verified against LyX 2.3.2 MathClass.h (Debian sources).
-// Starred entries (*) from the spec are simplified per LyX's embedded model.
+// TeX 3.141592653, tex.web math_spacing (verified 2026-09-25):
+// 0234000122*4000133**3**344*0400400*000000234000111*1111112341011
+// TeX 1/2/3/4 -> our -1/+1/-2/-3. '*' remains 9.
+// Source/provenance and the independent oracle: docs/MATH_TEX_01.md.
 // ════════════════════════════════════════════════════════════════════════════
 constexpr int8_t kSpacingTable[8][8] = {
     //           ORD   OP   BIN  REL  OPEN CLOSE PUNCT INNER
-    /* ORD    */ { 0,   1,   2,   3,   0,   0,    0,    1   },
-    /* OP     */ { 1,   1,   9,   3,   0,   0,    0,    1   },
-    /* BINARY */ { 2,   9,   9,   9,   2,   9,    9,    2   },
-    /* REL    */ { 3,   3,   9,   0,   3,   0,    0,    3   },
+    /* ORD    */ { 0,   1,  -2,  -3,   0,   0,    0,   -1   },
+    /* OP     */ { 1,   1,   9,  -3,   0,   0,    0,   -1   },
+    /* BINARY */ {-2,  -2,   9,   9,  -2,   9,    9,   -2   },
+    /* REL    */ {-3,  -3,   9,   0,  -3,   0,    0,   -3   },
     /* OPEN   */ { 0,   0,   9,   0,   0,   0,    0,    0   },
-    /* CLOSE  */ { 0,   1,   2,   3,   0,   0,    0,    1   },
-    /* PUNCT  */ { 1,   1,   9,   1,   1,   1,    1,    1   },
-    /* INNER  */ { 1,   1,   2,   3,   1,   0,    1,    1   }
+    /* CLOSE  */ { 0,   1,  -2,  -3,   0,   0,    0,   -1   },
+    /* PUNCT  */ {-1,  -1,   9,  -1,  -1,  -1,   -1,   -1   },
+    /* INNER  */ {-1,   1,  -2,  -3,  -1,   0,   -1,   -1   }
 };
 
 /// Lookup inter-atom spacing code between two MathClass values.

@@ -314,6 +314,17 @@ void testModifiersAndContexts() {
     CHECK(std::strcmp(resolved.text, "A") == 0);
     CHECK(!manager.isShift() && !manager.isAlpha());
 
+    manager.reset();
+    KeySemanticResolver::resolve(KeyCode::SHIFT, InputContext::Math, KeyAction::PRESS);
+    resolved = KeySemanticResolver::resolve(KeyCode::FORMAT, InputContext::Math, KeyAction::PRESS);
+    CHECK(resolved.code == KeyCode::TABLE);
+    manager.reset();
+    KeySemanticResolver::resolve(KeyCode::SHIFT, InputContext::Math, KeyAction::PRESS);
+    KeySemanticResolver::resolve(KeyCode::ALPHA, InputContext::Math, KeyAction::PRESS);
+    resolved = KeySemanticResolver::resolve(KeyCode::FORMAT, InputContext::Math, KeyAction::PRESS);
+    CHECK(resolved.code == KeyCode::FORMAT_MENU);
+    CHECK(!manager.isShift() && !manager.isAlpha());
+
     resolved = KeySemanticResolver::resolve(
         KeyCode::MUL, InputContext::Code, KeyAction::PRESS);
     CHECK(resolved.semantic == SemanticId::code_multiply);

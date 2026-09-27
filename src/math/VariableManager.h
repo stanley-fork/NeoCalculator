@@ -93,6 +93,10 @@ public:
      * @param newVal  Nuevo resultado a almacenar como Ans.
      */
     void updateAns(const ExactVal& newVal);
+    uint32_t revision(char name) const {
+        const int i = nameToIndex(name);
+        return i < 0 ? 0 : _revisions[i];
+    }
 
     /**
      * Obtiene el valor de Ans directamente.
@@ -156,6 +160,8 @@ private:
 
     /// Variables almacenadas
     std::array<ExactVal, NUM_VARS> _vars;
+    // Session coherence only; never serialized and no storage format change.
+    std::array<uint32_t, NUM_VARS> _revisions{};
 
     // ── Ruta del archivo de persistencia ─────────────────────────────────
     static constexpr const char* FLASH_PATH = "/vars.dat";

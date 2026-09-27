@@ -24,17 +24,15 @@
  * Contract:
  *  - Giac is the mathematical authority. There is NO fallback re-evaluation
  *    with MathEvaluator/OmniSolver/custom CAS on any path in this adapter.
- *  - ENTER policy is plain evaluate() (no implicit simplify): Giac numeric
- *    semantics are preserved honestly — x-2*x stays x-2*x, 1/0 is infinity
- *    (Ok, text fallback), 0/0 is Undefined (error status).
+ *  - Calculation ENTER evaluates exact decimal literals and applies Giac's
+ *    simplification when it does not expand the answer. Symbolic denominators
+ *    keep their domain restrictions; other apps retain their own policies.
  *  - Serialization walks the authored VPAM tree (never display text) with
  *    explicit parentheses; unsupported node shapes are rejected with a typed
  *    error (ParseError + diagnostic), never emitted ambiguously.
  *  - Presentation tiers:
- *      1. exactValValid  — the result fits ExactVal exactly (int64 integer,
- *         rational, k*sqrt(n), pi/e multiples, plain decimal). The app keeps
- *         its full legacy display pipeline (resultToAST + S<=>D + history +
- *         assert_result probes) so basic-arithmetic pixels do not move.
+ *      1. exactValValid — a lossless ExactVal mirror supports legacy storage,
+ *         rational presentation and numeric probes alongside the typed AST.
  *      2. exactAST       — structured MathAST built from the engine result
  *         tree (big integers, exact complex values, collections, matrices,
  *         intervals, piecewise, infinities, undefined and unevaluated calls).
@@ -49,7 +47,8 @@
  *    map to the reserved identifiers numos_Ans / numos_PreAns to avoid Giac
  *    built-in collisions. Values whose exact form exceeds ExactVal keep a
  *    session-exact Giac text (validated against the current VariableManager
- *    snapshot so the two stores cannot silently drift).
+ *    snapshot and revision so the two stores cannot silently drift). Complex
+ *    and symbolic Ans/A-F are session-only; the persistent format is unchanged.
  *
  * No LVGL, no Arduino: host-harness testable (tests/host).
  */
@@ -87,11 +86,11 @@ struct CalculationEvaluation {
     MathEngineStatus status = MathEngineStatus::Unsupported;
     CalcResultKind kind = CalcResultKind::None;
 
-    bool exactValValid = false;      // tier 1: legacy display path usable
+    bool exactValValid = false;      // lossless legacy scalar mirror usable
     vpam::ExactVal exactVal;         // valid only when exactValValid
 
-    vpam::NodePtr exactAST;          // tier 2: structured Symbolic display
-                                     // (null on tier 1 and on TextFallback)
+    vpam::NodePtr exactAST;          // canonical typed display, also for scalars
+                                     // (null on TextFallback)
     vpam::NodePtr approximateAST;    // typed evalf tree; never parsed text
 
     std::string serialized;          // what was sent to Giac (diagnostics)
@@ -119,16 +118,20 @@ public:
     /// Call AFTER VariableManager::updateAns(): rotates the session-exact
     /// Ans text (Ans -> PreAns) so exact chains (sqrt(2), 2^100) survive
     /// the int64 ExactVal store.
-    void noteAnsRotated(const std::string& exactGiacText);
+    void noteAnsRotated(const std::string& exactGiacText, bool mirrorRotated = true);
 
     /// Call AFTER an STO wrote VariableManager: keeps the stored variable's
     /// session-exact text coherent (STO copies Ans).
     void noteVariableStored(char varName);
+    /// Store the canonical Ans. Non-scalar values are session-only: this does
+    /// not encode a stale scalar into the persistent ExactVal file.
+    bool storeAns(char varName);
 
     // ── Pure helpers, exposed for the host harness ───────────────────────
     /// VPAM tree -> Giac input text. False + error on unsupported shapes.
     static bool serializeForGiac(const vpam::MathNode* root, std::string& out,
-                                 std::string& error);
+                                 std::string& error,
+                                 bool exactDecimals = false);
     /// Exact Giac text for an ExactVal ((num/den)*outer*sqrt(inner)*pi^k*e^m).
     static std::string exactValToGiacText(const vpam::ExactVal& v);
     /// Engine result tree -> exact ExactVal mirror (strict: false unless the
@@ -148,6 +151,8 @@ private:
 
     struct SessionExact {
         bool valid = false;
+        bool sessionOnly = false;
+        uint32_t revision = 0;
         vpam::ExactVal snapshot;   // VariableManager value the text mirrors
         std::string text;          // exact Giac expression for that value
     };

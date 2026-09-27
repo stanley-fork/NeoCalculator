@@ -32,6 +32,9 @@ export const NUMOS_LOGICAL_KEYS = Object.freeze([
   ["DIVIDE", 74, "Divide"], ["SQUARE", 75, "Square"],
   ["FORMAT", 76, "Format result"], ["COMMA", 77, "Comma"],
   ["EQUAL", 78, "Equals"], ["EXP", 79, "Scientific exponent"],
+  ["LBRACKET", 80, "Left bracket / Corchete izquierdo"],
+  ["RBRACKET", 81, "Right bracket / Corchete derecho"],
+  ["FORMAT_MENU", 82, "Result format menu / Menu de formato"],
 ].map(([id, code, ariaLabel]) => Object.freeze({
   id,
   code,
@@ -39,6 +42,7 @@ export const NUMOS_LOGICAL_KEYS = Object.freeze([
     FREE_EQ: "S⇔D", LEFT: "←", UP: "↑", DOWN: "↓", RIGHT: "→",
     VAR_X: "x", VAR_Y: "y", SHOW_STEPS: "Steps",
     NUM_7: "7", NUM_8: "8", NUM_9: "9", LPAREN: "(", RPAREN: ")",
+    LBRACKET: "[", RBRACKET: "]",
     DIV: "÷", POW: "xʸ", SQRT: "√",
     NUM_4: "4", NUM_5: "5", NUM_6: "6", MUL: "×", SUB: "−",
     NUM_1: "1", NUM_2: "2", NUM_3: "3", ADD: "+", NEG: "(−)",
@@ -135,7 +139,7 @@ export const NUMOS_WEB_KEYPAD_LAYOUT = Object.freeze([
 
       ["r9c0", "NUM_0", "0", "°", "space", "number"],
       ["r9c1", "DOT", ".", ":", "_", "number"],
-      ["r9c2", "POW", "×10ˣ", "ENG", "\"", "function"],
+      ["r9c2", "EXP", "×10ˣ", "ENG", "\"", "function"],
       ["r9c3", "NEG", "(-)", "Ans", "PreAns", "operator"],
       ["r9c4", "ENTER", "EXE", "≈", "", "system"],
     ].map(physicalKey)),

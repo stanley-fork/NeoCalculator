@@ -13,6 +13,7 @@ p.add_argument('--source',type=Path,required=True)
 p.add_argument('--build',type=Path,required=True)
 p.add_argument('--out',type=Path,required=True)
 p.add_argument('--compiler',default='g++')
+p.add_argument('--compile-commands',type=Path,help='Pinned native database when other targets share the source directory')
 p.add_argument('--tests',nargs='*',default=['tutor_composition_checks','tutor_composition_budget_failure','tutor_nonlinear_checks',
     'tutor_transcendental_checks','tutor_trig_checks','periodic_results_checks',
     'tutor_i18n_checks','tutor_teaching_math','tutor_conclusion_presentation',
@@ -23,7 +24,7 @@ out.mkdir(parents=True,exist_ok=True)
 objects=[p for p in (build/'src').rglob('*.o') if 'math' in p.parts or 'fonts' in p.parts or p.name in ['FileSystem.o','MathTypography.o']]
 libraries=[*build.rglob('liblvgl.a'),*build.rglob('libgiac.a'),*build.rglob('libtommath.a')]
 assert objects and len(libraries)==3,'Build matching emulator_pc first'
-database=json.loads((source/'compile_commands.json').read_text())
+database=json.loads((a.compile_commands or source/'compile_commands.json').read_text())
 native=next(x for x in database if x['file'].endswith('EquationsApp.cpp') and 'NATIVE_SIM' in x['command'])
 # WHY: an abandoned discovery build may leave a different LVGL checkout in
 # .pio/libdeps. Headers must match the linked library, including glyph ABI.
@@ -48,11 +49,19 @@ for name in a.tests:
     # (scripts/build-giac-host-harness.sh), not this native-object runner.
     obj=out/(name+'.o');binary=out/(name+('.exe' if os.name=='nt' else ''))
     run(name+'-compile',[a.compiler,*flags,'-c','tests/host/'+name+'.cpp','-o',str(obj)])
+    testObjects=objects
+    if name == 'calculation_input_checks':
+        # Exercise the existing node allocator boundary as well as C++ vectors;
+        # this instrumented object is never linked into a product image.
+        allocator=out/'MathAST-test-allocator.o'
+        run(name+'-allocator',[a.compiler,*flags,'-DNUMOS_MATH_AST_TEST_ALLOCATOR',
+            '-c','src/math/MathAST.cpp','-o',str(allocator)])
+        testObjects=[allocator if p.name=='MathAST.o' else p for p in objects]
     extra=[]
     if 'bool setting_complex_enabled' not in (source/'tests/host'/str(name+'.cpp')).read_text():
         stub=out/'settings.cpp';stub.write_text('bool setting_complex_enabled=false;\n')
         run(name+'-settings',[a.compiler,*flags,'-c',str(stub),'-o',str(out/'settings.o')]);extra=[out/'settings.o']
-    rsp=out/(name+'.rsp');rsp.write_text('\n'.join('"'+p.as_posix()+'"' for p in [obj,*extra,*objects,*libraries]))
+    rsp=out/(name+'.rsp');rsp.write_text('\n'.join('"'+p.as_posix()+'"' for p in [obj,*extra,*testObjects,*libraries]))
     run(name+'-link',[a.compiler,'@'+str(rsp),'-Wl,--gc-sections','-o',str(binary)])
     if name not in ['tutor_engine_main','tutor_i18n_main','periodic_result_main','tutor_teaching_math']:
         run(name,[str(binary)]);print(name,'PASS',flush=True)

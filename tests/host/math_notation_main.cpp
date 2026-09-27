@@ -21,8 +21,10 @@ static void rowGeometry(const MathNode* n, const FontMetrics& fm) {
     if(n->type()==NodeType::Row) {
         int width=0;
         for(int i=0;i<n->childCount();++i) {
-            if(i)width+=interAtomSpacingPx(n->child(i-1)->rightMathClass(),n->child(i)->leftMathClass(),fm.style,fm.emSize);
-            width+=n->child(i)->layout().width;
+            const auto& l=n->child(i)->layout();
+            if(i)width+=l.spaceBefore;
+            check(l.rowX==width,"notation row child origin");
+            width+=l.width;
         }
         check(width==n->layout().width,"row width differs from chosen atom spacing");
     }

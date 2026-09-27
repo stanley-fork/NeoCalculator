@@ -905,6 +905,8 @@ SymExpr* ASTFlattener::flattenRowToExpr(const vpam::NodeRow* row) {
 SymExpr* ASTFlattener::flattenFunctionToExpr(
     const vpam::NodeFunction* node)
 {
+    // Factorial is evaluated by Giac; this tutor has no factorial rule.
+    if (node && node->funcKind() == vpam::FuncKind::Factorial) return nullptr;
     if (!node || !_arena) return nullptr;
 
     SymExpr* arg = flattenToExpr(node->argument());

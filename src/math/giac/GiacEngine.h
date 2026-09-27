@@ -370,7 +370,11 @@ public:
      * result shape (see EngineNodeKind). hasTree is false when the shape
      * walk hit an internal limit — the textual result still stands.
      */
-    StructuredEngineResult evaluateStructured(const char* expression);
+    enum class EvaluationAngle : uint8_t { Current, Radians };
+    // Radians is scoped to this call, for mathematical display transforms
+    // (complex phase). It never changes the user's input angle setting.
+    StructuredEngineResult evaluateStructured(const char* expression, bool calculationPolicy = false,
+        EvaluationAngle angle = EvaluationAngle::Current);
 
     /**
      * Apply one typed algebraic transform to an already-authored expression.

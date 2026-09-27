@@ -128,6 +128,9 @@ enum class KeyCode : uint8_t {
     COMMA,       // Comma token
     EQUAL,       // Equality token; distinct from FREE_EQ exact/decimal toggle
     EXP,         // Scientific exponent (×10^x) template
+    LBRACKET,    // Authored square grouping; append-only for the web/serial ABI
+    RBRACKET,
+    FORMAT_MENU, // S+A+FORMAT, append-only software action
 };
 
 // ── Mapeo de tecla numérica → valor de dígito ────────────────────────────

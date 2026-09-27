@@ -829,6 +829,8 @@ double MathEvaluator::radToDeg(double rad) {
 }
 
 ExactVal MathEvaluator::evalFunction(const NodeFunction* node) const {
+    if (node && node->funcKind() == FuncKind::Factorial)
+        return ExactVal::makeError("Math ERROR"); // Calculation owns Giac factorial.
     if (!node) return ExactVal::makeError("Math ERROR");
 
     ExactVal arg = evaluate(node->argument());

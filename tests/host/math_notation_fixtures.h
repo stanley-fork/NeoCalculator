@@ -42,7 +42,8 @@ inline std::vector<Case> cases() {
       {"identifier_pair",mul(symbol("ab"),symbol("cd")),1},
       {"function_application_hazard",mul(x,plus),1},
       {"decimal",mul(node(K::Decimal,"1.25"),node(K::Decimal,"2.5")),1},
-      {"scientific",mul(node(K::Decimal,"1e3"),node(K::Decimal,"2e4")),1},
+      // Each scalar uses its own visible mantissa × 10^n, plus the product.
+      {"scientific",mul(node(K::Decimal,"1e3"),node(K::Decimal,"2e4")),3},
       {"denominator",node(K::Inv,"",{mul(integer("2"),x)}),0},
       {"half_x",mul(fraction("1","2"),x),0},
       {"numerator_denominator",node(K::Rational,"",{mul(integer("2"),x),mul(integer("3"),symbol("y"))}),0},

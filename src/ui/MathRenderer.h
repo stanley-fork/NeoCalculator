@@ -82,6 +82,13 @@ public:
     void setAutoHeightEnabled(bool enabled);
     void setTraceLabel(const char* label);
 
+    // Only the lone Empty in the canvas root can be hidden. Pending slots in
+    // fractions, powers and other templates remain visible in every canvas.
+    void setEmptyRootPlaceholderVisible(bool visible) {
+        _emptyRootPlaceholderVisible = visible;
+        invalidate();
+    }
+
     /**
      * Fuerza el redibujado completo del widget.
      * Llamar después de modificar el AST o mover el cursor.
@@ -133,19 +140,10 @@ public:
         return true;
     }
 
-    // Opt-in bounded scrolling for read-only Equations viewports. Existing
-    // editor auto-scroll and other apps retain their current behavior.
-    bool scrollBounded(int16_t delta) {
-        if (!_obj || !_root) return false;
-        const int32_t excess = _root->layout().width -
-            (lv_obj_get_width(_obj) - PADDING_LEFT - PADDING_RIGHT);
-        const int32_t limit = excess > 0 ? excess : 0;
-        const int32_t requested = int32_t(_scrollX) + delta;
-        const int32_t bounded = requested > 0 ? 0 : requested < -limit ? -limit : requested;
-        const bool moved = bounded != _scrollX;
-        scrollBy(static_cast<int16_t>(bounded - _scrollX));
-        return moved;
-    }
+    bool scrollBounded(int16_t delta);
+    bool scrollVerticalBounded(int16_t delta);
+    bool hasHorizontalOverflow() const;
+    bool hasVerticalOverflow() const;
 
     /** FontMetrics para la fuente normal (STIX Two Math 18) */
     const FontMetrics& normalMetrics() const { return _fmNormal; }
@@ -160,7 +158,7 @@ public:
     void scrollBy(int16_t delta);
 
     /** Resetea el scroll horizontal a 0 */
-    void resetScroll() { _scrollX = 0; }
+    void resetScroll() { _scrollX = _scrollY = 0; }
 
     // ── Utilidad estática ────────────────────────────────────────────────
 
@@ -197,7 +195,10 @@ private:
 
     // ── Scroll horizontal ────────────────────────────────────────────────
     int16_t    _scrollX;        // Desplazamiento horizontal (≤0)
+    int16_t    _scrollY = 0;    // Vertical viewport offset for tall content
     bool       _autoHeightEnabled;
+    bool       _placingChildren = false;
+    bool       _emptyRootPlaceholderVisible = true;
 
     // ── Smart Highlighter ────────────────────────────────────────────────
 #if defined(NUMOS_MATH_RENDER_TRACE_ONCE)
@@ -260,10 +261,16 @@ private:
     static constexpr uint32_t EMPTY_COLOR   = 0xD1D1D1;  ///< Color del placeholder
     static constexpr uint32_t CURSOR_COLOR  = 0x000000;  ///< Color del cursor (negro puro, máximo contraste)
     static constexpr int16_t  EMPTY_SIZE    = 8;    ///< Tamaño del cuadrado placeholder
-    // Typed result nodes introduce an owning semantic node plus slot Row at
-    // each engine level. 28 bounds that 2x expansion while remaining below
-    // the UI task's stack budget (no draw-frame allocations).
-    static constexpr int      MAX_RENDER_DEPTH = 28;
+    // Painting walks parent links and per-node child indices. Its stack is
+    // independent of tree depth; accepted nodes need no truncation indicator.
+    void preparePlacements(const MathNode* root, const FontMetrics& fm);
+    const MathNode* nextPaintNode(const MathNode* node, const MathNode* root);
+    FontMetrics placementMetrics(const MathNode* node) const;
+    void paintNode(lv_layer_t* layer, const MathNode* node, int16_t x,
+                   int16_t yBaseline, const FontMetrics& fm,
+                   const lv_font_t* font, int depth);
+    int16_t horizontalLimit() const;
+    int16_t verticalLimit() const;
 
     // ── Event callback (estático → instancia) ────────────────────────────
     static void drawEventCb(lv_event_t* e);

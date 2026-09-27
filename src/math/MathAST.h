@@ -143,6 +143,7 @@ enum class FuncKind : uint8_t {
     ArcTan,    // tan⁻¹  (arctan)
     Ln,        // ln     (logaritmo natural)
     Log,       // log    (logaritmo base 10)
+    Factorial, // Postfix !; a structural operand, never a binary operator.
 };
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -241,6 +242,25 @@ struct FontMetrics {
     int16_t plusMinusWidth = 0;        ///< Actual font advance/ink extent; captured outside layout.
     int16_t deltaWidth = 0, deltaAscent = 0, deltaDescent = 0;
 
+    // Non-owning metric binding; no LVGL headers, vtable, cache or allocation in
+    // the AST. The canvas binds the very same font/normalization/kerning policy
+    // used by drawing. Pure geometry tests may keep the explicit synthetic
+    // charWidth fallback. This callback is per text run, not per glyph.
+    const void* textFont = nullptr;
+    int16_t (*measureText)(const void*, const char*) = nullptr;
+
+    int16_t textAdvance(const char* text) const {
+        if (measureText && textFont) return measureText(textFont, text);
+        int32_t width = 0;
+        auto* p = reinterpret_cast<const uint8_t*>(text);
+        while (p && *p) {
+            uint32_t cp;
+            p += utf8Decode(p, cp);
+            width += charWidth;
+        }
+        return static_cast<int16_t>(std::min<int32_t>(32767, width));
+    }
+
     /// Altura total de la caja visual usada por layout.
     int16_t height() const { return ascent + descent; }
 
@@ -269,6 +289,13 @@ struct FontMetrics {
     /// metricsFromFont for the 12pt font), it is returned directly for level 1;
     /// level 2 falls through to the MathConstantsProvider-based scaling.
     FontMetrics superscript() const {
+        if (scriptLevel >= 2 && textFont) {
+            // WHY: drawing already clamps to the minimum physical font. A
+            // third script must not measure a fictitious smaller font/em.
+            FontMetrics out = *this;
+            out.style = MathStyle::SCRIPTSCRIPT;
+            return out;
+        }
         if (scriptLevel < 2 && script) {
             // Level 0→1: use the pre-computed script font metrics
             FontMetrics out = *script;
@@ -479,6 +506,14 @@ struct LayoutResult {
     int16_t inkAscent  = 0; ///< Actual visible glyph ink above baseline, if known.
     int16_t inkDescent = 0; ///< Actual visible glyph ink below baseline, if known.
 
+    // Derived presentation data, refreshed by the owning row's layout pass.
+    // WHY: one stored horizontal placement feeds draw, Finder and selection;
+    // it is never semantic state and is not serialized or cloned as meaning.
+    int16_t rowX = 0;
+    int16_t spaceBefore = 0;
+    MathClass effectiveLeft = MathClass::ORD;
+    MathClass effectiveRight = MathClass::ORD;
+
     /// Altura total = ascent + descent
     int16_t height() const { return ascent + descent; }
 
@@ -619,6 +654,8 @@ inline FractionBarGaps fractionBarGaps(const FontMetrics& fm,
 // MathNode — Clase base abstracta de todos los nodos del AST
 // ════════════════════════════════════════════════════════════════════════════
 class MathNode {
+    friend struct RowLayout;
+    friend class MathCanvas;
 public:
     virtual ~MathNode() = default;
 
@@ -672,6 +709,20 @@ protected:
     MathNode*    _parent;
     uint8_t      _scriptLevel;
     LayoutResult _layout;
+
+private:
+    // WHY: one transient placement per existing node replaces recursive draw
+    // frames and Finder's second copy of child geometry. No owning pointers,
+    // allocation or depth/row capacity is introduced. Rebuilt for each canvas.
+    struct PaintPlacement {
+        int16_t x = 0;
+        int16_t baseline = 0;
+        int nextChild = 0;
+        MathStyle style = MathStyle::TEXT;
+        uint8_t level = 0;
+        bool highlighted = false;
+    };
+    mutable PaintPlacement _paint;
 };
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -686,7 +737,14 @@ public:
     NodeRow();
 
     void calculateLayout(const FontMetrics& fm) override;
-    MathClass mathClass() const override;  // Propagates from first non-empty child
+    MathClass mathClass() const override;  // A row is a container, not a visible group.
+
+    // Requires calculateLayout(), just like layout(). O(1), including the end
+    // cursor; there is no independent spacing scan in any consumer.
+    int16_t childXOffset(int index) const {
+        if (index <= 0) return 0;
+        return index >= childCount() ? layout().width : child(index)->layout().rowX;
+    }
 
     // ── Hijos ──
     int       childCount()        const override;
@@ -698,6 +756,8 @@ public:
     // ── Mutación ──
     void    appendChild(NodePtr node);
     void    insertChild(int index, NodePtr node);
+    // Editing only: reserve before publishing a compound insertion.
+    void reserveChildren(size_t count) { _children.reserve(count); }
     NodePtr removeChild(int index);
     void    replaceChild(int index, NodePtr node);
     void    clear();
@@ -916,6 +976,11 @@ public:
     int16_t radicalExtraAscender()  const { return _radicalExtraAscender; }
     int16_t radicalKernBefore()     const { return _radicalKernBefore; }
     int16_t radicalKernAfter()      const { return _radicalKernAfter; }
+    int16_t radicalX() const { return _radicalX; }
+    int16_t radicandX() const { return _radicalX + RADICAL_HOOK_W + RADICAL_SLOPE_W; }
+    int16_t radicalAscent() const { return _radicalAscent; }
+    int16_t degreeX() const { return _degreeX; }
+    int16_t degreeBaseline() const { return _degreeBaseline; }
 
 private:
     NodePtr _radicand;
@@ -926,6 +991,10 @@ private:
     int16_t _radicalExtraAscender = 1;
     int16_t _radicalKernBefore    = 0;
     int16_t _radicalKernAfter     = 0;
+    int16_t _radicalX = 0;
+    int16_t _radicalAscent = 0;
+    int16_t _degreeX = 0;
+    int16_t _degreeBaseline = 0;
 };
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -994,6 +1063,7 @@ public:
     // Generated read-only products use TeX ORD -> OP spacing before sin, etc.
     // Authored function/editor geometry remains the default.
     MathClass leftMathClass() const override {
+        if (_kind == FuncKind::Factorial) return MathClass::ORD;
         return _generatedOperatorSpacing ? MathClass::OP : mathClass();
     }
     void setGeneratedOperatorSpacing(bool enabled) { _generatedOperatorSpacing = enabled; }
@@ -1161,6 +1231,13 @@ public:
     const std::string& nonRepeat()  const { return _nonRepeat; }
     const std::string& repeat()     const { return _repeat; }
     bool               isNegative() const { return _negative; }
+
+    int16_t prefixAdvance(const FontMetrics& fm) const {
+        return static_cast<int16_t>((_negative ? fm.textAdvance("-") : 0)
+            + fm.textAdvance(_intPart.c_str())
+            + ((!_nonRepeat.empty() || !_repeat.empty()) ? fm.textAdvance(".") : 0)
+            + fm.textAdvance(_nonRepeat.c_str()));
+    }
 
     /// Grosor de la overline sobre los dígitos periódicos
     static constexpr int16_t OVERLINE_T   = 1;

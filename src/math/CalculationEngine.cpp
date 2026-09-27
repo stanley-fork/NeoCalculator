@@ -18,6 +18,7 @@
 // types (everything Giac-shaped arrives as EngineResultNode).
 
 #include "CalculationEngine.h"
+#include "CalculationFormat.h"
 #include "giac/EngineContracts.h"
 
 #include <algorithm>
@@ -90,6 +91,8 @@ struct Serializer {
     std::string err;
     int nodes = 0;
     int depth = 0;
+    int frames = 0;
+    bool exactDecimals = false;
 
     struct DepthScope {
         int& value;
@@ -119,13 +122,17 @@ struct Serializer {
     }
 
     bool emitRow(const vpam::NodeRow* row) {
-        DepthScope scope(depth);
-        if (depth > enginecontract::kMaxTreeDepth)
+        // Slot rows are transparent to semantic depth. Independently bound
+        // C++ traversal frames, including pathological nested wrapper rows.
+        DepthScope frame(frames);
+        if (frames > 2 * enginecontract::kMaxTreeDepth + 2)
             return fail("expression nesting too deep");
         if (!budget()) return false;
         const auto& kids = row->children();
         bool prevOperand = false;
         bool any = false;
+        bool denominatorOperand = false;
+        bool groupedSign = false;
         for (const auto& kid : kids) {
             const vpam::MathNode* n = kid.get();
             if (!n) continue;
@@ -140,7 +147,15 @@ struct Serializer {
                     // Unary position (row start or after another operator):
                     // normalize to an explicit (-1)* factor so the emitted
                     // text never relies on Giac's prefix-minus grammar.
-                    if (op == vpam::OpKind::Sub) out += "(-1)*";
+                    if (op == vpam::OpKind::Sub) {
+                        // WHY: a / -b means a / ((-1)*b), not a / (-1)*b.
+                        // Keep the sign attached to its operand through division.
+                        if (denominatorOperand && !groupedSign) {
+                            out += '(';
+                            groupedSign = true;
+                        }
+                        out += "(-1)*";
+                    }
                     // unary '+' contributes nothing
                     else if (op == vpam::OpKind::Mul ||
                              op == vpam::OpKind::Div)
@@ -151,11 +166,14 @@ struct Serializer {
                          : (op == vpam::OpKind::Mul) ? '*'
                                                      : '/';
                     prevOperand = false;
+                    denominatorOperand = op == vpam::OpKind::Div;
                 }
                 continue;
             }
             if (prevOperand) out += '*';   // explicit implicit-multiplication
             if (!emitNode(n)) return false;
+            if (groupedSign) out += ')';
+            groupedSign = denominatorOperand = false;
             prevOperand = true;
             any = true;
         }
@@ -174,6 +192,17 @@ struct Serializer {
             ++digits;
         }
         if (dots > 1 || digits == 0) return fail("invalid number literal");
+        if (dots && exactDecimals) {
+            // WHY: preserve authored decimal digits exactly, never rationalize
+            // a rounded binary double. Keep the public serialization unchanged.
+            std::string digitsOnly;
+            for (char c : v) if (c != '.') digitsOnly += c;
+            const auto first = digitsOnly.find_first_not_of('0');
+            digitsOnly = first == std::string::npos ? "0" : digitsOnly.substr(first);
+            const size_t scale = v.size() - v.find('.') - 1;
+            out += "(" + digitsOnly + "/10^" + std::to_string(scale) + ")";
+            return true;
+        }
         if (v.front() == '.') out += '0';
         out += v;
         if (v.back() == '.') out += '0';
@@ -181,6 +210,11 @@ struct Serializer {
     }
 
     bool emitNode(const vpam::MathNode* n) {
+        if (n->type() == vpam::NodeType::Row)
+            return emitRow(static_cast<const vpam::NodeRow*>(n));
+        DepthScope frame(frames);
+        if (frames > 2 * enginecontract::kMaxTreeDepth + 2)
+            return fail("expression nesting too deep");
         DepthScope scope(depth);
         if (depth > enginecontract::kMaxTreeDepth)
             return fail("expression nesting too deep");
@@ -220,9 +254,11 @@ struct Serializer {
                     if (!emitSlot(r->degree(), "incomplete root")) return false;
                     out += ')';
                 } else {
-                    out += "sqrt(";
+                    // One pair already belongs to the function call. Extra
+                    // wrapper parentheses waste the host parser's depth budget.
+                    out += exactDecimals ? "sqrt" : "sqrt(";
                     if (!emitSlot(r->radicand(), "incomplete root")) return false;
-                    out += ')';
+                    if (!exactDecimals) out += ')';
                 }
                 return true;
             }
@@ -240,6 +276,7 @@ struct Serializer {
                 auto* f = static_cast<const vpam::NodeFunction*>(n);
                 const char* name = nullptr;
                 switch (f->funcKind()) {
+                    case vpam::FuncKind::Factorial: name = "factorial"; break;
                     case vpam::FuncKind::Sin:    name = "sin";   break;
                     case vpam::FuncKind::Cos:    name = "cos";   break;
                     case vpam::FuncKind::Tan:    name = "tan";   break;
@@ -322,7 +359,7 @@ bool rowIsEffectivelyEmpty(const vpam::MathNode* root) {
 } // namespace
 
 bool CalculationEngine::serializeForGiac(const vpam::MathNode* root,
-                                         std::string& out, std::string& error) {
+                                         std::string& out, std::string& error, bool exactDecimals) {
     out.clear();
     error.clear();
     if (rowIsEffectivelyEmpty(root)) {
@@ -330,10 +367,12 @@ bool CalculationEngine::serializeForGiac(const vpam::MathNode* root,
         return false;
     }
     Serializer s;
+    s.exactDecimals = exactDecimals;
     const bool ok = (root->type() == vpam::NodeType::Row)
                         ? s.emitRow(static_cast<const vpam::NodeRow*>(root))
                         : s.emitNode(root);
-    if (!ok) {
+    if (!ok || s.out.size() > kMaxSerializedLength) {
+        if (s.out.size() > kMaxSerializedLength) s.err = "expression too complex";
         error = s.err.empty() ? "unsupported expression" : s.err;
         return false;
     }
@@ -550,6 +589,16 @@ bool appendNumberText(const std::string& text, vpam::NodeRow* row,
                       int ctxPrec) {
     if (text.empty()) return false;
     const bool negative = text[0] == '-';
+    if (text.find_first_of("eE") != std::string::npos) {
+        auto scientific = powerOfTenFormat(text, false);
+        if (!scientific) return false;
+        if (negative && ctxPrec >= PREC_MUL) row->appendChild(vpam::makeParen(std::move(scientific)));
+        else {
+            auto* source = static_cast<vpam::NodeRow*>(scientific.get());
+            while (source->childCount()) row->appendChild(source->removeChild(0));
+        }
+        return true;
+    }
     const std::string digits = negative ? text.substr(1) : text;
     if (digits.empty()) return false;
     if (negative && ctxPrec >= PREC_MUL) {
@@ -703,6 +752,29 @@ bool appendConverted(const EngineResultNode& n, vpam::NodeRow* row,
 
         case EngineNodeKind::Pow: {
             if (n.children.size() != 2) return false;
+            const auto& base = n.children[0];
+            const auto& exponent = n.children[1];
+            // A positive scalar's reciprocal-integer power has an unambiguous
+            // real radical form. Avoid a tiny stacked fraction in a script;
+            // the old engine bridge stopped choosing a radical at degree 64.
+            const bool positive = base.kind == EngineNodeKind::Pi ||
+                base.kind == EngineNodeKind::EulerE ||
+                (base.kind == EngineNodeKind::Integer && !base.text.empty() &&
+                 base.text[0] != '-' && base.text != "0");
+            if (positive && exponent.kind == EngineNodeKind::Rational &&
+                exponent.children.size() == 2 &&
+                exponent.children[0].kind == EngineNodeKind::Integer &&
+                exponent.children[0].text == "1" &&
+                exponent.children[1].kind == EngineNodeKind::Integer &&
+                !exponent.children[1].text.empty() &&
+                exponent.children[1].text[0] != '-') {
+                bool ok = false;
+                auto radicand = convertToRow(base, depth + 1, ok);
+                if (!ok) return false;
+                row->appendChild(vpam::makeRoot(std::move(radicand),
+                    vpam::makeNumber(exponent.children[1].text)));
+                return true;
+            }
             bool okB = false, okE = false;
             auto basePtr = vpam::makeRow();
             auto* baseRow = static_cast<vpam::NodeRow*>(basePtr.get());
@@ -1078,7 +1150,7 @@ void CalculationEngine::syncVariablesToGiac(std::string& diagnostic) {
         const int idx = sessionIndex(c);
         const SessionExact& se = _session[idx];
         const std::string text =
-            (se.valid && exactValEquals(se.snapshot, val))
+            (se.valid && se.revision == vm.revision(c) && exactValEquals(se.snapshot, val))
                 ? se.text
                 : exactValToGiacText(val);
         const MathEngineResult r = eng.assign(giacNameFor(c), text.c_str());
@@ -1090,17 +1162,21 @@ void CalculationEngine::syncVariablesToGiac(std::string& diagnostic) {
     }
 }
 
-void CalculationEngine::noteAnsRotated(const std::string& exactGiacText) {
+void CalculationEngine::noteAnsRotated(const std::string& exactGiacText, bool mirrorRotated) {
     auto& vm = vpam::VariableManager::instance();
     SessionExact& ans = _session[sessionIndex(vpam::VAR_ANS)];
     SessionExact& pre = _session[sessionIndex(vpam::VAR_PREANS)];
     // The store rotated old-Ans into PreAns; the session text follows only if
     // it still matches what the store now holds (no silent drift).
-    pre.valid = ans.valid && exactValEquals(ans.snapshot, vm.getPreAns());
+    pre.valid = ans.valid && ans.revision + (mirrorRotated ? 1u : 0u) == vm.revision(vpam::VAR_ANS);
     pre.text = ans.text;
+    pre.sessionOnly = ans.sessionOnly;
     pre.snapshot = vm.getPreAns();
+    pre.revision = vm.revision(vpam::VAR_PREANS);
     ans.valid = !exactGiacText.empty();
+    ans.sessionOnly = !mirrorRotated;
     ans.snapshot = vm.getAns();
+    ans.revision = vm.revision(vpam::VAR_ANS);
     ans.text = exactGiacText;
 }
 
@@ -1111,13 +1187,40 @@ void CalculationEngine::noteVariableStored(char varName) {
     const vpam::ExactVal val = vm.getVariable(varName);
     const SessionExact& ans = _session[sessionIndex(vpam::VAR_ANS)];
     SessionExact& slot = _session[idx];
-    if (ans.valid && exactValEquals(ans.snapshot, val)) {
+    if (ans.valid && ans.revision == vm.revision(vpam::VAR_ANS) && exactValEquals(ans.snapshot, val)) {
         slot.valid = true;
         slot.snapshot = val;
+        slot.revision = vm.revision(varName);
         slot.text = ans.text;
+        slot.sessionOnly = ans.sessionOnly;
     } else {
         slot.valid = false;   // sync falls back to exactValToGiacText
     }
+}
+
+bool CalculationEngine::storeAns(char varName) {
+    const int idx = sessionIndex(varName);
+    auto& vm = vpam::VariableManager::instance();
+    const auto& ans = _session[sessionIndex(vpam::VAR_ANS)];
+    if (idx < 0) {
+        if (!vm.isValidName(varName) || (ans.valid && ans.sessionOnly &&
+            ans.revision == vm.revision(vpam::VAR_ANS))) return false;
+        vm.setVariable(varName, vm.getAns());
+        vm.saveToFlash();
+        return true;
+    }
+    if (idx >= 6) return false;
+    if (ans.valid && ans.sessionOnly && ans.revision == vm.revision(vpam::VAR_ANS)) {
+        auto& target = _session[idx];
+        target = ans;
+        target.snapshot = vm.getVariable(varName);
+        target.revision = vm.revision(varName);
+        return true;
+    }
+    vm.setVariable(varName, vm.getAns());
+    noteVariableStored(varName);
+    vm.saveToFlash();
+    return true;
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -1133,8 +1236,9 @@ CalculationEvaluation CalculationEngine::evaluate(const vpam::MathNode* root) {
     CalculationEvaluation ev;
 
     std::string serErr;
-    if (!serializeForGiac(root, ev.serialized, serErr)) {
-        ev.status = MathEngineStatus::ParseError;
+    if (!serializeForGiac(root, ev.serialized, serErr, true)) {
+        ev.status = serErr == "expression nesting too deep" || serErr == "expression too complex"
+            ? MathEngineStatus::Unsupported : MathEngineStatus::ParseError;
         ev.diagnostic = serErr;
         return ev;
     }
@@ -1142,7 +1246,7 @@ CalculationEvaluation CalculationEngine::evaluate(const vpam::MathNode* root) {
     syncVariablesToGiac(ev.diagnostic);
 
     StructuredEngineResult sr =
-        GiacEngine::instance().evaluateStructured(ev.serialized.c_str());
+        GiacEngine::instance().evaluateStructured(ev.serialized.c_str(), true);
     ev.status = sr.base.status;
     ev.exactText = sr.base.exactText;
     ev.approximateText = sr.base.approximateText;
@@ -1161,10 +1265,8 @@ CalculationEvaluation CalculationEngine::evaluate(const vpam::MathNode* root) {
         ev.sToDPolicy = sToDPolicyForResult(sr.tree, sr.hasApproximateTree);
         if (resultTreeToExactVal(sr.tree, ev.exactVal)) {
             ev.exactValValid = true;
-            ev.kind = CalcResultKind::Structured;
-            return ev;
         }
-        ev.exactAST = resultTreeToAST(sr.tree);
+        ev.exactAST = resultTreeToAST(sr.tree, ProductNotation::ScalarNatural);
         if (ev.exactAST) {
             ev.exactAST->calculateLayout(vpam::defaultFontMetrics());
             const auto& layout = ev.exactAST->layout();

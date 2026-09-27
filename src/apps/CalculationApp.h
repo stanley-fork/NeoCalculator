@@ -56,6 +56,7 @@
 // Giac is the sole Calculation answer engine. MathEvaluator remains included
 // only for the presentation helpers used by ExactVal/S<=>D rendering.
 #include "../math/CalculationEngine.h"
+#include "../math/CalculationFormat.h"
 #include "../math/cas/CASStepLogger.h"
 #include "../math/cas/SymExpr.h"
 #include "../math/cas/SymExprArena.h"
@@ -118,6 +119,7 @@ public:
     const char* debugCalcResultKind() const;   // "structured"|"text_fallback"|"none"
     const char* debugCalcStatus() const;       // "ok"|"undefined"|"parse_error"|...
     const std::string& debugCalcExactText() const;
+    bool debugInput(const std::string& expected) const;
 #endif // NATIVE_SIM
 
 private:
@@ -135,7 +137,22 @@ private:
     // ── Estado del resultado ─────────────────────────────────────────────
     bool                   _hasResult;       ///< Hay un resultado visible
     bool                   _showDecimal;     ///< Legacy (conservado)
-    vpam::ResultMode       _resultMode;      ///< 3-state: Symbolic/Periodic/Extended
+    numos::CalculationFormat _resultMode;
+    int _engineeringShift = 0;
+    lv_obj_t* _formatMenu = nullptr;
+    lv_obj_t* _formatMenuCounter = nullptr;
+    lv_obj_t* _formatMenuRows[5]{};
+    lv_obj_t* _formatMenuLabels[5]{};
+    lv_obj_t* _formatMenuMarks[5]{};
+    lv_obj_t* _formatMenuThumb = nullptr;
+    numos::CalculationFormat _formatChoices[static_cast<int>(numos::CalculationFormat::Count)]{};
+    uint8_t _formatChoiceCount = 0;
+    uint8_t _formatChoice = 0;
+    bool _formatPickingDigits = false;
+    uint8_t _fixedPlaces = 2;
+    bool _angleResult = false;
+    bool _resultInDegrees = false;
+    numos::CalculationFormat _phaseUnit = numos::CalculationFormat::Radians;
     vpam::ExactVal         _lastResult;      ///< Último resultado evaluado
     vpam::NodePtr          _resultNode;      ///< AST del resultado (owned)
     vpam::NodeRow*         _resultRow;       ///< Puntero directo al NodeRow del resultado
@@ -170,6 +187,8 @@ private:
         numos::EngineFallbackReason fallbackReason = numos::EngineFallbackReason::None;
         std::string             exactText;
         std::string             approxText;
+        bool angleResult = false;
+        bool resultInDegrees = false;
     };
     std::vector<HistoryEntry> _history;      ///< Entradas de historial
     int  _historyIndex;                      ///< -1 = nueva expresión, 0..N-1 = historial
@@ -211,6 +230,16 @@ private:
     void showTextResult(const std::string& text);
     void hideTextResult();
     void toggleSD();
+    void openFormatMenu(bool pickDigits = false);
+    void closeFormatMenu();
+    void updateFormatMenu();
+    bool formatAvailable(numos::CalculationFormat format) const;
+    void selectFormat(numos::CalculationFormat format);
+    void engineeringFormat(int direction = 1);
+    vpam::NodePtr formattedResult();
+    const std::string& numericResultText() const;
+    bool complexResult() const;
+    void applyFormatChoice();
     void navigateHistory(int direction);  ///< -1 = arriba (atrás), +1 = abajo (reciente)
     void loadHistoryEntry(int index);     ///< Carga una entrada del historial en el canvas
 

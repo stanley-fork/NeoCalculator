@@ -1,0 +1,19 @@
+[
+  {"id":"bracket-simple","keys":"[ 2 + 3 ] * 4","expected":20},
+  {"id":"bracket-fraction","keys":"[ 1 / 2 ] + 1","expected":1.5},
+  {"id":"bracket-script","keys":"2 ^ [ 1 / 2 ]","expected":1.4142135623730951},
+  {"id":"bracket-script-script","keys":"2 ^ 2 ^ [ 1 / 2 ]","evaluate":false},
+  {"id":"bracket-nested","keys":"[ 2 * [ 3 + 4 ] ] - 1","expected":13},
+  {"id":"bracket-mixed","keys":"[ ( 2 + 3 ) * 4 ] / 5","expected":4},
+  {"id":"bracket-power","keys":"[ neg 2 ] ^ 3","expected":-8},
+  {"id":"bracket-root","keys":"[ SQRT 2 ] + 1","expected":2.4142135623730951},
+  {"id":"bracket-assembly","keys":"[ 1 / 1 / 1 / 1 / 1 / 1 / 2 ] + 1","expected":3},
+  {"id":"bracket-assembly-script","keys":"2 ^ [ 1 / 1 / 1 / 1 / 1 / 1 / 2 ]","expected":4},
+  {"id":"bracket-assembly-script-script","keys":"2 ^ 2 ^ [ 1 / 1 / 1 / 1 / 1 / 1 / 2 ]","evaluate":false},
+  {"id":"bracket-empty","keys":"[ ]","complete":false},
+  {"id":"bracket-incomplete","keys":"[ 2 ^ ] + 1","complete":false},
+  {"id":"bracket-delete","keys":"[ 2 + 3 ] DEL","expected":5},
+  {"id":"bracket-empty-delete","keys":"[ DEL 4","expected":4},
+  {"id":"bracket-implicit","keys":"2 [ 3 + 4 ]","expected":14},
+  {"id":"bracket-unmatched-close","keys":"2 ] + 3","expected":5}
+]

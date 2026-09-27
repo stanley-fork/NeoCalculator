@@ -32,6 +32,7 @@
  */
 
 #include "MathAST.h"
+#include "MathRowLayout.h"
 #include <algorithm>
 
 #include "../ui/MathSymbols.h"
@@ -45,12 +46,20 @@
 
 namespace vpam {
 
+#ifdef NUMOS_MATH_AST_TEST_ALLOCATOR
+// Host-only allocator seam; absent from native/web/firmware product builds.
+extern void* testNodeAllocate(std::size_t);
+extern void testNodeRelease(void*);
+#endif
+
 // ════════════════════════════════════════════════════════════════════════════
 // MathNode — PSRAM allocation
 // ════════════════════════════════════════════════════════════════════════════
 void* MathNode::operator new(std::size_t size) {
     void* p = nullptr;
-#ifdef ARDUINO
+#ifdef NUMOS_MATH_AST_TEST_ALLOCATOR
+    p = testNodeAllocate(size);
+#elif defined(ARDUINO)
     p = heap_caps_malloc(size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!p) p = heap_caps_malloc(size, MALLOC_CAP_8BIT); // fallback
 #else
@@ -62,7 +71,9 @@ void* MathNode::operator new(std::size_t size) {
 
 void MathNode::operator delete(void* ptr) noexcept {
     if (!ptr) return;
-#ifdef ARDUINO
+#ifdef NUMOS_MATH_AST_TEST_ALLOCATOR
+    testNodeRelease(ptr);
+#elif defined(ARDUINO)
     heap_caps_free(ptr);
 #else
     std::free(ptr);
@@ -146,8 +157,8 @@ static inline void expandDelimiterGeometryToAssembly(
 
 static inline int16_t assembledDelimiterWidthPx(
         AxisDelimiterGeometry& geom, const FontMetrics& fm, uint32_t baseCp) {
-    if (baseCp == '(' || baseCp == ')') {
-        const auto plan = stixParenthesisPlan(geom.height, fm.emSize);
+    if (baseCp == '(' || baseCp == ')' || baseCp == '[' || baseCp == ']') {
+        const auto plan = stixParenthesisPlan(geom.height, fm.emSize, baseCp == '[' || baseCp == ']');
         const int16_t extra = plan.height - geom.height;
         geom.ascent = static_cast<int16_t>(geom.ascent + (extra + 1) / 2);
         geom.descent = static_cast<int16_t>(geom.descent + extra / 2);
@@ -180,60 +191,14 @@ static inline int16_t assembledDelimiterWidthPx(
 NodeRow::NodeRow() : MathNode(NodeType::Row) {}
 
 MathClass NodeRow::mathClass() const {
-    // Propagate from the first non-empty child (TeXbook convention)
-    for (auto& child : _children) {
-        if (child->type() != NodeType::Empty)
-            return child->mathClass();
-    }
+    // WHY: a container has no single static atom class. RowLayout traverses
+    // transparent rows; a boxed multi-atom nucleus is ordinary (TeX sub_mlist).
+    if (_children.size() == 1) return atomBoundary(_children.front().get()).left;
     return MathClass::ORD;
 }
 
 void NodeRow::calculateLayout(const FontMetrics& fm) {
-    applyScriptLevel(this, fm);
-    if (_children.empty()) {
-        _layout.width   = 0;
-        _layout.ascent  = fm.ascent;
-        _layout.descent = fm.descent;
-        _layout.inkAscent = fm.ascent;
-        _layout.inkDescent = fm.descent;
-        return;
-    }
-
-    int16_t totalW     = 0;
-    int16_t maxAscent  = 0;
-    int16_t maxDescent = 0;
-    int16_t maxInkAscent = 0;
-    int16_t maxInkDescent = 0;
-
-    bool      hasPrev   = false;
-
-    for (size_t i = 0; i < _children.size(); ++i) {
-        _children[i]->calculateLayout(fm);
-        const auto& cl = _children[i]->layout();
-
-        // ── TeX Inter-Atom Spacing (Spec §3.2) ──
-        // Use rightMathClass of the prev node and leftMathClass of the curr node
-        // so that opening/closing delimiters use the correct type on each side.
-        if (hasPrev) {
-            MathClass prevRight = _children[i - 1]->rightMathClass();
-            MathClass currLeft  = _children[i]->leftMathClass();
-            totalW = static_cast<int16_t>(
-                totalW + interAtomSpacingPx(prevRight, currLeft, fm.style, fm.emSize));
-        }
-
-        totalW     += cl.width;
-        maxAscent   = std::max(maxAscent,  cl.ascent);
-        maxDescent  = std::max(maxDescent, cl.descent);
-        maxInkAscent = std::max<int16_t>(maxInkAscent, layoutInkAscentPx(cl));
-        maxInkDescent = std::max<int16_t>(maxInkDescent, layoutInkDescentPx(cl));
-        hasPrev     = true;
-    }
-
-    _layout.width   = totalW;
-    _layout.ascent  = maxAscent;
-    _layout.descent = maxDescent;
-    _layout.inkAscent = maxInkAscent;
-    _layout.inkDescent = maxInkDescent;
+    RowLayout::calculate(*this, fm);
 }
 
 int NodeRow::childCount() const {
@@ -292,10 +257,7 @@ NodeNumber::NodeNumber(const std::string& value)
 
 void NodeNumber::calculateLayout(const FontMetrics& fm) {
     applyScriptLevel(this, fm);
-    int len = static_cast<int>(_value.size());
-    if (len == 0) len = 1;   // Mínimo 1 carácter de ancho (para cursor)
-
-    _layout.width   = fm.charWidth * static_cast<int16_t>(len);
+    _layout.width = _value.empty() ? fm.charWidth : fm.textAdvance(_value.c_str());
     _layout.ascent  = fm.ascent;
     _layout.descent = fm.descent;
     _layout.inkAscent = (fm.numberAscent > 0) ? fm.numberAscent : fm.ascent;
@@ -335,8 +297,8 @@ void NodeOperator::calculateLayout(const FontMetrics& fm) {
     // exclusively by the TeX spacing logic in NodeRow::calculateLayout.
     // WHY: STIX plus-minus is wider than a digit. Use the captured glyph extent
     // so row layout, cursor advances and the shared glyph draw agree.
-    _layout.width   = (_op == OpKind::PlusMinus && fm.plusMinusWidth > 0)
-        ? fm.plusMinusWidth : fm.charWidth;
+    _layout.width = fm.measureText ? fm.textAdvance(symbol())
+        : (_op == OpKind::PlusMinus && fm.plusMinusWidth > 0) ? fm.plusMinusWidth : fm.charWidth;
     _layout.ascent  = fm.ascent;
     _layout.descent = fm.descent;
 }
@@ -599,45 +561,36 @@ void NodeRoot::calculateLayout(const FontMetrics& fm) {
     _radicalExtraAscender = mc.radicalExtraAscender();
     if (_radicalExtraAscender < 1) _radicalExtraAscender = 1;
 
-    // 3. Radical symbol width: hook + slope (drawn manually, not from font)
-    int16_t radSymW = RADICAL_HOOK_W + RADICAL_SLOPE_W;
-
-    // 4. Degree (superscript font), if present
-    if (_degree) {
-        FontMetrics fmDeg = fm.superscript();
-        _degree->calculateLayout(fmDeg);
-        const auto& degL = _degree->layout();
-
-        // Kern values from MATH table (kernAfter is negative for STIX Two Math)
-        _radicalKernBefore = mc.radicalKernBeforeDegree();
-        _radicalKernAfter  = mc.radicalKernAfterDegree();
-
-        // Symbol width must accommodate degree
-        radSymW = std::max(radSymW,
-            static_cast<int16_t>(_radicalKernBefore + degL.width
-                               + _radicalKernAfter + RADICAL_HOOK_W));
-    }
-
-    // 5. Total width: symbol + content + right padding
-    _layout.width = static_cast<int16_t>(radSymW + radL.width + RADICAL_RIGHT_PAD);
-
-    // 6. Ascent: radicand.ascent + verticalGap + ruleThickness + extraAscender
-    _layout.ascent = static_cast<int16_t>(
-        radL.ascent + _radicalVerticalGap + _radicalRuleThickness
-        + _radicalExtraAscender);
+    // WHY: the degree can enlarge the node, but must not move the radical
+    // bar or the radicand baseline. Cache the one placement used by painting
+    // and the cursor; a reserved width alone does not move either consumer.
+    _radicalAscent = radL.ascent + _radicalVerticalGap +
+        _radicalRuleThickness + _radicalExtraAscender;
+    _layout.ascent = _radicalAscent;
     _layout.descent = radL.descent;
-
-    // 7. Degree may extend above the overline
+    _radicalX = _degreeX = _degreeBaseline = 0;
+    _radicalKernBefore = _radicalKernAfter = 0;
     if (_degree) {
-        const auto& degL = _degree->layout();
-        // Degree bottom raised at RadicalDegreeBottomRaisePercent % of em above baseline
-        // For STIX Two Math this is 55% → degree sits near the top of the radicand
-        int16_t degreeBottomRaise = static_cast<int16_t>(
-            (fm.emSize * mc.radicalDegreeBottomRaisePercent()) / 100);
-        int16_t degTop = static_cast<int16_t>(
-            _layout.ascent - degreeBottomRaise + degL.ascent);
-        _layout.ascent = std::max(_layout.ascent, degTop);
+        _degree->calculateLayout(fm.superscript());
+        const auto& degree = _degree->layout();
+        _radicalKernBefore = mc.radicalKernBeforeDegree();
+        _radicalKernAfter = mc.radicalKernAfterDegree();
+        _degreeX = std::max<int16_t>(0, _radicalKernBefore);
+        // The existing vector radical has no glyph's empty left bearing.
+        // Limit negative MATH kern to its hook, leaving 1mu ink clearance.
+        const int after = std::max<int>(
+            _radicalKernAfter, mc.muToPx(1) - RADICAL_HOOK_W);
+        _radicalX = std::max<int>(0, _degreeX + degree.width + after);
+        const int radicalHeight = _radicalAscent + radL.descent;
+        const int raise = radicalHeight * mc.radicalDegreeBottomRaisePercent() / 100;
+        _degreeBaseline = radL.descent - raise - degree.descent;
+        _layout.ascent = std::max<int>(_radicalAscent,
+                                      degree.ascent - _degreeBaseline);
+        _layout.descent = std::max<int>(radL.descent,
+                                        _degreeBaseline + degree.descent);
     }
+    _layout.width = radicandX() + radL.width + RADICAL_RIGHT_PAD;
+
 }
 
 int NodeRoot::childCount() const {
@@ -686,7 +639,7 @@ void NodeParen::calculateLayout(const FontMetrics& fm) {
     const auto& cl = _content->layout();
 
     const int16_t padPx = delimiterVerticalPadPx(cl, fm);
-    AxisDelimiterGeometry geom = _delimKind == DelimKind::Paren
+    AxisDelimiterGeometry geom = (_delimKind == DelimKind::Paren || _delimKind == DelimKind::Bracket)
         ? parenthesisGeometry(cl)
         : symmetricAxisDelimiterGeometry(cl, fm, padPx);
     _parenWidth = assembledDelimiterWidthPx(geom, fm, leftCp());
@@ -726,6 +679,7 @@ NodeFunction::NodeFunction(FuncKind kind, NodePtr argument)
 
 const char* NodeFunction::label() const {
     switch (_kind) {
+        case FuncKind::Factorial: return "!";
         case FuncKind::Sin:    return "sin";
         case FuncKind::Cos:    return "cos";
         case FuncKind::Tan:    return "tan";
@@ -740,17 +694,8 @@ const char* NodeFunction::label() const {
 
 void NodeFunction::calculateLayout(const FontMetrics& fm) {
     applyScriptLevel(this, fm);
-    // 1. Etiqueta: ancho basado en charWidth × longitud del texto visible
-    // Para funciones cortas (sin, cos, ln) es suficiente
-    const char* lbl = label();
-    int labelChars = 0;
-    // Contar caracteres visibles (no bytes UTF-8)
-    const char* p = lbl;
-    while (*p) {
-        if ((*p & 0xC0) != 0x80) labelChars++;  // No es byte de continuación
-        p++;
-    }
-    _labelWidth = static_cast<int16_t>(fm.charWidth * labelChars);
+    // WHY: proportional label advance must end where the drawn run ends.
+    _labelWidth = fm.textAdvance(label());
 
     // 2. Argumento entre paréntesis
     _argument->calculateLayout(fm);
@@ -761,6 +706,13 @@ void NodeFunction::calculateLayout(const FontMetrics& fm) {
     _innerPad = std::max<int16_t>(1, _parenWidth / 3);
     _parenAscent = geom.ascent;
     _parenDescent = geom.descent;
+
+    if (_kind == FuncKind::Factorial &&
+        (_argument->type() != NodeType::Row || _argument->childCount() == 1)) {
+        _parenWidth = _innerPad = 0;
+        _parenAscent = argL.ascent;
+        _parenDescent = argL.descent;
+    }
 
     // 3. Ancho total: etiqueta + gap + ( + pad + argumento + pad + )
     _layout.width = static_cast<int16_t>(_labelWidth + LABEL_GAP
@@ -802,8 +754,7 @@ NodeLogBase::NodeLogBase(NodePtr base, NodePtr argument)
 
 void NodeLogBase::calculateLayout(const FontMetrics& fm) {
     applyScriptLevel(this, fm);
-    // 1. Etiqueta "log": 3 chars
-    _labelWidth = fm.charWidth * 3;
+    _labelWidth = fm.textAdvance("log");
 
     // 2. Subíndice (base) en fuente reducida
     FontMetrics fmSub = fm.superscript();   // misma escala que superscript
@@ -874,8 +825,7 @@ const char* NodeConstant::symbol() const {
 
 void NodeConstant::calculateLayout(const FontMetrics& fm) {
     applyScriptLevel(this, fm);
-    // La constante ocupa exactamente 1 carácter de ancho
-    _layout.width   = fm.charWidth;
+    _layout.width = fm.textAdvance(symbol());
     _layout.ascent  = fm.ascent;
     _layout.descent = fm.descent;
 }
@@ -957,12 +907,7 @@ const char* NodeVariable::label() const {
 
 void NodeVariable::calculateLayout(const FontMetrics& fm) {
     applyScriptLevel(this, fm);
-    // Ancho = charWidth × longitud del label
-    const char* lbl = label();
-    int len = 0;
-    while (lbl[len]) ++len;
-    _labelWidth = fm.charWidth * static_cast<int16_t>(len);
-    if (_labelWidth < fm.charWidth) _labelWidth = fm.charWidth;
+    _labelWidth = fm.textAdvance(label());
     _layout.width   = _labelWidth;
     _layout.ascent  = fm.ascent;
     _layout.descent = fm.descent;
@@ -983,19 +928,9 @@ NodePeriodicDecimal::NodePeriodicDecimal(const std::string& intPart,
 
 void NodePeriodicDecimal::calculateLayout(const FontMetrics& fm) {
     applyScriptLevel(this, fm);
-    // Contar caracteres totales:
-    //   [signo] + intPart + "." + nonRepeat + repeat
-    int chars = 0;
-    if (_negative) chars += 1;  // "-"
-    chars += static_cast<int>(_intPart.size());
-    if (!_nonRepeat.empty() || !_repeat.empty()) {
-        chars += 1;  // "."
-        chars += static_cast<int>(_nonRepeat.size());
-        chars += static_cast<int>(_repeat.size());
-    }
-    if (chars == 0) chars = 1;
-
-    _layout.width = fm.charWidth * static_cast<int16_t>(chars);
+    // Each component is a separate drawn run (no kerning across components).
+    _layout.width = static_cast<int16_t>(prefixAdvance(fm) + fm.textAdvance(_repeat.c_str()));
+    if (_layout.width == 0) _layout.width = fm.charWidth;
 
     // Si hay dígitos periódicos, necesitamos espacio extra encima para la overline
     if (!_repeat.empty()) {
@@ -1471,18 +1406,8 @@ constexpr int32_t kResultHeightOverflowSentinel = 1025;
 
 static int16_t boundedTextWidth(const std::string& text,
                                 const FontMetrics& fm) {
-    int glyphs = 0;
-    const uint8_t* p = reinterpret_cast<const uint8_t*>(text.c_str());
-    while (*p) {
-        uint32_t cp = 0;
-        const uint8_t used = utf8Decode(p, cp);
-        if (used == 0) break;
-        p += used;
-        ++glyphs;
-    }
-    if (glyphs == 0) glyphs = 1;
     return static_cast<int16_t>(std::min<int32_t>(kResultWidthOverflowSentinel,
-        static_cast<int32_t>(fm.charWidth) * glyphs));
+        text.empty() ? fm.charWidth : fm.textAdvance(text.c_str())));
 }
 
 static void setTextLayout(MathNode* node, LayoutResult& layout,

@@ -826,9 +826,7 @@ static void testRootLayoutUsesMathConstants() {
 static void testNegativeSpacingCodesCollapseInScriptStyles() {
     // Positive codes 1-3 always apply; only negative codes (-1/-2/-3)
     // are restricted to display/text and should yield zero spacing in
-    // script styles.  Since kSpacingTable currently has no negative
-    // entries, this test validates the mechanism is correct WHEN a
-    // negative code IS used.
+    // script styles. MATH-TEX-01 uses the actual TeX conditional entries.
     FontMetrics fm = defaultFontMetrics();          // DISPLAY_STYLE
     FontMetrics fmScript = fm.superscript();         // SCRIPT
 
@@ -838,7 +836,7 @@ static void testNegativeSpacingCodesCollapseInScriptStyles() {
     const int16_t scriptSpace = interAtomSpacingPx(
         MathClass::ORD, MathClass::BINARY, fmScript.style, fmScript.emSize);
     check(displaySpace > 0, "ORD→BIN spacing is positive in display style");
-    check(scriptSpace > 0, "ORD→BIN spacing is positive in script style (code 2 always applies)");
+    check(scriptSpace == 0, "ORD→BIN spacing collapses in script style (TeX conditional medium)");
     check(scriptSpace < displaySpace,
           "script inter-atom space scales down with em-size");
 }

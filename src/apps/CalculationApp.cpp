@@ -31,6 +31,8 @@
  */
 
 #include "CalculationApp.h"
+#include "../math/tutor/Locale.h"
+#include "../math/AngleModeRuntime.h"
 #include "../input/KeyCodes.h"
 #include "../input/generated/ProductionKeypadMap.generated.h"
 #include "../Config.h"
@@ -40,6 +42,7 @@
 #include "../math/cas/SymSimplify.h"
 #include "../math/cas/SymExprToAST.h"
 #include "../ui/MathTypography.h"
+#include "../ui/TutorFonts.h"
 #include "../utils/HwUxProbe.h"
 #ifdef NATIVE_SIM
   #include <cstdio>
@@ -72,7 +75,7 @@ CalculationApp::CalculationApp()
     , _rootRow(nullptr)
     , _hasResult(false)
     , _showDecimal(false)
-    , _resultMode(vpam::ResultMode::Symbolic)
+    , _resultMode(numos::CalculationFormat::Standard)
     , _resultRow(nullptr)
     , _historyIndex(-1)
     , _hasEduSteps(false)
@@ -101,6 +104,7 @@ void CalculationApp::begin() {
 // ════════════════════════════════════════════════════════════════════════════
 
 void CalculationApp::end() {
+    closeFormatMenu();
     closeStepViewer();
 
     _mathCanvas.stopCursorBlink();
@@ -160,6 +164,7 @@ void CalculationApp::createUI() {
 
     // ── MathCanvas — Expression (full-area, vertically centered in edit mode) ──
     _mathCanvas.create(_screen);
+    _mathCanvas.setEmptyRootPlaceholderVisible(false);
     _mathCanvas.setAutoHeightEnabled(false);
     _mathCanvas.setTraceLabel("calc_input_edit");
     // LaTeX inline look: top-level atoms use TEXT style so fractions step their
@@ -261,6 +266,58 @@ void CalculationApp::handleKey(const KeyEvent& ev) {
 
     const auto semantic =
         static_cast<numos::input::SemanticId>(ev.semanticId);
+    if (_formatMenu) {
+        if (ev.code == KeyCode::UP && _formatChoice) --_formatChoice;
+        else if (ev.code == KeyCode::DOWN && _formatChoice + 1 < _formatChoiceCount) ++_formatChoice;
+        else if (ev.code == KeyCode::ENTER) {
+            applyFormatChoice();
+            return;
+        } else if (ev.code == KeyCode::AC || ev.code == KeyCode::DEL ||
+                   ev.code == KeyCode::FORMAT || ev.code == KeyCode::FORMAT_MENU) {
+            closeFormatMenu();
+            return;
+        }
+        updateFormatMenu();
+        return;
+    }
+    if (ev.code == KeyCode::FORMAT_MENU ||
+        ((ev.code == KeyCode::FORMAT || ev.code == KeyCode::FREE_EQ) && km.isShift() && km.isAlpha())) {
+        km.consumeModifier();
+        openFormatMenu();
+        _statusBar.update();
+        return;
+    }
+    if (semantic == numos::input::SemanticId::engineering_notation ||
+        (ev.code == KeyCode::EXP && km.isShift() && !km.isAlpha())) {
+        km.consumeModifier();
+        engineeringFormat();
+        _statusBar.update();
+        return;
+    }
+    if (_hasResult && _resultMode == numos::CalculationFormat::Engineering &&
+        !km.isShift() && (ev.code == KeyCode::LEFT || ev.code == KeyCode::RIGHT)) {
+        engineeringFormat(ev.code == KeyCode::LEFT ? -1 : 1);
+        return;
+    }
+
+    if (semantic == numos::input::SemanticId::left_bracket ||
+        semantic == numos::input::SemanticId::right_bracket) {
+        clearResult();
+        if (semantic == numos::input::SemanticId::left_bracket)
+            _cursor.insertParen(vpam::DelimKind::Bracket);
+        else _cursor.closeBracket();
+        _statusBar.update();
+        _mathCanvas.resetCursorBlink();
+        refreshExpression();
+        return;
+    }
+    if (semantic == numos::input::SemanticId::pow10) {
+        if (_cursor.insertPowerOfTen()) clearResult();
+        _statusBar.update();
+        _mathCanvas.resetCursorBlink();
+        refreshExpression();
+        return;
+    }
     if (semantic >= numos::input::SemanticId::alpha_A &&
         semantic <= numos::input::SemanticId::alpha_Z) {
         const char variable = static_cast<char>(
@@ -377,6 +434,8 @@ void CalculationApp::handleKey(const KeyEvent& ev) {
 
         // ── Operadores ──
         case KeyCode::ADD: clearResult(); _cursor.insertOperator(vpam::OpKind::Add); break;
+        case KeyCode::NEG:
+        case KeyCode::NEGATE:
         case KeyCode::SUB: clearResult(); _cursor.insertOperator(vpam::OpKind::Sub); break;
         case KeyCode::MUL: clearResult(); _cursor.insertOperator(vpam::OpKind::Mul); break;
         case KeyCode::DIVIDE: clearResult(); _cursor.insertOperator(vpam::OpKind::Div); break;
@@ -391,19 +450,25 @@ void CalculationApp::handleKey(const KeyEvent& ev) {
             _cursor.insertDigit('2');
             break;
         case KeyCode::SQRT:   clearResult(); _cursor.insertRoot();     break;
-        case KeyCode::LPAREN: clearResult(); _cursor.insertParen();    break;
-        case KeyCode::RPAREN: clearResult(); _cursor.moveRight();      break;
+        case KeyCode::LPAREN:
+            clearResult();
+            _cursor.insertParen(km.isShift() ? vpam::DelimKind::Bracket : vpam::DelimKind::Paren);
+            if (km.isShift()) km.consumeModifier();
+            break;
+        case KeyCode::LBRACKET: clearResult(); _cursor.insertParen(vpam::DelimKind::Bracket); break;
+        case KeyCode::RBRACKET: clearResult(); _cursor.closeBracket(); break;
+        case KeyCode::RPAREN:
+            clearResult();
+            if (km.isShift()) { _cursor.closeBracket(); km.consumeModifier(); }
+            else _cursor.moveRight();
+            break;
         case KeyCode::COMMA:  clearResult(); _cursor.insertVariable(','); break;
         case KeyCode::EQUAL:
             clearResult();
             _cursor.insertOperator(vpam::OpKind::Eq);
             break;
         case KeyCode::EXP:
-            clearResult();
-            _cursor.insertOperator(vpam::OpKind::Mul);
-            _cursor.insertDigit('1');
-            _cursor.insertDigit('0');
-            _cursor.insertPower();
+            if (_cursor.insertPowerOfTen()) clearResult();
             break;
 
         // ── Funciones trigonométricas / logarítmicas ──
@@ -441,8 +506,13 @@ void CalculationApp::handleKey(const KeyEvent& ev) {
             _cursor.insertFunction(vpam::FuncKind::Ln);
             break;
         case KeyCode::LOG:
-            clearResult();
-            _cursor.insertFunction(vpam::FuncKind::Log);
+            if (km.isShift()) {
+                if (_cursor.insertPowerOfTen()) clearResult();
+                km.consumeModifier();
+            } else {
+                clearResult();
+                _cursor.insertFunction(vpam::FuncKind::Log);
+            }
             break;
         case KeyCode::LOG_BASE:
             clearResult();
@@ -487,22 +557,30 @@ void CalculationApp::handleKey(const KeyEvent& ev) {
 
         // ── Navegación ──
         case KeyCode::LEFT:
-            if (_hasResult && _resultMode == vpam::ResultMode::Extended) {
-                _resultCanvas.scrollBy(20);
+            if (_hasResult && (km.isShift() || _resultCanvas.hasHorizontalOverflow())) {
+                (km.isShift() ? _mathCanvas : _resultCanvas).scrollBounded(20);
                 changed = false;
             } else {
                 _cursor.moveLeft();
             }
             break;
         case KeyCode::RIGHT:
-            if (_hasResult && _resultMode == vpam::ResultMode::Extended) {
-                _resultCanvas.scrollBy(-20);
+            if (_hasResult && (km.isShift() || _resultCanvas.hasHorizontalOverflow())) {
+                (km.isShift() ? _mathCanvas : _resultCanvas).scrollBounded(-20);
                 changed = false;
             } else {
                 _cursor.moveRight();
             }
             break;
         case KeyCode::UP:
+            if (_hasResult && km.isShift()) {
+                // WHY: keep plain UP/DOWN for history. A tall result takes
+                // precedence; otherwise expose the tall authored expression.
+                (_resultCanvas.hasVerticalOverflow() ? _resultCanvas : _mathCanvas)
+                    .scrollVerticalBounded(20);
+                changed = false;
+                break;
+            }
             if (_hasResult || _historyIndex >= 0) {
                 // Navegar historial: ir a la entrada anterior
                 navigateHistory(-1);
@@ -512,6 +590,12 @@ void CalculationApp::handleKey(const KeyEvent& ev) {
             }
             break;
         case KeyCode::DOWN:
+            if (_hasResult && km.isShift()) {
+                (_resultCanvas.hasVerticalOverflow() ? _resultCanvas : _mathCanvas)
+                    .scrollVerticalBounded(-20);
+                changed = false;
+                break;
+            }
             if (_historyIndex >= 0) {
                 // Navegar historial: ir a la entrada más reciente
                 navigateHistory(1);
@@ -549,16 +633,12 @@ void CalculationApp::handleKey(const KeyEvent& ev) {
 
         // ── FACT: factorización en primos ──
         case KeyCode::FACT:
-            if (_hasResult && _lastResult.ok) {
-                _resultNode = vpam::MathEvaluator::factorizeToAST(_lastResult);
-                _resultRow  = static_cast<vpam::NodeRow*>(_resultNode.get());
-                _resultRow->calculateLayout(_resultCanvas.normalMetrics());
-                _resultCanvas.setExpression(_resultRow, nullptr);
-                _resultCanvas.resetScroll();
-                _resultCanvas.invalidate();
-                applyResultLayout();  // dynamic reposition for Result Mode
+            if (_hasResult) {
+                clearResult();
+                resetExpression();
+                _cursor.insertVariable(vpam::VAR_ANS);
             }
-            changed = false;
+            changed = _cursor.insertFactorial();
             break;
 
         default:
@@ -590,6 +670,11 @@ void CalculationApp::evaluateExpression() {
     // re-evaluation happens on any path.
     numos::CalculationEvaluation ev =
         numos::CalculationEngine::instance().evaluate(_rootRow);
+#if defined(NATIVE_SIM) && !defined(__EMSCRIPTEN__)
+    if (std::getenv("NUMOS_CALC_INPUT_TRACE"))
+        std::printf("[CALC-EVAL] serialized=%s diagnostic=%s status=%d\n",
+                    ev.serialized.c_str(), ev.diagnostic.c_str(), int(ev.status));
+#endif
 
     _hasResult      = true;
     _lastStatus     = ev.status;
@@ -602,6 +687,9 @@ void CalculationApp::evaluateExpression() {
     _reusePolicy = ev.reusePolicy;
     _sToDPolicy = ev.sToDPolicy;
     _fallbackReason = ev.fallbackReason;
+    _angleResult = ev.ok() && numos::authoredAngle(_rootRow);
+    _resultInDegrees = numos::angleModeIsDeg();
+    _phaseUnit = _resultInDegrees ? numos::CalculationFormat::Degrees : numos::CalculationFormat::Radians;
 
     // ExactVal mirror: exact when tier 1; numeric fallback otherwise (probes,
     // FACT and the persistent Ans store still see a coherent value).
@@ -621,12 +709,10 @@ void CalculationApp::evaluateExpression() {
                 _lastResult = vpam::ExactVal::fromDouble(d);
                 numericMirror = true;
             } else {
-                // Pure symbolic result (e.g. x-2*x): no numeric mirror.
-                _lastResult = vpam::ExactVal();
-                _lastResult.ok = true;
-                _lastResult.approximate = true;
-                _lastResult.approxVal = 0.0;
-            }
+                // The canonical structured result owns non-real/symbolic values.
+                // Do not fabricate a zero for legacy scalar-only consumers.
+                _lastResult = vpam::ExactVal::makeError("Math ERROR");
+        }
         }
         // Ans policy: successful results with an exact or numeric value
         // update the persistent NumOS store; the exact Giac text rides
@@ -634,32 +720,26 @@ void CalculationApp::evaluateExpression() {
         // free-symbol results (no numeric mirror) leave Ans untouched.
         if (ev.exactValValid || numericMirror) {
             vpam::VariableManager::instance().updateAns(_lastResult);
-            numos::CalculationEngine::instance().noteAnsRotated(ev.exactText);
             ansUpdated = true;
         }
+        if (_reusePolicy != numos::ResultReusePolicy::NonReusable)
+            numos::CalculationEngine::instance().noteAnsRotated(ev.exactText, ansUpdated);
     } else {
         // Typed error statuses keep the legacy error rendering (and the
         // assert_error contract). Failed evaluations never overwrite Ans.
         const char* msg = "Math ERROR";
-        if (ev.status == numos::MathEngineStatus::ParseError ||
-            ev.status == numos::MathEngineStatus::Unsupported)
-            msg = "Syntax ERROR";
+        if (ev.status == numos::MathEngineStatus::ParseError) msg = "Syntax ERROR";
+        if (ev.status == numos::MathEngineStatus::Unsupported)
+            msg = numos::tutor::productLocale == numos::tutor::Locale::Spanish
+                ? "Limite de expresion" : "Expression limit";
         _lastResult = vpam::ExactVal::makeError(msg);
     }
     (void)ansUpdated;
 
-    // Default display mode: tier 1 keeps the legacy large-denominator
-    // heuristic (decimal-looking rationals open in Periodic); everything
-    // else opens Symbolic.
-    constexpr int64_t kDecimalDenThreshold = 100000;  // 10^5
-    if (_exactValValid && _lastResult.ok && _lastResult.isRational() &&
-        _lastResult.den >= kDecimalDenThreshold) {
-        _resultMode  = vpam::ResultMode::Periodic;
-        _showDecimal = true;
-    } else {
-        _resultMode  = vpam::ResultMode::Symbolic;
-        _showDecimal = false;
-    }
+    // Standard/exact is always the initial view, including decimal literals.
+    _resultMode = numos::CalculationFormat::Standard;
+    _engineeringShift = 0;
+    _showDecimal = false;
 
     // ── Guardar en historial ─────────────────────────────────────────
     {
@@ -671,6 +751,8 @@ void CalculationApp::evaluateExpression() {
         entry.exactValValid = _exactValValid;
         entry.exactText  = _exactText;
         entry.approxText = _approxText;
+        entry.angleResult = _angleResult;
+        entry.resultInDegrees = _resultInDegrees;
         if (_structuredResult)
             entry.resultAST = vpam::cloneNode(_structuredResult.get());
         if (_structuredApproxResult)
@@ -714,6 +796,7 @@ void CalculationApp::evaluateExpression() {
 }
 
 bool CalculationApp::navigateBack() {
+    if (_formatMenu) { closeFormatMenu(); return true; }
     if (!_stepViewerActive) return false;
     closeStepViewer();
     return true;
@@ -904,14 +987,18 @@ void CalculationApp::hideTextResult() {
 
 void CalculationApp::showResult() {
     if (_rootRow) {
-        _mathCanvas.setExpression(_rootRow, nullptr);
+        // WHY: failed input is still an editor expression. Keep its pending
+        // slots visible after EXE; a read-only canvas would hide that evidence.
+        _mathCanvas.setExpression(_rootRow,
+            _lastStatus == numos::MathEngineStatus::Ok ? nullptr : &_cursor);
         _mathCanvas.stopCursorBlink();
     }
 
     hideTextResult();
 
     if (_lastStatus == numos::MathEngineStatus::Ok &&
-        _lastKind == numos::CalcResultKind::TextFallback) {
+        _lastKind == numos::CalcResultKind::TextFallback &&
+        _resultMode == numos::CalculationFormat::Standard) {
         // Tier 3: Giac's own printed result as plain text — honest fallback,
         // never a legacy re-evaluation.
         std::string visible = "Giac text fallback (";
@@ -922,36 +1009,14 @@ void CalculationApp::showResult() {
         return;
     }
 
-    if ((_lastStatus == numos::MathEngineStatus::Ok ||
-         _lastStatus == numos::MathEngineStatus::Undefined) && !_exactValValid &&
-        _structuredResult) {
-        // Tier 2: structured Giac result. Symbolic shows the exact tree;
-        // the S<=>D states show the decimal companion when one exists.
-        if (_resultMode == vpam::ResultMode::Symbolic ||
-            !_structuredApproxResult) {
-            _resultNode = vpam::cloneNode(_structuredResult.get());
-        } else {
-            // WHY: S<=>D consumes Giac's typed evalf tree. Container and
-            // complex results are never reconstructed from formatted text.
-            _resultNode = vpam::cloneNode(_structuredApproxResult.get());
-        }
-        _resultRow = static_cast<vpam::NodeRow*>(_resultNode.get());
-    } else {
-        // Tier 1 (exact ExactVal) and error results: unchanged legacy
-        // rendering — basic-arithmetic pixels and error visuals stay put.
-        switch (_resultMode) {
-            case vpam::ResultMode::Symbolic:
-                _resultNode = vpam::MathEvaluator::resultToAST(_lastResult);
-                break;
-            case vpam::ResultMode::Periodic:
-                _resultNode = vpam::MathEvaluator::resultToPeriodicAST(_lastResult);
-                break;
-            case vpam::ResultMode::Extended:
-                _resultNode = vpam::MathEvaluator::resultToExtendedAST(_lastResult, 200);
-                break;
-        }
-        _resultRow = static_cast<vpam::NodeRow*>(_resultNode.get());
+    _resultNode = formattedResult();
+    if (!_resultNode) {
+        _resultMode = numos::CalculationFormat::Standard;
+        _resultNode = _structuredResult ? vpam::cloneNode(_structuredResult.get())
+            : vpam::MathEvaluator::resultToAST(_lastResult);
     }
+    _resultRow = static_cast<vpam::NodeRow*>(_resultNode.get());
+    if (!_resultRow) return;
     // Conectar al canvas de resultado (sin cursor)
     _resultCanvas.setExpression(_resultRow, nullptr);
     _resultCanvas.resetScroll();   // Resetear scroll al cambiar de estado
@@ -1021,20 +1086,13 @@ void CalculationApp::clearResult() {
 // ════════════════════════════════════════════════════════════════════════════
 
 void CalculationApp::toggleSD() {
-    if (!_exactValValid && _sToDPolicy == numos::ResultSToDPolicy::Unavailable)
-        return;
-    switch (_resultMode) {
-        case vpam::ResultMode::Symbolic:
-            _resultMode = vpam::ResultMode::Periodic;
-            break;
-        case vpam::ResultMode::Periodic:
-            _resultMode = vpam::ResultMode::Extended;
-            break;
-        case vpam::ResultMode::Extended:
-            _resultMode = vpam::ResultMode::Symbolic;
-            break;
-    }
-    _showDecimal = (_resultMode != vpam::ResultMode::Symbolic);
+    if (!_hasResult || _lastStatus != numos::MathEngineStatus::Ok) return;
+    if (_resultMode == numos::CalculationFormat::Standard) {
+        if (!formatAvailable(numos::CalculationFormat::Decimal)) return;
+        _resultMode = numos::CalculationFormat::Decimal;
+    } else _resultMode = numos::CalculationFormat::Standard;
+    _engineeringShift = 0;
+    _showDecimal = _resultMode == numos::CalculationFormat::Decimal;
     showResult();
 }
 
@@ -1099,12 +1157,15 @@ void CalculationApp::loadHistoryEntry(int index) {
     _lastResult  = entry.result;
     _hasResult   = true;
     _showDecimal = false;
-    _resultMode  = vpam::ResultMode::Symbolic;
+    _resultMode  = numos::CalculationFormat::Standard;
     _lastStatus    = entry.status;
     _lastKind      = entry.kind;
     _exactValValid = entry.exactValValid;
     _exactText     = entry.exactText;
     _approxText    = entry.approxText;
+    _angleResult = entry.angleResult;
+    _resultInDegrees = entry.resultInDegrees;
+    _phaseUnit = _resultInDegrees ? numos::CalculationFormat::Degrees : numos::CalculationFormat::Radians;
     _structuredResult = entry.resultAST
                             ? vpam::cloneNode(entry.resultAST.get())
                             : vpam::NodePtr();
@@ -1146,16 +1207,8 @@ char CalculationApp::alphaKeyToVarName(KeyCode code) {
 // ════════════════════════════════════════════════════════════════════════════
 
 void CalculationApp::executeStore(char varName) {
-    auto& vm = vpam::VariableManager::instance();
-    vpam::ExactVal ans = vm.getAns();
-    vm.setVariable(varName, ans);
+    numos::CalculationEngine::instance().storeAns(varName);
 
-    // Intentar persistir en flash
-    vm.saveToFlash();
-
-    // Keep the Giac session's exact text coherent with the store (A-F only;
-    // x/y/z stay free symbols on the Giac side).
-    numos::CalculationEngine::instance().noteVariableStored(varName);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -1423,3 +1476,358 @@ const std::string& CalculationApp::debugCalcExactText() const {
     return _exactText;
 }
 #endif // NATIVE_SIM
+
+#ifdef NATIVE_SIM
+namespace {
+bool calcInputTreeValid(const vpam::MathNode* node, const vpam::MathNode* parent,
+                        const vpam::MathNode* cursor, bool& found, unsigned depth = 0) {
+    if (!node || depth > 64 || node->parent() != parent) return false;
+    if (node == cursor) found = true;
+    if (node->type() == vpam::NodeType::Number &&
+        (node->layout().width <= 0 || node->layout().height() <= 0)) return false;
+    for (int i = 0; i < node->childCount(); ++i)
+        if (!calcInputTreeValid(node->child(i),node,cursor,found,depth+1)) return false;
+    return true;
+}
+}
+bool CalculationApp::debugInput(const std::string& expected) const {
+    std::string serialized, diagnostic;
+    const bool complete = numos::CalculationEngine::serializeForGiac(_rootRow, serialized, diagnostic);
+    const auto& cursor = _cursor.cursor();
+    if (expected == "dump") {
+        std::printf("[CALC-INPUT] cursor=%d slot=%s complete=%d serialized=%s diagnostic=%s\n%s",
+                    cursor.index, cursor.row == _rootRow ? "root" : "nested", complete,
+                    serialized.c_str(), diagnostic.c_str(), vpam::dumpTree(_rootRow).c_str());
+        return true;
+    }
+    if (expected == "incomplete") return !complete;
+    if (expected == "complete") return complete;
+    if (expected == "structure") {
+        bool found = false;
+        return calcInputTreeValid(_rootRow,nullptr,cursor.row,found) && found &&
+            cursor.index >= 0 && cursor.index <= cursor.row->childCount();
+    }
+    if (expected.compare(0,5,"near ") == 0) {
+        double value=0, tolerance=0; char extra=0;
+        if (std::sscanf(expected.c_str()+5,"%lf %lf %c",&value,&tolerance,&extra)!=2) return false;
+        return _hasResult && _lastStatus == numos::MathEngineStatus::Ok &&
+            std::isfinite(_lastResult.toDouble()) && tolerance >= 0 &&
+            std::fabs(_lastResult.toDouble()-value) <= tolerance;
+    }
+    if (expected.compare(0,9,"rational ") == 0) {
+        long long numerator=0, denominator=0;char extra=0;
+        int64_t lhs=0,rhs=0;
+        if (std::sscanf(expected.c_str()+9,"%lld %lld %c",&numerator,&denominator,&extra)!=2 ||
+            denominator==0 || !_hasResult || !_exactValValid || !_lastResult.ok ||
+            _lastResult.approximate || !_lastResult.isRational()) return false;
+        // Exact rational comparison, including a sign kept in Giac's denominator.
+        return !__builtin_mul_overflow(_lastResult.num, denominator, &lhs) &&
+               !__builtin_mul_overflow(numerator, _lastResult.den, &rhs) && lhs==rhs;
+    }
+    if (expected == "cursor") return cursor.row && cursor.index >= 0 && cursor.index <= cursor.row->childCount();
+    if (expected.compare(0,11,"serialized ") == 0) {
+        if (complete && serialized == expected.substr(11)) return true;
+        std::printf("[CALC-INPUT] actual=%s diagnostic=%s\n",serialized.c_str(),diagnostic.c_str());
+    }
+    return false;
+}
+#endif
+
+
+const std::string& CalculationApp::numericResultText() const {
+    numos::DecimalParts scalar;
+    return numos::decimalParts(_approxText, scalar) ? _approxText : _exactText;
+}
+
+bool CalculationApp::complexResult() const {
+    bool imaginary = false;
+    unsigned budget = 400;
+    return numos::numericComplex(_structuredResult.get(), imaginary, budget) && imaginary;
+}
+
+bool CalculationApp::formatAvailable(numos::CalculationFormat format) const {
+    using F = numos::CalculationFormat;
+    if (!_hasResult || _lastStatus != numos::MathEngineStatus::Ok) return false;
+    const bool rational = _exactValValid && _lastResult.isRational();
+    switch (format) {
+        case F::Standard: return true;
+        case F::Decimal: return _structuredApproxResult != nullptr &&
+            _sToDPolicy != numos::ResultSToDPolicy::Unavailable;
+        case F::Periodic:
+        case F::Extended: return rational && _lastResult.den > 1;
+        case F::MixedFraction:
+            return rational && _lastResult.den > 1 &&
+                _lastResult.num != INT64_MIN &&
+                (_lastResult.num / _lastResult.den != 0);
+        case F::PrimeFactors:
+            // Bounded interactive factorization; unlike normal evaluation,
+            // factoring a large semiprime can have unpredictable cost.
+            return !_angleResult && rational && _lastResult.den == 1 &&
+                _lastResult.num >= -1000000000000LL && _lastResult.num <= 1000000000000LL &&
+                (_lastResult.num < -1 || _lastResult.num > 1);
+        case F::Scientific:
+        case F::Engineering: {
+            numos::DecimalParts scalar;
+            return numos::decimalParts(numericResultText(), scalar);
+        }
+        case F::Polar:
+        case F::Exponential: return complexResult();
+        case F::Fixed: {
+            numos::DecimalParts scalar;
+            return numos::decimalParts(numericResultText(), scalar) && scalar.exponent <= 255;
+        }
+        case F::Radians: case F::Degrees: case F::Gradians: {
+            numos::DecimalParts scalar;
+            return (_angleResult && numos::decimalParts(numericResultText(), scalar)) ||
+                   (complexResult() && _resultMode == F::Polar);
+        }
+        default: return false;
+    }
+}
+
+vpam::NodePtr CalculationApp::formattedResult() {
+    using F = numos::CalculationFormat;
+    switch (_resultMode) {
+        case F::Standard:
+            return _structuredResult ? vpam::cloneNode(_structuredResult.get())
+                : vpam::MathEvaluator::resultToAST(_lastResult);
+        case F::Decimal:
+            return _structuredApproxResult ? vpam::cloneNode(_structuredApproxResult.get()) : nullptr;
+        case F::Periodic: return vpam::MathEvaluator::resultToPeriodicAST(_lastResult);
+        case F::Extended: return vpam::MathEvaluator::resultToExtendedAST(_lastResult, 200);
+        case F::Scientific: return numos::powerOfTenFormat(numericResultText(), false);
+        case F::Engineering: return numos::powerOfTenFormat(numericResultText(), true, _engineeringShift);
+        case F::MixedFraction: return numos::mixedFractionFormat(_lastResult);
+        case F::PrimeFactors: {
+            auto result = numos::GiacEngine::instance().evaluateStructured(("ifactor(" + _exactText + ")").c_str());
+            return result.base.ok() && result.hasTree ? numos::CalculationEngine::resultTreeToAST(result.tree) : nullptr;
+        }
+        case F::Polar:
+        case F::Exponential: {
+            auto& engine = numos::GiacEngine::instance();
+            auto magnitude = engine.evaluateStructured(("abs(" + _exactText + ")").c_str());
+            // WHY: Giac's arg() in DEG can round an exact phase to a double.
+            // Evaluate this display transform in a scoped radian context;
+            // the engine restores its mode and the input setting is untouched.
+            const std::string angle = "arg(" + _exactText + ")";
+            std::string radians = angle;
+            if (_resultMode == F::Polar) {
+                if (_phaseUnit == F::Degrees) radians = "(" + radians + ")*180/pi";
+                if (_phaseUnit == F::Gradians) radians = "(" + radians + ")*200/pi";
+            }
+            auto argument = engine.evaluateStructured(radians.c_str(), true,
+                numos::GiacEngine::EvaluationAngle::Radians);
+            if (!magnitude.base.ok() || !magnitude.hasTree || !argument.base.ok() || !argument.hasTree) return nullptr;
+            auto r = numos::CalculationEngine::resultTreeToAST(magnitude.tree);
+            auto theta = numos::CalculationEngine::resultTreeToAST(argument.tree);
+            if (!r || !theta) return nullptr;
+            if (_resultMode == F::Polar) {
+                auto* row = static_cast<vpam::NodeRow*>(r.get());
+                row->appendChild(vpam::makeSymbol("\xE2\x80\x89\xE2\x88\xA0\xE2\x80\x89"));
+                row->appendChild(std::move(theta));
+                row->appendChild(vpam::makeSymbol(_phaseUnit == F::Degrees ? "\xC2\xB0" :
+                    _phaseUnit == F::Gradians ? "\xE2\x80\x89gon" : "\xE2\x80\x89rad"));
+                return r;
+            }
+            auto exponent = vpam::makeRow();
+            auto* exp = static_cast<vpam::NodeRow*>(exponent.get());
+            exp->appendChild(vpam::makeConstant(vpam::ConstKind::Imag));
+            exp->appendChild(vpam::makeOperator(vpam::OpKind::Mul));
+            exp->appendChild(vpam::makeParen(std::move(theta)));
+            auto* row = static_cast<vpam::NodeRow*>(r.get());
+            row->appendChild(vpam::makeOperator(vpam::OpKind::Mul));
+            row->appendChild(vpam::makePower(vpam::makeConstant(vpam::ConstKind::E), std::move(exponent)));
+            return r;
+        }
+        case F::Fixed: {
+            std::string decimal;
+            if (!numos::fixedDecimal(numericResultText(), _fixedPlaces, decimal)) return nullptr;
+            numos::EngineResultNode number;
+            number.kind = numos::EngineNodeKind::Decimal;
+            number.text = std::move(decimal);
+            return numos::CalculationEngine::resultTreeToAST(number);
+        }
+        case F::Radians: case F::Degrees: case F::Gradians: {
+            std::string expression = "(" + _exactText + ")";
+            if (_resultInDegrees) expression += "*pi/180";
+            if (_resultMode == F::Degrees) expression += "*180/pi";
+            if (_resultMode == F::Gradians) expression += "*200/pi";
+            auto angle = numos::GiacEngine::instance().evaluateStructured(expression.c_str(), true);
+            if (!angle.base.ok() || !angle.hasTree) return nullptr;
+            auto value = numos::CalculationEngine::resultTreeToAST(angle.tree);
+            if (value) static_cast<vpam::NodeRow*>(value.get())->appendChild(vpam::makeSymbol(
+                _resultMode == F::Degrees ? "\xC2\xB0" :
+                _resultMode == F::Gradians ? "\xE2\x80\x89gon" : "\xE2\x80\x89rad"));
+            return value;
+        }
+        default: return nullptr;
+    }
+}
+
+void CalculationApp::selectFormat(numos::CalculationFormat format) {
+    if (!formatAvailable(format)) return;
+    if (format == numos::CalculationFormat::Fixed) { openFormatMenu(true); return; }
+    if (complexResult() && (format == numos::CalculationFormat::Radians ||
+        format == numos::CalculationFormat::Degrees || format == numos::CalculationFormat::Gradians)) {
+        _phaseUnit = format;
+        _resultMode = numos::CalculationFormat::Polar;
+    } else _resultMode = format;
+    _engineeringShift = 0;
+    _showDecimal = format == numos::CalculationFormat::Decimal;
+    showResult();
+}
+
+void CalculationApp::engineeringFormat(int direction) {
+    if (!formatAvailable(numos::CalculationFormat::Engineering)) return;
+    if (_resultMode != numos::CalculationFormat::Engineering) _engineeringShift = 0;
+    else _engineeringShift = std::max(-6, std::min(6, _engineeringShift - direction));
+    _resultMode = numos::CalculationFormat::Engineering;
+    showResult();
+}
+
+void CalculationApp::openFormatMenu(bool pickDigits) {
+    if (_formatMenu || !_hasResult || _lastStatus != numos::MathEngineStatus::Ok) return;
+    _formatPickingDigits = pickDigits;
+    _formatChoiceCount = _formatChoice = 0;
+    if (pickDigits) { _formatChoiceCount = 10; _formatChoice = _fixedPlaces; }
+    else for (unsigned i = 0; i < static_cast<unsigned>(numos::CalculationFormat::Count); ++i) {
+        const auto format = static_cast<numos::CalculationFormat>(i);
+        if (!formatAvailable(format)) continue;
+        if (format == _resultMode) _formatChoice = _formatChoiceCount;
+        _formatChoices[_formatChoiceCount++] = format;
+    }
+    if (!_formatChoiceCount) return;
+    const bool spanish = numos::tutor::productLocale == numos::tutor::Locale::Spanish;
+    _formatMenu = lv_obj_create(_screen);
+    lv_obj_remove_style_all(_formatMenu);
+    lv_obj_set_pos(_formatMenu, 0, 24);
+    lv_obj_set_size(_formatMenu, 320, 216);
+    lv_obj_remove_flag(_formatMenu, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_style_bg_color(_formatMenu, lv_color_hex(0x14243B), 0);
+    lv_obj_set_style_bg_opa(_formatMenu, LV_OPA_40, 0);
+
+    auto* panel = lv_obj_create(_formatMenu);
+    lv_obj_remove_style_all(panel);
+    const int visibleRows = std::min<int>(5, _formatChoiceCount);
+    const int panelHeight = 82 + visibleRows * 24;
+    lv_obj_set_pos(panel, 8, (216 - panelHeight) / 2);
+    lv_obj_set_size(panel, 304, panelHeight);
+    lv_obj_remove_flag(panel, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_style_bg_color(panel, lv_color_white(), 0);
+    lv_obj_set_style_bg_opa(panel, LV_OPA_COVER, 0);
+    lv_obj_set_style_radius(panel, 10, 0);
+    lv_obj_set_style_border_width(panel, 1, 0);
+    lv_obj_set_style_border_color(panel, lv_color_hex(0xDCE3EE), 0);
+    auto label = [](lv_obj_t* parent, const char* text, int x, int y,
+                    const lv_font_t* font, uint32_t color) {
+        auto* object = lv_label_create(parent);
+        lv_label_set_text(object, text);
+        lv_obj_set_pos(object, x, y);
+        lv_obj_set_style_text_font(object, font, 0);
+        lv_obj_set_style_text_color(object, lv_color_hex(color), 0);
+        return object;
+    };
+    label(panel, spanish ? "MOSTRAR COMO" : "DISPLAY AS", 14, 9,
+          &lv_font_montserrat_12, 0x526D91);
+    label(panel, pickDigits ? (spanish ? "Decimales fijos" : "Decimal places") :
+          (spanish ? "Formato del resultado" : "Result format"), 14, 25,
+          &lv_font_montserrat_14, 0x18283F);
+    _formatMenuCounter = label(panel, "", 256, 26, &lv_font_montserrat_12, 0x758399);
+
+    for (unsigned i = 0; i < 5; ++i) {
+        auto* row = _formatMenuRows[i] = lv_obj_create(panel);
+        lv_obj_remove_style_all(row);
+        lv_obj_set_pos(row, 8, 51 + i * 24);
+        lv_obj_set_size(row, 278, 24);
+        lv_obj_set_style_radius(row, 5, 0);
+        lv_obj_remove_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
+        // WHY: reuse the existing Spanish fallback; ASCII geometry, size and
+        // kerning stay unchanged, while í/ó and their capitals have real glyphs.
+        _formatMenuLabels[i] = label(row, "", 9, 4, ui::tutorFont14(), 0x344155);
+        _formatMenuMarks[i] = label(row, "", 254, 5, &lv_font_montserrat_12, 0x526D91);
+        lv_obj_add_event_cb(row, [](lv_event_t* event) {
+            auto* self = static_cast<CalculationApp*>(lv_event_get_user_data(event));
+            auto* target = lv_event_get_target_obj(event);
+            for (unsigned slot = 0; slot < 5; ++slot) {
+                if (self->_formatMenuRows[slot] != target) continue;
+                const unsigned first = self->_formatChoice < 5 ? 0 : self->_formatChoice - 4;
+                if (first + slot >= self->_formatChoiceCount) return;
+                self->_formatChoice = first + slot;
+                self->applyFormatChoice(); return;
+            }
+        }, LV_EVENT_CLICKED, this);
+    }
+    auto* track = lv_obj_create(panel);
+    lv_obj_remove_style_all(track);
+    lv_obj_set_pos(track, 292, 55); lv_obj_set_size(track, 2, 112);
+    lv_obj_set_style_bg_color(track, lv_color_hex(0xE6ECF4), 0);
+    lv_obj_set_style_bg_opa(track, LV_OPA_COVER, 0);
+    if (_formatChoiceCount <= 5) lv_obj_add_flag(track, LV_OBJ_FLAG_HIDDEN);
+    _formatMenuThumb = lv_obj_create(track);
+    lv_obj_remove_style_all(_formatMenuThumb);
+    lv_obj_set_style_bg_color(_formatMenuThumb, lv_color_hex(0x9BACBF), 0);
+    lv_obj_set_style_bg_opa(_formatMenuThumb, LV_OPA_COVER, 0);
+    lv_obj_set_width(_formatMenuThumb, 2);
+    const int footerY = panelHeight - 20;
+    label(panel, LV_SYMBOL_UP LV_SYMBOL_DOWN, 15, footerY, &lv_font_montserrat_12, 0x64748B);
+    label(panel, spanish ? "Elegir" : "Choose", 41, footerY, &lv_font_montserrat_12, 0x64748B);
+    label(panel, spanish ? "EXE  Aplicar" : "EXE  Apply", 113, footerY, &lv_font_montserrat_12, 0x344155);
+    label(panel, "BACK", 254, footerY, &lv_font_montserrat_12, 0x64748B);
+    updateFormatMenu();
+}
+
+void CalculationApp::updateFormatMenu() {
+    if (!_formatMenu) return;
+    const bool spanish = numos::tutor::productLocale == numos::tutor::Locale::Spanish;
+    lv_label_set_text_fmt(_formatMenuCounter, "%u / %u", _formatChoice + 1, _formatChoiceCount);
+    const unsigned first = _formatChoice < 5 ? 0 : _formatChoice - 4;
+    for (unsigned slot = 0; slot < 5; ++slot) {
+        auto* row = _formatMenuRows[slot];
+        const unsigned i = first + slot;
+        if (i >= _formatChoiceCount) { lv_obj_add_flag(row, LV_OBJ_FLAG_HIDDEN); continue; }
+        lv_obj_remove_flag(row, LV_OBJ_FLAG_HIDDEN);
+        const bool focused = i == _formatChoice;
+        lv_obj_set_style_bg_color(row, lv_color_hex(0x245DB2), 0);
+        lv_obj_set_style_bg_opa(row, focused ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
+        if (_formatPickingDigits) {
+            const char* precisionLabel = spanish
+                ? (i == 1 ? "%u decimal" : "%u decimales")
+                : (i == 1 ? "%u decimal place" : "%u decimal places");
+            lv_label_set_text_fmt(_formatMenuLabels[slot], precisionLabel, i);
+        } else {
+            const char* name = numos::calculationFormatLabel(_formatChoices[i], spanish);
+            if (_formatChoices[i] == numos::CalculationFormat::Standard && complexResult())
+                name = spanish ? "Cartesiana (a + bi)" : "Cartesian (a + bi)";
+            lv_label_set_text(_formatMenuLabels[slot], name);
+        }
+        lv_obj_set_style_text_color(_formatMenuLabels[slot], lv_color_hex(focused ? 0xFFFFFF : 0x344155), 0);
+        lv_label_set_text(_formatMenuMarks[slot], (_formatPickingDigits ? i == _fixedPlaces : _formatChoices[i] == _resultMode) ? LV_SYMBOL_OK : "");
+        lv_obj_set_style_text_color(_formatMenuMarks[slot], lv_color_hex(focused ? 0xFFFFFF : 0x245DB2), 0);
+    }
+    const unsigned visible = std::min<unsigned>(5, _formatChoiceCount);
+    const unsigned height = 112 * visible / _formatChoiceCount;
+    lv_obj_set_height(_formatMenuThumb, height);
+    lv_obj_set_y(_formatMenuThumb, _formatChoiceCount > 5 ?
+                 (112-height)*first/(_formatChoiceCount-5) : 0);
+}
+
+void CalculationApp::closeFormatMenu() {
+    if (_formatMenu) lv_obj_delete(_formatMenu);
+    _formatMenu = _formatMenuCounter = _formatMenuThumb = nullptr;
+    for (unsigned i = 0; i < 5; ++i)
+        _formatMenuRows[i] = _formatMenuLabels[i] = _formatMenuMarks[i] = nullptr;
+}
+
+void CalculationApp::applyFormatChoice() {
+    if (_formatPickingDigits) {
+        _fixedPlaces = _formatChoice;
+        closeFormatMenu();
+        _resultMode = numos::CalculationFormat::Fixed;
+        showResult();
+    } else {
+        const auto chosen = _formatChoices[_formatChoice];
+        closeFormatMenu();
+        selectFormat(chosen);
+    }
+}

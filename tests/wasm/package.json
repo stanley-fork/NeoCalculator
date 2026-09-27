@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "calculation-input": "node calculation-input.mjs",
     "smoke": "node smoke.mjs",
     "persistence": "node persistence.mjs",
     "keycode-catalog": "node keycode-catalog.mjs",

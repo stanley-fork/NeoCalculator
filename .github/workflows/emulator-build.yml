@@ -27,6 +27,9 @@ on:
       - 'scripts/compare-ppm.py'
       - 'scripts/generate-emulator-candidates.py'
       - 'scripts/check-keycode-digit-patterns.py'
+      - 'scripts/test-calculation-input.py'
+      - 'wasm/numos-keypad.js'
+      - 'tests/wasm/keycode-catalog.mjs'
       - 'scripts/test-equations-rebuild.py'
       - '.github/workflows/emulator-build.yml'
   pull_request:
@@ -41,6 +44,9 @@ on:
       - 'scripts/compare-ppm.py'
       - 'scripts/generate-emulator-candidates.py'
       - 'scripts/check-keycode-digit-patterns.py'
+      - 'scripts/test-calculation-input.py'
+      - 'wasm/numos-keypad.js'
+      - 'tests/wasm/keycode-catalog.mjs'
       - 'scripts/test-equations-rebuild.py'
       - '.github/workflows/emulator-build.yml'
   workflow_dispatch:
@@ -170,6 +176,17 @@ jobs:
 
       - name: Build emulator (emulator_pc)
         run: pio run -e emulator_pc
+
+      - name: Calculation input integrity (before tutor suites)
+        run: python scripts/test-calculation-input.py --bin .pio/build/emulator_pc/program --out out/calc-core-input-01/ci --cycles 10
+
+      - name: Virtual keypad action integrity
+        run: node tests/wasm/keycode-catalog.mjs
+
+      - name: Calculation editor allocation and placeholder checks
+        run: |
+          pio run -e emulator_pc -t compiledb
+          python scripts/test-tutor-composition-host.py --source . --build .pio/build/emulator_pc --out out/calc-core-input-01/editor-ci --tests calculation_input_checks
 
       - name: Equations transactional workflow and production semantic keys
         run: python scripts/test-equations-rebuild.py --bin .pio/build/emulator_pc/program --out out/equations-rebuild/ci --cycles 50

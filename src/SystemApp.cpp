@@ -668,6 +668,13 @@ void SystemApp::handleKey(const KeyEvent &rawEvent) {
         return;
     }
     if (ev.code == KeyCode::BACK) {
+        // WHY: Calculation owns its FORMAT dialog and step viewer on the PCB
+        // too. Dismiss that layer before returning to HOME.
+        if (_mode == Mode::APP_CALCULATION) {
+            if (ev.action == KeyAction::PRESS &&
+                !(_calcApp && _calcApp->navigateBack())) returnToMenu();
+            return;
+        }
         // Equations owns transactional drafts in every firmware profile.
         if (_mode == Mode::APP_EQUATIONS) {
             if (ev.action == KeyAction::PRESS &&

@@ -308,7 +308,7 @@ void EquationsApp::handleEditor(const KeyEvent& ev) {
     else if(semantic==SemanticId::asin || semantic==SemanticId::acos || semantic==SemanticId::atan)
         cc.insertFunction(semantic==SemanticId::asin?FuncKind::ArcSin:semantic==SemanticId::acos?FuncKind::ArcCos:FuncKind::ArcTan);
     else if(semantic==SemanticId::pow_e) { cc.insertConstant(ConstKind::E); cc.insertPower(); }
-    else if(semantic==SemanticId::pow10) { cc.insertDigit('1'); cc.insertDigit('0'); cc.insertPower(); }
+    else if(semantic==SemanticId::pow10) { changed=cc.insertPowerOfTen(); }
     else if(semantic==SemanticId::absolute_value) {
         const auto cursor=cc.cursor();
         cursor.row->insertChild(cursor.index,makeParen(nullptr,DelimKind::Bar));
@@ -361,7 +361,7 @@ void EquationsApp::handleEditor(const KeyEvent& ev) {
             case KeyCode::CONST_PI: cc.insertConstant(ConstKind::Pi); break;
             case KeyCode::CONST_E: cc.insertConstant(ConstKind::E); break;
             case KeyCode::EXP:
-                cc.insertOperator(OpKind::Mul); cc.insertDigit('1'); cc.insertDigit('0'); cc.insertPower(); break;
+                changed=cc.insertPowerOfTen(); break;
             case KeyCode::EQUAL: case KeyCode::FREE_EQ: cc.insertOperator(OpKind::Eq); break;
             case KeyCode::DEL: cc.backspace(); break;
             case KeyCode::AC:

@@ -36,6 +36,38 @@ inline constexpr StixParenInk kStixParens18[] = {
     {8, 23, 0, 0, 9}, // uni239E
     {3, 24, 5, -1, 9}, // uni239F
     {8, 23, 0, 0, 9}, // uni23A0
+    {5, 18, 1, -4, 6}, // bracketleft
+    {5, 22, 1, -6, 7}, // bracketleft.s1
+    {6, 26, 1, -8, 7}, // bracketleft.s2
+    {6, 30, 1, -10, 7}, // bracketleft.s3
+    {6, 35, 1, -13, 8}, // bracketleft.s4
+    {5, 39, 2, -15, 8}, // bracketleft.s5
+    {5, 44, 2, -17, 8}, // bracketleft.s6
+    {6, 48, 2, -19, 9}, // bracketleft.s7
+    {6, 52, 2, -21, 9}, // bracketleft.s8
+    {6, 56, 2, -23, 10}, // bracketleft.s9
+    {6, 60, 2, -25, 10}, // bracketleft.s10
+    {6, 66, 2, -28, 10}, // bracketleft.s11
+    {7, 70, 2, -30, 11}, // bracketleft.s12
+    {7, 23, 2, 0, 11}, // uni23A1
+    {3, 18, 2, 0, 11}, // uni23A2
+    {7, 23, 2, 0, 11}, // uni23A3
+    {5, 18, 0, -4, 6}, // bracketright
+    {4, 22, 1, -6, 7}, // bracketright.s1
+    {5, 26, 1, -8, 7}, // bracketright.s2
+    {5, 30, 1, -10, 7}, // bracketright.s3
+    {5, 35, 1, -13, 8}, // bracketright.s4
+    {6, 39, 1, -15, 8}, // bracketright.s5
+    {6, 44, 1, -17, 8}, // bracketright.s6
+    {6, 48, 1, -19, 9}, // bracketright.s7
+    {6, 52, 1, -21, 9}, // bracketright.s8
+    {7, 56, 1, -23, 10}, // bracketright.s9
+    {6, 60, 2, -25, 10}, // bracketright.s10
+    {6, 66, 2, -28, 10}, // bracketright.s11
+    {7, 70, 2, -30, 11}, // bracketright.s12
+    {7, 23, 2, 0, 11}, // uni23A4
+    {3, 18, 6, 0, 11}, // uni23A5
+    {7, 23, 2, 0, 11}, // uni23A6
 };
 inline constexpr StixParenInk kStixParens12[] = {
     {4, 13, 0, -3, 4}, // parenleft
@@ -70,6 +102,38 @@ inline constexpr StixParenInk kStixParens12[] = {
     {6, 16, 0, 0, 6}, // uni239E
     {3, 16, 3, -1, 6}, // uni239F
     {6, 16, 0, 0, 6}, // uni23A0
+    {3, 12, 1, -3, 4}, // bracketleft
+    {3, 15, 1, -4, 4}, // bracketleft.s1
+    {3, 18, 1, -6, 5}, // bracketleft.s2
+    {3, 21, 1, -7, 5}, // bracketleft.s3
+    {4, 23, 1, -8, 5}, // bracketleft.s4
+    {4, 26, 1, -10, 5}, // bracketleft.s5
+    {4, 29, 1, -11, 6}, // bracketleft.s6
+    {4, 32, 1, -13, 6}, // bracketleft.s7
+    {5, 35, 1, -14, 6}, // bracketleft.s8
+    {5, 38, 1, -16, 6}, // bracketleft.s9
+    {5, 41, 1, -17, 7}, // bracketleft.s10
+    {5, 44, 1, -19, 7}, // bracketleft.s11
+    {5, 46, 1, -20, 7}, // bracketleft.s12
+    {5, 17, 1, -1, 7}, // uni23A1
+    {2, 12, 1, 0, 7}, // uni23A2
+    {5, 16, 1, 0, 7}, // uni23A3
+    {4, 12, 0, -3, 4}, // bracketright
+    {4, 15, 0, -4, 4}, // bracketright.s1
+    {4, 18, 0, -6, 5}, // bracketright.s2
+    {3, 21, 1, -7, 5}, // bracketright.s3
+    {4, 23, 0, -8, 5}, // bracketright.s4
+    {4, 26, 1, -10, 5}, // bracketright.s5
+    {4, 29, 1, -11, 6}, // bracketright.s6
+    {4, 32, 1, -13, 6}, // bracketright.s7
+    {4, 35, 1, -14, 6}, // bracketright.s8
+    {4, 38, 1, -16, 6}, // bracketright.s9
+    {4, 41, 1, -17, 7}, // bracketright.s10
+    {5, 44, 1, -19, 7}, // bracketright.s11
+    {5, 46, 1, -20, 7}, // bracketright.s12
+    {5, 17, 1, -1, 7}, // uni23A4
+    {2, 12, 4, 0, 7}, // uni23A5
+    {5, 16, 1, 0, 7}, // uni23A6
 };
 inline constexpr StixParenInk kStixParens8[] = {
     {3, 9, 0, -2, 3}, // parenleft
@@ -104,5 +168,39 @@ inline constexpr StixParenInk kStixParens8[] = {
     {4, 11, 0, 0, 4}, // uni239E
     {2, 11, 2, -1, 4}, // uni239F
     {4, 11, 0, 0, 4}, // uni23A0
+    {3, 8, 0, -2, 3}, // bracketleft
+    {3, 10, 0, -3, 3}, // bracketleft.s1
+    {2, 12, 1, -4, 3}, // bracketleft.s2
+    {2, 14, 1, -5, 3}, // bracketleft.s3
+    {2, 16, 1, -6, 3}, // bracketleft.s4
+    {3, 18, 1, -7, 4}, // bracketleft.s5
+    {3, 20, 1, -8, 4}, // bracketleft.s6
+    {3, 22, 1, -9, 4}, // bracketleft.s7
+    {3, 24, 1, -10, 4}, // bracketleft.s8
+    {3, 26, 1, -11, 4}, // bracketleft.s9
+    {3, 27, 1, -11, 4}, // bracketleft.s10
+    {3, 29, 1, -12, 5}, // bracketleft.s11
+    {3, 31, 1, -13, 5}, // bracketleft.s12
+    {3, 11, 1, -1, 5}, // uni23A1
+    {1, 8, 1, 0, 5}, // uni23A2
+    {3, 11, 1, 0, 5}, // uni23A3
+    {3, 8, 0, -2, 3}, // bracketright
+    {2, 10, 0, -3, 3}, // bracketright.s1
+    {3, 12, 0, -4, 3}, // bracketright.s2
+    {3, 14, 0, -5, 3}, // bracketright.s3
+    {3, 16, 0, -6, 3}, // bracketright.s4
+    {3, 18, 0, -7, 4}, // bracketright.s5
+    {3, 20, 0, -8, 4}, // bracketright.s6
+    {3, 22, 0, -9, 4}, // bracketright.s7
+    {3, 24, 0, -10, 4}, // bracketright.s8
+    {3, 26, 0, -11, 4}, // bracketright.s9
+    {4, 27, 0, -11, 4}, // bracketright.s10
+    {3, 29, 1, -12, 5}, // bracketright.s11
+    {3, 31, 1, -13, 5}, // bracketright.s12
+    {3, 11, 1, -1, 5}, // uni23A4
+    {2, 8, 2, 0, 5}, // uni23A5
+    {3, 11, 1, 0, 5}, // uni23A6
 };
+inline constexpr int16_t kStixBracketMinOverlapDu = 100;
+inline constexpr int16_t kStixBracketMaxOverlapDu = 1000;
 } // namespace vpam

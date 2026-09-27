@@ -1,0 +1,65 @@
+# Desktop events supplied by the user, after entering Calculation from HOME.
+# Includes repeated dead-key carets and the original deletion/re-entry path.
+sdl_down Left Shift
+sdl_repeat Left Shift
+sdl_repeat Left Shift
+sdl_repeat Left Shift
+sdl_repeat Left Shift
+sdl_repeat Left Shift
+sdl_repeat Left Shift
+sdl_repeat Left Shift
+sdl_repeat Left Shift
+sdl_repeat Left Shift
+sdl_up Left Shift
+sdl_down Left Shift
+sdl_text ^
+sdl_text ^
+sdl_up Left Shift
+sdl_down Left Shift
+sdl_up Left Shift
+sdl_down Backspace
+sdl_text ^
+sdl_up Backspace
+sdl_down Backspace
+sdl_repeat Backspace
+sdl_repeat Backspace
+sdl_repeat Backspace
+sdl_repeat Backspace
+sdl_repeat Backspace
+sdl_repeat Backspace
+sdl_repeat Backspace
+sdl_repeat Backspace
+sdl_up Backspace
+sdl_text 2
+sdl_down Left Shift
+sdl_repeat Left Shift
+sdl_repeat Left Shift
+sdl_up Left Shift
+sdl_down Left Shift
+sdl_up Left Shift
+sdl_down Left Shift
+sdl_up Left Shift
+sdl_down Left Shift
+sdl_up Left Shift
+sdl_down Left Shift
+sdl_up Left Shift
+sdl_down Left Shift
+sdl_up Left Shift
+sdl_down Left Shift
+sdl_text ^
+sdl_text ^
+sdl_up Left Shift
+sdl_text 2
+sdl_down Backspace
+sdl_up Backspace
+sdl_down Backspace
+sdl_up Backspace
+sdl_text -
+sdl_text 2
+sdl_down Return
+sdl_up Return
+assert_calc_input complete
+assert_calc_input structure
+assert_calc_input serialized ((2)^((-1)*2))
+assert_calc_status ok
+assert_calc_input near 0.25 1e-14

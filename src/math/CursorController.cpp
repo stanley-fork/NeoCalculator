@@ -299,12 +299,12 @@ bool CursorController::exitRowLeft() {
 }
 
 void CursorController::replaceEmptyIfNeeded() {
-    // Si la fila tiene exactamente 1 NodeEmpty y vamos a insertar algo,
-    // eliminar el Empty primero
-    if (_cur.row->childCount() == 1 &&
-        _cur.row->child(0)->type() == NodeType::Empty) {
-        _cur.row->removeChild(0);
-        _cur.index = 0;
+    // WHY: a unary sign may precede the pending operand. Replace only the
+    // placeholder at this insertion boundary, never unrelated incomplete slots.
+    if (_cur.nodeRight() && _cur.nodeRight()->type() == NodeType::Empty) {
+        _cur.row->removeChild(_cur.index);
+    } else if (_cur.nodeLeft() && _cur.nodeLeft()->type() == NodeType::Empty) {
+        _cur.row->removeChild(--_cur.index);
     }
 }
 
@@ -334,12 +334,10 @@ void CursorController::insertDigit(char c) {
         return;
     }
 
-    // Si estamos sobre un NodeEmpty solitario, reemplazarlo con el nuevo número
-    replaceEmptyIfNeeded();
-
-    // Crear nuevo NodeNumber
+    // Prepare allocation before replacing the pending operand.
     std::string s(1, c);
     auto newNum = std::make_unique<NodeNumber>(s);
+    replaceEmptyIfNeeded();
     _cur.row->insertChild(_cur.index, std::move(newNum));
     _cur.index++;
 }
@@ -355,6 +353,13 @@ void CursorController::insertOperator(OpKind op) {
     // junto al contenido existente.
 
     auto newOp = std::make_unique<NodeOperator>(op);
+    if ((op == OpKind::Add || op == OpKind::Sub) &&
+        _cur.row->childCount() == 1 &&
+        _cur.row->child(0)->type() == NodeType::Empty) {
+        // A leading sign belongs BEFORE its pending operand, including when
+        // the user re-enters the empty slot from the right.
+        _cur.index = 0;
+    }
     _cur.row->insertChild(_cur.index, std::move(newOp));
     _cur.index++;
 }
@@ -415,44 +420,83 @@ void CursorController::insertFraction() {
 // ════════════════════════════════════════════════════════════════════════════
 // INSERCIÓN — Potencia (VPAM Capture + Jump)
 // ════════════════════════════════════════════════════════════════════════════
+bool CursorController::insertPowerOfTen() {
+    if (!_cur.isValid()) return false;
+#if defined(__cpp_exceptions)
+    try {
+#endif
+        const bool multiply = isCapturable(_cur.nodeLeft());
+        auto base = std::make_unique<NodeRow>();
+        base->appendChild(std::make_unique<NodeNumber>("10"));
+        auto exponent = std::make_unique<NodeRow>();
+        exponent->appendChild(std::make_unique<NodeEmpty>());
+        NodeRow* exponentSlot = exponent.get();
+        auto power = std::make_unique<NodePower>(std::move(base), std::move(exponent));
+        NodePtr times = multiply ? std::make_unique<NodeOperator>(OpKind::Mul) : nullptr;
+        // WHY: once storage is reserved, publication only moves unique_ptrs.
+        // No orphan operator or half-power survives allocation failure.
+        _cur.row->reserveChildren(_cur.row->childCount() + (multiply ? 2 : 1));
+        replaceEmptyIfNeeded();
+        if (times) _cur.row->insertChild(_cur.index++, std::move(times));
+        _cur.row->insertChild(_cur.index, std::move(power));
+        _cur.row = exponentSlot;
+        _cur.index = 0;
+        return true;
+#if defined(__cpp_exceptions)
+    } catch (const std::bad_alloc&) {
+        return false;
+    }
+#endif
+}
+
+bool CursorController::insertFactorial() {
+    if (!_cur.isValid()) return false;
+#if defined(__cpp_exceptions)
+    try {
+#endif
+        const bool capture = isCapturable(_cur.nodeLeft());
+        auto argument = std::make_unique<NodeRow>();
+        argument->reserveChildren(1);
+        if (!capture) argument->appendChild(makeEmpty());
+        auto* slot = argument.get();
+        auto factorial = std::make_unique<NodeFunction>(FuncKind::Factorial, std::move(argument));
+        // WHY: finish allocations before moving the user's operand.
+        _cur.row->reserveChildren(_cur.row->childCount() + 1);
+        if (capture) slot->appendChild(_cur.row->removeChild(--_cur.index));
+        else replaceEmptyIfNeeded();
+        _cur.row->insertChild(_cur.index++, std::move(factorial));
+        if (!capture) _cur = {slot, 0};
+        return true;
+#if defined(__cpp_exceptions)
+    } catch (const std::bad_alloc&) { return false; }
+#endif
+}
+
 void CursorController::insertPower() {
     if (!_cur.isValid()) return;
-
-    MathNode* left = _cur.nodeLeft();
-
-    NodePtr baseRow;
-    if (left && isCapturable(left)) {
-        // Capturar el nodo izquierdo como base
-        int captureIdx = _cur.index - 1;
-        NodePtr captured = _cur.row->removeChild(captureIdx);
-        _cur.index = captureIdx;
-
-        baseRow = std::make_unique<NodeRow>();
-        static_cast<NodeRow*>(baseRow.get())->appendChild(std::move(captured));
-    } else {
-        // Base vacía
-        replaceEmptyIfNeeded();
-        baseRow = nullptr;   // Constructor por defecto creará Empty
+#if defined(__cpp_exceptions)
+    try {
+#endif
+        const bool capture = isCapturable(_cur.nodeLeft());
+        auto base = std::make_unique<NodeRow>();
+        base->reserveChildren(1);
+        if (!capture) base->appendChild(std::make_unique<NodeEmpty>());
+        auto exponent = std::make_unique<NodeRow>();
+        exponent->appendChild(std::make_unique<NodeEmpty>());
+        auto* baseSlot = base.get();
+        auto* exponentSlot = exponent.get();
+        auto power = std::make_unique<NodePower>(std::move(base), std::move(exponent));
+        // WHY: prepare all ownership/capacity before removing the user's base.
+        _cur.row->reserveChildren(_cur.row->childCount() + 1);
+        if (capture) baseSlot->appendChild(_cur.row->removeChild(--_cur.index));
+        else replaceEmptyIfNeeded();
+        _cur.row->insertChild(_cur.index, std::move(power));
+        _cur = {exponentSlot, 0};
+#if defined(__cpp_exceptions)
+    } catch (const std::bad_alloc&) {
+        // Allocation failure leaves the original expression and cursor intact.
     }
-
-    // Exponente siempre vacío (el cursor saltará aquí)
-    auto expRow = std::make_unique<NodeRow>();
-    expRow->appendChild(std::make_unique<NodeEmpty>());
-
-    auto power = std::make_unique<NodePower>(
-        baseRow ? std::move(baseRow) : nullptr,
-        std::move(expRow)
-    );
-    NodePower* powPtr = power.get();
-
-    _cur.row->insertChild(_cur.index, std::move(power));
-
-    // Cursor → dentro del exponente (salto automático)
-    auto* exp = powPtr->exponent();
-    if (exp && exp->type() == NodeType::Row) {
-        _cur.row   = static_cast<NodeRow*>(exp);
-        _cur.index = 0;
-    }
+#endif
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -479,12 +523,12 @@ void CursorController::insertRoot() {
 // ════════════════════════════════════════════════════════════════════════════
 // INSERCIÓN — Paréntesis
 // ════════════════════════════════════════════════════════════════════════════
-void CursorController::insertParen() {
+void CursorController::insertParen(DelimKind kind) {
     if (!_cur.isValid()) return;
 
     replaceEmptyIfNeeded();
 
-    auto paren = std::make_unique<NodeParen>();
+    auto paren = std::make_unique<NodeParen>(kind);
     NodeParen* parPtr = paren.get();
 
     _cur.row->insertChild(_cur.index, std::move(paren));
@@ -498,6 +542,21 @@ void CursorController::insertParen() {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+void CursorController::closeBracket() {
+    if (!_cur.isValid()) return;
+    for (MathNode* node = _cur.row; node; node = node->parent()) {
+        if (node->type() != NodeType::Paren ||
+            static_cast<NodeParen*>(node)->delimKind() != DelimKind::Bracket) continue;
+        auto* parent = node->parent();
+        if (!parent || parent->type() != NodeType::Row) return;
+        auto* row = static_cast<NodeRow*>(parent);
+        for (int i = 0; i < row->childCount(); ++i) {
+            if (row->child(i) == node) { _cur = {row, i + 1}; return; }
+        }
+        return;
+    }
+}
+
 // NAVEGACIÓN — moveRight
 //
 // Lógica:
@@ -713,243 +772,104 @@ void CursorController::moveDown() {
 //     - En ranura hija: subir al padre (salir a la izquierda)
 //     - En raíz: no hacer nada
 // ════════════════════════════════════════════════════════════════════════════
+bool CursorController::unwrapStructure(NodeRow* row, int index, NodeRow* retained) {
+    if (!row || !retained) return false;
+#if defined(__cpp_exceptions)
+    try {
+#endif
+        const int count = retained->childCount();
+        // Retain the existing placeholder if this will be the sole empty row.
+        // A populated slot keeps its order, including signs and operators.
+        row->reserveChildren(row->childCount() - 1 + std::max(1, count));
+        NodePtr empty;
+        if (count == 0 && row->childCount() == 1) empty = makeEmpty();
+        NodePtr owner = row->removeChild(index);
+        _cur = {row, index};
+        while (retained->childCount()) {
+            auto node = retained->removeChild(0);
+            if (node->type() != NodeType::Empty || (count == 1 && row->isEmpty()))
+                row->insertChild(_cur.index++, std::move(node));
+        }
+        if (empty) row->insertChild(_cur.index, std::move(empty));
+        if (row->childCount() == 1 && row->child(0)->type() == NodeType::Empty)
+            _cur.index = 0;
+        return true;
+#if defined(__cpp_exceptions)
+    } catch (const std::bad_alloc&) {
+        return false; // Only preparation above can allocate.
+    }
+#endif
+}
+
 void CursorController::backspace() {
     if (!_cur.isValid()) return;
 
-    // ── Caso: cursor al inicio ──
-    if (_cur.atStart()) {
-        if (!isRootRow(_cur.row)) {
-            // Subir al padre (sale de la ranura hija)
-            exitRowLeft();
+    // WHY: DEL in an empty trailing slot must undo the template, not leave an
+    // invisible abandoned structure to its right. Never drop a populated slot.
+    const bool emptySlot = _cur.row->childCount() == 1 &&
+                           _cur.row->child(0)->type() == NodeType::Empty;
+    if (emptySlot && !isRootRow(_cur.row)) {
+        auto info = findParentSlot(_cur.row);
+        auto* owner = _cur.row->parent();
+        NodeRow* retained = nullptr;
+        if (owner && owner->type() == NodeType::Power) {
+            auto* power = static_cast<NodePower*>(owner);
+            if (power->exponent() == _cur.row)
+                retained = static_cast<NodeRow*>(power->base());
+        } else if (owner && owner->type() == NodeType::Fraction) {
+            auto* frac = static_cast<NodeFraction*>(owner);
+            if (frac->denominator() == _cur.row)
+                retained = static_cast<NodeRow*>(frac->numerator());
+        } else if (owner && (owner->type() == NodeType::Paren ||
+                            owner->type() == NodeType::Function ||
+                            (owner->type() == NodeType::Root &&
+                             !static_cast<NodeRoot*>(owner)->hasDegree()))) {
+            retained = _cur.row;
         }
+        if (retained && info.parentRow) {
+            unwrapStructure(info.parentRow, info.indexInParent, retained);
+            return;
+        }
+    }
+    if (_cur.atStart()) {
+        if (!isRootRow(_cur.row)) exitRowLeft();
         return;
     }
 
-    // ── Hay algo a la izquierda ──
     MathNode* left = _cur.nodeLeft();
     if (!left) return;
-    int leftIdx = _cur.index - 1;
-
+    const int leftIdx = _cur.index - 1;
+    NodeRow* retained = nullptr;
     switch (left->type()) {
-
-        // ── NodeNumber: borrar último dígito ──
-        case NodeType::Number: {
-            auto* num = static_cast<NodeNumber*>(left);
-            num->deleteLastChar();
-            if (num->length() == 0) {
-                // Número vacío → eliminar nodo
-                _cur.row->removeChild(leftIdx);
-                _cur.index = leftIdx;
-                ensureNotEmpty(_cur.row);
-            }
-            break;
-        }
-
-        // ── NodeOperator: eliminar directamente ──
-        case NodeType::Operator: {
-            _cur.row->removeChild(leftIdx);
-            _cur.index = leftIdx;
-            ensureNotEmpty(_cur.row);
-            break;
-        }
-
-        // ── NodeEmpty: En ranura, subir al padre. En raíz, eliminar. ──
-        case NodeType::Empty: {
-            if (!isRootRow(_cur.row)) {
-                exitRowLeft();
-            } else {
-                // En raíz, si hay más nodos además del Empty, eliminarlo
-                if (_cur.row->childCount() > 1) {
-                    _cur.row->removeChild(leftIdx);
-                    _cur.index = leftIdx;
-                }
-            }
-            break;
-        }
-
-        // ── Estructuras: DESHACER (flatten) ──
-        case NodeType::Fraction: {
-            auto* frac = static_cast<NodeFraction*>(left);
-
-            // Extraer el contenido del numerador a la fila padre
-            auto* numRow = static_cast<NodeRow*>(frac->numerator());
-
-            // Guardamos los nodos del numerador
-            std::vector<NodePtr> extracted;
-            while (numRow->childCount() > 0) {
-                auto node = numRow->removeChild(numRow->childCount() - 1);
-                // Descartamos NodeEmpty solitarios del numerador
-                if (node->type() != NodeType::Empty) {
-                    extracted.push_back(std::move(node));
-                }
-            }
-
-            // Eliminar la fracción de la fila padre
-            _cur.row->removeChild(leftIdx);
-            _cur.index = leftIdx;
-
-            // Insertar los nodos extraídos (en orden inverso, los sacamos de atrás)
-            int insertPos = _cur.index;
-            for (auto it = extracted.rbegin(); it != extracted.rend(); ++it) {
-                _cur.row->insertChild(insertPos, std::move(*it));
-            }
-            _cur.index = insertPos + static_cast<int>(extracted.size());
-
-            ensureNotEmpty(_cur.row);
-            break;
-        }
-
-        case NodeType::Power: {
-            auto* pow = static_cast<NodePower*>(left);
-            auto* baseRow = static_cast<NodeRow*>(pow->base());
-
-            // Extraer contenido de la base
-            std::vector<NodePtr> extracted;
-            while (baseRow->childCount() > 0) {
-                auto node = baseRow->removeChild(baseRow->childCount() - 1);
-                if (node->type() != NodeType::Empty) {
-                    extracted.push_back(std::move(node));
-                }
-            }
-
-            _cur.row->removeChild(leftIdx);
-            _cur.index = leftIdx;
-
-            int insertPos = _cur.index;
-            for (auto it = extracted.rbegin(); it != extracted.rend(); ++it) {
-                _cur.row->insertChild(insertPos, std::move(*it));
-            }
-            _cur.index = insertPos + static_cast<int>(extracted.size());
-
-            ensureNotEmpty(_cur.row);
-            break;
-        }
-
-        case NodeType::Root: {
-            auto* root = static_cast<NodeRoot*>(left);
-            auto* radRow = static_cast<NodeRow*>(root->radicand());
-
-            std::vector<NodePtr> extracted;
-            while (radRow->childCount() > 0) {
-                auto node = radRow->removeChild(radRow->childCount() - 1);
-                if (node->type() != NodeType::Empty) {
-                    extracted.push_back(std::move(node));
-                }
-            }
-
-            _cur.row->removeChild(leftIdx);
-            _cur.index = leftIdx;
-
-            int insertPos = _cur.index;
-            for (auto it = extracted.rbegin(); it != extracted.rend(); ++it) {
-                _cur.row->insertChild(insertPos, std::move(*it));
-            }
-            _cur.index = insertPos + static_cast<int>(extracted.size());
-
-            ensureNotEmpty(_cur.row);
-            break;
-        }
-
-        case NodeType::Paren: {
-            auto* paren = static_cast<NodeParen*>(left);
-            auto* contentRow = static_cast<NodeRow*>(paren->content());
-
-            std::vector<NodePtr> extracted;
-            while (contentRow->childCount() > 0) {
-                auto node = contentRow->removeChild(contentRow->childCount() - 1);
-                if (node->type() != NodeType::Empty) {
-                    extracted.push_back(std::move(node));
-                }
-            }
-
-            _cur.row->removeChild(leftIdx);
-            _cur.index = leftIdx;
-
-            int insertPos = _cur.index;
-            for (auto it = extracted.rbegin(); it != extracted.rend(); ++it) {
-                _cur.row->insertChild(insertPos, std::move(*it));
-            }
-            _cur.index = insertPos + static_cast<int>(extracted.size());
-
-            ensureNotEmpty(_cur.row);
-            break;
-        }
-
-        // ── Función: deshacer → extraer contenido del argumento ──
-        case NodeType::Function: {
-            auto* func = static_cast<NodeFunction*>(left);
-            auto* argRow = static_cast<NodeRow*>(func->argument());
-
-            std::vector<NodePtr> extracted;
-            while (argRow->childCount() > 0) {
-                auto node = argRow->removeChild(argRow->childCount() - 1);
-                if (node->type() != NodeType::Empty) {
-                    extracted.push_back(std::move(node));
-                }
-            }
-
-            _cur.row->removeChild(leftIdx);
-            _cur.index = leftIdx;
-
-            int insertPos = _cur.index;
-            for (auto it = extracted.rbegin(); it != extracted.rend(); ++it) {
-                _cur.row->insertChild(insertPos, std::move(*it));
-            }
-            _cur.index = insertPos + static_cast<int>(extracted.size());
-
-            ensureNotEmpty(_cur.row);
-            break;
-        }
-
-        // ── LogBase: deshacer → extraer contenido del argumento ──
-        case NodeType::LogBase: {
-            auto* lb = static_cast<NodeLogBase*>(left);
-            auto* argRow = static_cast<NodeRow*>(lb->argument());
-
-            std::vector<NodePtr> extracted;
-            while (argRow->childCount() > 0) {
-                auto node = argRow->removeChild(argRow->childCount() - 1);
-                if (node->type() != NodeType::Empty) {
-                    extracted.push_back(std::move(node));
-                }
-            }
-
-            _cur.row->removeChild(leftIdx);
-            _cur.index = leftIdx;
-
-            int insertPos = _cur.index;
-            for (auto it = extracted.rbegin(); it != extracted.rend(); ++it) {
-                _cur.row->insertChild(insertPos, std::move(*it));
-            }
-            _cur.index = insertPos + static_cast<int>(extracted.size());
-
-            ensureNotEmpty(_cur.row);
-            break;
-        }
-
-        // ── Constante (π, e): eliminar directamente ──
-        case NodeType::Constant: {
-            _cur.row->removeChild(leftIdx);
-            _cur.index = leftIdx;
-            ensureNotEmpty(_cur.row);
-            break;
-        }
-
-        // ── Variable (x, y, z, A-F, Ans, PreAns): eliminar directamente ──
-        case NodeType::Variable: {
-            _cur.row->removeChild(leftIdx);
-            _cur.index = leftIdx;
-            ensureNotEmpty(_cur.row);
-            break;
-        }
-
-        default:
-            // Nodo desconocido: eliminar directamente
-            _cur.row->removeChild(leftIdx);
-            _cur.index = leftIdx;
-            ensureNotEmpty(_cur.row);
-            break;
+        case NodeType::Power: retained = static_cast<NodeRow*>(static_cast<NodePower*>(left)->base()); break;
+        case NodeType::Fraction: retained = static_cast<NodeRow*>(static_cast<NodeFraction*>(left)->numerator()); break;
+        case NodeType::Root: retained = static_cast<NodeRow*>(static_cast<NodeRoot*>(left)->radicand()); break;
+        case NodeType::Paren: retained = static_cast<NodeRow*>(static_cast<NodeParen*>(left)->content()); break;
+        case NodeType::Function: retained = static_cast<NodeRow*>(static_cast<NodeFunction*>(left)->argument()); break;
+        case NodeType::LogBase: retained = static_cast<NodeRow*>(static_cast<NodeLogBase*>(left)->argument()); break;
+        default: break;
     }
+    if (retained) {
+        unwrapStructure(_cur.row, leftIdx, retained);
+        return;
+    }
+    if (left->type() == NodeType::Empty) {
+        if (!isRootRow(_cur.row)) exitRowLeft();
+        else if (_cur.row->childCount() > 1) {
+            _cur.row->removeChild(leftIdx);
+            _cur.index = leftIdx;
+        }
+        return;
+    }
+    if (left->type() == NodeType::Number) {
+        auto* number = static_cast<NodeNumber*>(left);
+        if (number->length() > 1) { number->deleteLastChar(); return; }
+    }
+    // Prepare the replacement before erasing the last leaf.
+    NodePtr empty = _cur.row->childCount() == 1 ? makeEmpty() : nullptr;
+    _cur.row->removeChild(leftIdx);
+    _cur.index = leftIdx;
+    if (empty) _cur.row->appendChild(std::move(empty));
 }
 
 // ════════════════════════════════════════════════════════════════════════════

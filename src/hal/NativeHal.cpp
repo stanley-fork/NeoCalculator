@@ -551,6 +551,8 @@ static KeyCode mapTextChar(char c)
         case '=': return KeyCode::FREE_EQ;
         case '(': return KeyCode::LPAREN;
         case ')': return KeyCode::RPAREN;
+        case '[': return KeyCode::LBRACKET;
+        case ']': return KeyCode::RBRACKET;
         case '.': return KeyCode::DOT;
         // Desigualdades (Grapher). SDL_TEXTINPUT entrega '<'/'>' ya resueltos por
         // la distribución (en US son Shift+, y Shift+.), así que el keysym crudo no
@@ -582,6 +584,8 @@ static KeyCode scriptNameToKeyCode(const std::string& raw)
     if (raw == ".") return KeyCode::DOT;
     if (raw == "(") return KeyCode::LPAREN;
     if (raw == ")") return KeyCode::RPAREN;
+    if (raw == "[") return KeyCode::LBRACKET;
+    if (raw == "]") return KeyCode::RBRACKET;
     if (raw == "=") return KeyCode::FREE_EQ;
     // Desigualdades del Grapher (Phase 10D). KeyCode::LESS/GREATER lo consume
     // GrapherApp::handleExprEdit (insertVariable '<'/'>'); GraphModel sombrea la
@@ -634,6 +638,8 @@ static KeyCode scriptNameToKeyCode(const std::string& raw)
     if (n == "graph")                         return KeyCode::GRAPH;
     if (n == "x" || n == "varx")              return KeyCode::VAR_X;
     if (n == "y" || n == "vary")              return KeyCode::VAR_Y;
+    if (n == "exp") return KeyCode::EXP;
+    if (n == "neg_legacy") return KeyCode::NEG;
     if (n == "pow")                           return KeyCode::POW;
     if (n == "frac" || n == "fraction" ||
         n == "div")                           return KeyCode::DIV;   // DIV == fraccion
@@ -1824,6 +1830,7 @@ static bool saveScreenshotPPM(const char* path)
 // ════════════════════════════════════════════════════════════════════════════
 enum class ScriptCmdType : uint8_t {
     Wait, Key, KeyDown, KeyUp, KeyRepeat, Screenshot, Log,
+    SdlText, SdlDown, SdlUp, SdlRepeat, // Replay actual SDL input, not KeyCode shortcuts.
     OpenApp,               // open_app NAME  (Phase 5A: lanza app por nombre)
     // Phase 4B-C: aserciones semanticas (sin OCR, sin pixeles). Comparan el
     // estado de la app activa / el resultado calculado por CalculationApp.
@@ -1871,6 +1878,8 @@ enum class ScriptCmdType : uint8_t {
     CalculusSemantic,
     AssertEquationsRebuild,
     EquationsPhysical,
+    CalculationPhysical,
+    AssertCalcInput,
     AssertCalculusState,
     AssertCalculusFocus,
     AssertCalculusLayout,
@@ -2075,6 +2084,18 @@ static bool loadScript(const char* path)
                     : (lc == "keyrepeat") ? ScriptCmdType::KeyRepeat
                                         : ScriptCmdType::KeyUp;
             sc.key  = kc;
+        }
+        else if (lc == "sdl_text" || lc == "sdl_down" || lc == "sdl_up" || lc == "sdl_repeat") {
+            std::string value;
+            std::getline(iss >> std::ws, value);
+            if (value.empty() || (lc == "sdl_text" && value.size() >= SDL_TEXTINPUTEVENT_TEXT_SIZE))
+                return scriptErr(path, lineNo, "invalid SDL event payload");
+            if (lc != "sdl_text" && SDL_GetKeyFromName(value.c_str()) == SDLK_UNKNOWN)
+                return scriptErr(path, lineNo, "unknown SDL key name");
+            sc.type = lc == "sdl_text" ? ScriptCmdType::SdlText :
+                      lc == "sdl_down" ? ScriptCmdType::SdlDown :
+                      lc == "sdl_up" ? ScriptCmdType::SdlUp : ScriptCmdType::SdlRepeat;
+            sc.strArg = value;
         }
         else if (lc == "screenshot") {
             std::string p, extra;
@@ -2364,6 +2385,11 @@ static bool loadScript(const char* path)
             sc.strArg = rest;
         }
         // ── GIAC-C01: Grapher engine probes (append-only) ────────────────
+        else if (lc == "assert_calc_input" || lc == "calc_physical") {
+            std::getline(iss >> std::ws, sc.strArg);
+            if (sc.strArg.empty()) return scriptErr(path,lineNo,"Calculation argument required");
+            sc.type = lc == "assert_calc_input" ? ScriptCmdType::AssertCalcInput : ScriptCmdType::CalculationPhysical;
+        }
         else if (lc == "assert_equations" || lc == "equations_physical") {
             std::getline(iss >> std::ws, sc.strArg);
             if (sc.strArg.empty()) return scriptErr(path,lineNo,"Equations argument required");
@@ -2853,6 +2879,23 @@ static void scriptStepBegin()
         case ScriptCmdType::KeyUp:
             dispatchKey(sc.key, KeyAction::RELEASE, false);
             break;
+        case ScriptCmdType::SdlText:
+        case ScriptCmdType::SdlDown:
+        case ScriptCmdType::SdlUp:
+        case ScriptCmdType::SdlRepeat: {
+            SDL_Event event{};
+            if (sc.type == ScriptCmdType::SdlText) {
+                event.type = SDL_TEXTINPUT;
+                std::memcpy(event.text.text, sc.strArg.c_str(), sc.strArg.size() + 1);
+            } else {
+                event.type = sc.type == ScriptCmdType::SdlUp ? SDL_KEYUP : SDL_KEYDOWN;
+                event.key.keysym.sym = SDL_GetKeyFromName(sc.strArg.c_str());
+                event.key.repeat = sc.type == ScriptCmdType::SdlRepeat;
+            }
+            if (SDL_PushEvent(&event) != 1) assertFail(sc.line, "SDL replay queue failure");
+            // processSdlEvents consumes this before the next assertion/frame.
+            break;
+        }
         case ScriptCmdType::Screenshot:
             g_pendingShot     = true;
             g_pendingShotPath = sc.strArg;   // captura tras el render de este frame
@@ -3450,8 +3493,15 @@ static void scriptStepBegin()
             if (g_equationsApp && g_equationsApp->debugAssert(sc.strArg)) assertPass(sc.line,"Equations " + sc.strArg);
             else assertFail(sc.line,"Equations mismatch: " + sc.strArg);
             break;
+        case ScriptCmdType::AssertCalcInput:
+            if (g_mode == AppMode::CALCULATION && g_calcApp && g_calcApp->debugInput(sc.strArg))
+                assertPass(sc.line,"Calculation input " + sc.strArg);
+            else assertFail(sc.line,"Calculation input " + sc.strArg);
+            break;
+        case ScriptCmdType::CalculationPhysical:
         case ScriptCmdType::EquationsPhysical: {
-            if (g_mode != AppMode::EQUATIONS) { assertFail(sc.line,"Equations required"); break; }
+            const bool calculation = sc.type == ScriptCmdType::CalculationPhysical;
+            if (g_mode != (calculation ? AppMode::CALCULATION : AppMode::EQUATIONS)) { assertFail(sc.line,"Equations required"); break; }
             std::istringstream input(sc.strArg); int row=-1,col=-1; std::string repeat;
             input >> row >> col >> repeat;
             const auto action = repeat == "repeat" ? KeyAction::REPEAT : KeyAction::PRESS;
@@ -3465,7 +3515,14 @@ static void scriptStepBegin()
                 if (resolved.code == KeyCode::BACK) { dispatchKey(KeyCode::BACK,action,true); break; }
                 KeyEvent event{}; event.code=resolved.code; event.action=action;
                 event.row=row; event.col=col; event.semanticId=static_cast<uint16_t>(resolved.semantic); event.text=resolved.text;
-                g_equationsApp->handleKey(event); break;
+                if (calculation) {
+                    std::printf("[CALC-PHYSICAL] row=%d col=%d code=%d semantic=%u modifier=%d/%d\n",
+                                row,col,int(event.code),unsigned(event.semanticId),
+                                vpam::KeyboardManager::instance().isShift(),vpam::KeyboardManager::instance().isAlpha());
+                    g_calcApp->handleKey(event);
+                    if (std::getenv("NUMOS_CALC_INPUT_TRACE")) g_calcApp->debugInput("dump");
+                } else g_equationsApp->handleKey(event);
+                break;
             }
             if (!found) assertFail(sc.line,"Unknown physical matrix position");
             break;
@@ -4176,7 +4233,7 @@ extern "C" EMSCRIPTEN_KEEPALIVE int numos_send_logical_key(int keyCode,
     if (!g_initialized || g_shutdownComplete || keyCode <= 0 ||
         // The public catalog includes the append-only semantic keys after
         // GREATER (HOME/BACK/TOOLBOX and VPAM templates). Accept the full enum.
-        keyCode > static_cast<int>(KeyCode::EXP) ||
+        keyCode > static_cast<int>(KeyCode::RBRACKET) ||
         actionCode < static_cast<int>(KeyAction::PRESS) ||
         actionCode > static_cast<int>(KeyAction::REPEAT)) {
         return 0;

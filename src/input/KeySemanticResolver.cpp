@@ -67,6 +67,13 @@ ResolvedKey KeySemanticResolver::resolve(const KeyCode physicalCode,
     }
 
     const KeyPlane plane = activePlane(modifiers);
+    // Software result-format menu. Keep the electrical/legend map intact;
+    // Shift+FORMAT remains TABLE, Code/Text retain their existing planes.
+    if (context == InputContext::Math && physicalCode == KeyCode::FORMAT &&
+        plane == KeyPlane::ShiftAlpha) {
+        if (action == KeyAction::PRESS) modifiers.consumeForPlane(true, true);
+        return {true, KeyCode::FORMAT_MENU, SemanticId::none, "", plane};
+    }
     const auto& resolved = definition(context, index, plane);
     ResolvedKey out{
         true,

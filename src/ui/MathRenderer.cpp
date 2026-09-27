@@ -26,6 +26,7 @@
  */
 
 #include "MathRenderer.h"
+#include "MathViewport.h"
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -37,6 +38,7 @@
 
 #include "MathSymbols.h"
 #include "MathTextNormalization.h"
+#include "MathTextMetrics.h"
 #include "MathTypography.h"
 #include "../math/font/stix_math_variants.h"
 #include "../math/font/MathGlyphAssembly.h"
@@ -67,6 +69,7 @@ namespace {
 /// Thin stroke helper (rounded caps) for synthetic delimiters.
 static void strokeSeg(lv_layer_t* layer, int16_t x1, int16_t y1,
                       int16_t x2, int16_t y2, int16_t w, lv_color_t color) {
+    if (!layer) return;
     lv_draw_line_dsc_t dsc;
     lv_draw_line_dsc_init(&dsc);
     dsc.color = color;
@@ -172,20 +175,22 @@ static bool drawDelimiterGlyph(lv_layer_t* layer,
                                uint32_t delimCp, lv_color_t color,
                                const lv_font_t* font,
                                int16_t emSizePx) {
+    if (!layer) return true;
     if (yBottom <= yTop || font == nullptr) return false;
 
-    if (delimCp == '(' || delimCp == ')') {
-        const auto plan = stixParenthesisPlan(yBottom - yTop, emSizePx);
-        const auto* ink = stixParenthesisInk(emSizePx);
+    if (delimCp == '(' || delimCp == ')' || delimCp == '[' || delimCp == ']') {
+        const bool bracket = delimCp == '[' || delimCp == ']';
+        const auto plan = stixParenthesisPlan(yBottom - yTop, emSizePx, bracket);
+        const auto* ink = stixParenthesisInk(emSizePx, bracket);
         const lv_font_t* parenFont = ui::mathParenthesisFont(emSizePx);
-        const uint8_t side = delimCp == '(' ? 0 : 16;
+        const uint8_t side = (delimCp == '(' || delimCp == '[') ? 0 : 16;
         auto drawPiece = [&](uint8_t index, int32_t top) {
             const auto& metric = ink[index];
             lv_draw_letter_dsc_t dsc;
             lv_draw_letter_dsc_init(&dsc);
             dsc.font = parenFont;
             dsc.color = color;
-            dsc.unicode = 0xE000 + index;
+            dsc.unicode = 0xE000 + (bracket ? 32 : 0) + index;
             // Same baseline/pivot contract as drawTextBaseline. No temporary
             // text buffer or bitmap; the glyph's antialiasing is preserved.
             lv_point_t pos = {x + metric.advance / 2,
@@ -197,7 +202,8 @@ static bool drawDelimiterGlyph(lv_layer_t* layer,
         } else {
             // OpenType parts: top, extender, bottom. STIX cap connectors are
             // 250 design units; overlap only the straight stem, never the cap.
-            const int16_t overlap = std::max<int16_t>(1, (250 * emSizePx + 500) / 1000);
+            const int16_t overlap = bracket ? stixBracketOverlapPx(emSizePx)
+                : std::max<int16_t>(1, (250 * emSizePx + 500) / 1000);
             const int32_t middleTop = yTop + ink[side + 13].height - overlap;
             const int32_t bottomTop = yBottom - ink[side + 15].height;
             const int32_t middleBottom = bottomTop + overlap;
@@ -495,6 +501,8 @@ FontMetrics MathCanvas::metricsFromFont(const lv_font_t* font) {
     fm.scriptLevel = 0;
     fm.script   = nullptr;
     fm.emSize   = ui::nominalMathEmSizeForFont(font);
+    fm.textFont = font;
+    fm.measureText = ui::measureMathTextAdvance;
 
     // ── Canonical ascent / descent from LVGL font header ────────────────
     // LVGL line-box metrics only. The visual layout box is narrowed to glyph
@@ -629,7 +637,7 @@ void MathCanvas::destroy() {
     _cursorX = 0;
     _cursorY = 0;
     _cursorH = 0;
-    _scrollX = 0;
+    _scrollX = _scrollY = 0;
     _obj = nullptr;
 }
 
@@ -641,7 +649,7 @@ void MathCanvas::setExpression(NodeRow* root, const CursorController* ctrl) {
     _root       = root;
     _cursorCtrl = ctrl;
     _cursorEditable = (_cursorCtrl && _cursorCtrl->cursor().isValid());
-    _scrollX    = 0;
+    _scrollX = _scrollY = 0;
 
     if (!_cursorEditable) {
         stopCursorBlink();
@@ -708,11 +716,39 @@ void MathCanvas::clearHighlightNode() {
     invalidate();
 }
 
-void MathCanvas::scrollBy(int16_t delta) {
-    _scrollX += delta;
-    if (_scrollX > 0) _scrollX = 0;   // No pasar del borde izquierdo
-    invalidate();
+int16_t MathCanvas::horizontalLimit() const {
+    if (!_obj || !_root) return 0;
+    const int32_t content = _root->layout().width + (isCursorEditable() ? CURSOR_WIDTH : 0);
+    return static_cast<int16_t>(std::max<int32_t>(0, content -
+        (lv_obj_get_width(_obj) - PADDING_LEFT - PADDING_RIGHT)));
 }
+
+int16_t MathCanvas::verticalLimit() const {
+    if (!_obj || !_root) return 0;
+    return static_cast<int16_t>(std::max<int32_t>(0, _root->layout().height() +
+        (isCursorEditable() ? 1 : 0) - (lv_obj_get_height(_obj) - 2 * CURSOR_PAD)));
+}
+
+bool MathCanvas::hasHorizontalOverflow() const { return horizontalLimit() > 0; }
+bool MathCanvas::hasVerticalOverflow() const { return verticalLimit() > 0; }
+
+bool MathCanvas::scrollBounded(int16_t delta) {
+    const int16_t next = viewportOffset(int32_t(_scrollX) + delta, horizontalLimit());
+    const bool moved = next != _scrollX;
+    _scrollX = next;
+    if (moved) invalidate();
+    return moved;
+}
+
+bool MathCanvas::scrollVerticalBounded(int16_t delta) {
+    const int16_t next = viewportOffset(int32_t(_scrollY) + delta, verticalLimit());
+    const bool moved = next != _scrollY;
+    _scrollY = next;
+    if (moved) invalidate();
+    return moved;
+}
+
+void MathCanvas::scrollBy(int16_t delta) { scrollBounded(delta); }
 
 // ════════════════════════════════════════════════════════════════════════════
 // Cursor Blink Animation
@@ -798,50 +834,39 @@ void MathCanvas::onDraw(lv_event_t* e) {
     _root->calculateLayout(_fmNormal);
     const auto& rootL = _root->layout();
 
-    // Posicionar la expresión: centrada verticalmente, alineada a la izquierda
-    int16_t baseX = static_cast<int16_t>(objArea.x1) + PADDING_LEFT + _scrollX;
-    int16_t rootBaseline = static_cast<int16_t>(
-        static_cast<int16_t>(objArea.y1) + (widgetH + rootL.ascent - rootL.descent) / 2);
+    // One geometry pass prepares all child origins with the same methods
+    // that paint them. Parent links keep this walk independent of tree depth.
+    preparePlacements(_root, _fmNormal);
+    _scrollX = viewportOffset(_scrollX, horizontalLimit());
+    _scrollY = viewportOffset(_scrollY, verticalLimit());
+    int16_t baseX = static_cast<int16_t>(objArea.x1 + PADDING_LEFT + _scrollX);
+    const int16_t anchoredBaseline = hasVerticalOverflow()
+        ? static_cast<int16_t>(objArea.y1 + CURSOR_PAD + rootL.ascent)
+        : static_cast<int16_t>(objArea.y1 + (widgetH + rootL.ascent - rootL.descent) / 2);
+    int16_t rootBaseline = static_cast<int16_t>(anchoredBaseline + _scrollY);
     int16_t rootYTop = layoutTopFromBaseline(rootL, rootBaseline);
 
 #ifdef NUMOS_MATH_STRESS_DIAGNOSTICS
     const int64_t drawStartUs = esp_timer_get_time();
 #endif
-
-    // Calcular posición del cursor ANTES de dibujar
     const bool cursorActive = isCursorEditable();
     if (cursorActive) {
         computeCursorPosition(baseX, rootBaseline, objArea, rootL, rootYTop);
+        // WHY: follow the full logical caret before clipping. Clamping its
+        // endpoints first destroyed the distance needed to reveal the slot.
+        _scrollX = followViewport(_scrollX, _cursorX, _cursorX + CURSOR_WIDTH - 1,
+            objArea.x1 + PADDING_LEFT, objArea.x2 - PADDING_RIGHT, horizontalLimit());
+        _scrollY = followViewport(_scrollY, _cursorY, _cursorY + _cursorH - 1,
+            objArea.y1, objArea.y2, verticalLimit());
+        baseX = static_cast<int16_t>(objArea.x1 + PADDING_LEFT + _scrollX);
+        rootBaseline = static_cast<int16_t>(anchoredBaseline + _scrollY);
+        rootYTop = layoutTopFromBaseline(rootL, rootBaseline);
+        computeCursorPosition(baseX, rootBaseline, objArea, rootL, rootYTop);
     }
 #if defined(NUMOS_MATH_RENDER_TRACE_ONCE)
-    else {
-        traceCursorState(rootL, nullptr, -1, nullptr, rootBaseline, rootYTop,
-                         _fmNormal, objArea, false);
-    }
+    else traceCursorState(rootL, nullptr, -1, nullptr, rootBaseline, rootYTop,
+                          _fmNormal, objArea, false);
 #endif
-
-    // Auto-scroll horizontal: mantener el cursor visible
-    if (cursorActive) {
-        int16_t visLeft  = static_cast<int16_t>(objArea.x1) + PADDING_LEFT;
-        int16_t visRight = static_cast<int16_t>(objArea.x2) - PADDING_RIGHT;
-
-        if (_cursorX < visLeft) {
-            _scrollX += (visLeft - _cursorX + 4);
-            baseX = static_cast<int16_t>(objArea.x1) + PADDING_LEFT + _scrollX;
-            computeCursorPosition(baseX, rootBaseline, objArea, rootL, rootYTop);
-        } else if (_cursorX > visRight) {
-            _scrollX -= (_cursorX - visRight + 4);
-            baseX = static_cast<int16_t>(objArea.x1) + PADDING_LEFT + _scrollX;
-            computeCursorPosition(baseX, rootBaseline, objArea, rootL, rootYTop);
-        }
-
-        // No dejar que el scroll sea positivo (expresión se sale por la izquierda)
-        if (_scrollX > 0) {
-            _scrollX = 0;
-            baseX = static_cast<int16_t>(objArea.x1) + PADDING_LEFT;
-            computeCursorPosition(baseX, rootBaseline, objArea, rootL, rootYTop);
-        }
-    }
 
     // Dibujar la expresión recursivamente usando el layout ya calculado arriba.
 #if defined(NUMOS_MATH_RENDER_TRACE_ONCE)
@@ -961,416 +986,23 @@ void MathCanvas::computeCursorPosition(int16_t baseX, int16_t rootBaseline,
                                        const lv_area_t& objArea,
                                        const LayoutResult& rootLayout,
                                        int16_t rootYTop) {
-    if (!isCursorEditable()) {
-#if defined(NUMOS_MATH_RENDER_TRACE_ONCE)
-        traceCursorState(rootLayout, nullptr, -1, nullptr, rootBaseline,
-                         rootYTop, _fmNormal, objArea, false);
-#endif
-        return;
-    }
-
+    if (!isCursorEditable()) return;
     const Cursor& cur = _cursorCtrl->cursor();
-
-    // Necesitamos encontrar la posición absoluta del NodeRow del cursor.
-    // Recorremos el AST de forma recursiva para encontrar el row y acumular offsets.
-    struct FindResult {
-        bool   found;
-        int16_t x;
-        int16_t yBaseline;
-        FontMetrics fm;
-    };
-
-    // Función recursiva para buscar el row del cursor en el árbol
-    struct Finder {
-        const NodeRow* target;
-        FindResult     result;
-
-        void search(const MathNode* node, int16_t x, int16_t yBaseline,
-                    const FontMetrics& fm, const FontMetrics& fmSmall) {
-            if (result.found) return;
-            if (!node) return;
-
-            if (node->type() == NodeType::Row) {
-                auto* row = static_cast<const NodeRow*>(node);
-                if (row == target) {
-                    result = { true, x, yBaseline, fm };
-                    return;
-                }
-                // Buscar dentro de los hijos del row (match drawRow spacing)
-                int16_t cx = x;
-                MathClass prevRight = MathClass::ORD;
-                bool hasPrev = false;
-                for (int i = 0; i < row->childCount(); ++i) {
-                    MathNode* child = row->child(i);
-                    const auto& childL = child->layout();
-                    if (hasPrev) {
-                        cx = static_cast<int16_t>(
-                            cx + interAtomSpacingPx(prevRight, child->leftMathClass(), fm.style, fm.emSize));
-                    }
-                    search(child, cx, yBaseline, fm, fmSmall);
-                    if (result.found) return;
-                    cx += childL.width;
-                    prevRight = child->rightMathClass();
-                    hasPrev = true;
-                }
-            }
-            else if (node->type() == NodeType::Fraction) {
-                auto* frac = static_cast<const NodeFraction*>(node);
-                const auto& fracL = frac->layout();
-                const auto& numL = frac->numerator()->layout();
-                const auto& denL = frac->denominator()->layout();
-
-                const int16_t barHalfUp = frac->barHalfUpPx();
-                const int16_t barHalfDown = frac->barHalfDownPx();
-                const int16_t numShift = frac->numeratorShiftPx();
-                const int16_t denShift = frac->denominatorShiftPx();
-                const int16_t ruleOverhang = frac->ruleOverhangPx();
-
-                int16_t axis = fm.axisHeight();
-                int16_t yAxis = static_cast<int16_t>(yBaseline - axis);
-
-                // Child metrics step down to match layout/draw (TeX style).
-                const FontMetrics childFm = fractionPartMetrics(fm);
-                const FontMetrics childSmall = childFm.superscript();
-
-                // Numerador: baseline = yAxis - barHalfUp - numShift
-                int16_t numX = static_cast<int16_t>(x + ruleOverhang +
-                               (fracL.width - 2 * ruleOverhang - numL.width) / 2);
-                int16_t numY = static_cast<int16_t>(yAxis - barHalfUp - numShift);
-                search(frac->numerator(), numX, numY, childFm, childSmall);
-                if (result.found) return;
-
-                // Denominador: baseline = yAxis + barHalfDown + denShift
-                int16_t denX = static_cast<int16_t>(x + ruleOverhang +
-                               (fracL.width - 2 * ruleOverhang - denL.width) / 2);
-                int16_t denY = static_cast<int16_t>(yAxis + barHalfDown + denShift);
-                search(frac->denominator(), denX, denY, childFm, childSmall);
-            }
-            else if (node->type() == NodeType::Power) {
-                auto* pow = static_cast<const NodePower*>(node);
-                const auto& baseL = pow->base()->layout();
-
-                // Base
-                search(pow->base(), x, yBaseline, fm, fmSmall);
-                if (result.found) return;
-
-                // Exponente (fuente reducida)
-                FontMetrics fmSup = fm.superscript();
-                MathConstantsProvider mc(fm.emSize);
-                const auto& expL = pow->exponent()->layout();
-                int16_t supShiftUp = mc.superscriptShiftUp();
-                int16_t supBottomMin = mc.superscriptBottomMin();
-                int16_t expShift = std::max(supShiftUp,
-                                            static_cast<int16_t>(supBottomMin + expL.descent));
-                if (expShift < 1) expShift = 1;
-                int16_t expX = static_cast<int16_t>(x + baseL.width + pow->italicCorrectionPx());
-                int16_t expBaseline = static_cast<int16_t>(yBaseline - expShift);
-
-                search(pow->exponent(), expX, expBaseline, fmSup,
-                       fmSup.superscript());
-            }
-            else if (node->type() == NodeType::Root) {
-                auto* root = static_cast<const NodeRoot*>(node);
-                int16_t radSymW = static_cast<int16_t>(
-                    NodeRoot::RADICAL_HOOK_W + NodeRoot::RADICAL_SLOPE_W);
-
-                // Radicand
-                int16_t radX = static_cast<int16_t>(x + radSymW);
-                search(root->radicand(), radX, yBaseline, fm, fmSmall);
-                if (result.found) return;
-
-                // Degree (if present)
-                if (root->hasDegree()) {
-                    FontMetrics fmDeg = fm.superscript();
-                    const auto& degL  = root->degree()->layout();
-                    int16_t degX = static_cast<int16_t>(x + root->radicalKernBefore());
-                    int16_t degBaseline = static_cast<int16_t>(yBaseline -
-                                          root->layout().ascent + degL.ascent);
-                    search(root->degree(), degX, degBaseline, fmDeg,
-                           fmDeg.superscript());
-                }
-            }
-            else if (node->type() == NodeType::Paren) {
-                auto* paren = static_cast<const NodeParen*>(node);
-                int16_t pw = paren->parenWidth();
-                int16_t innerPad = std::max<int16_t>(1, pw / 3);
-                int16_t contentX = static_cast<int16_t>(x + pw + innerPad);
-                search(paren->content(), contentX, yBaseline, fm, fmSmall);
-            }
-            else if (node->type() == NodeType::Function) {
-                auto* func = static_cast<const NodeFunction*>(node);
-                int16_t contentX = static_cast<int16_t>(x + func->labelWidth()
-                                   + NodeFunction::LABEL_GAP
-                                   + func->parenWidth() + func->innerPad());
-                search(func->argument(), contentX, yBaseline, fm, fmSmall);
-            }
-            else if (node->type() == NodeType::LogBase) {
-                auto* lb = static_cast<const NodeLogBase*>(node);
-                const auto& baseL = lb->base()->layout();
-
-                // Base (subíndice) → fuente reducida, bajada
-                FontMetrics fmSub = fm.superscript();
-                int16_t subDrop = MathConstantsProvider(fm.emSize).subscriptShiftDown();
-                if (subDrop < 2) subDrop = 2;
-                int16_t baseX = static_cast<int16_t>(x + lb->labelWidth());
-                int16_t baseBaseline = static_cast<int16_t>(yBaseline + subDrop);
-                search(lb->base(), baseX, baseBaseline, fmSub, fmSub.superscript());
-                if (result.found) return;
-
-                // Argumento (dentro de paréntesis)
-                // Mirror layout: labelWidth + baseL.width + SpaceAfterScript + LABEL_GAP
-                int16_t argX = static_cast<int16_t>(x + lb->labelWidth() + baseL.width
-                               + spaceAfterScriptPx(fm) + NodeLogBase::LABEL_GAP
-                               + lb->parenWidth() + lb->innerPad());
-                search(lb->argument(), argX, yBaseline, fm, fmSmall);
-            }
-            else if (node->type() == NodeType::DefIntegral) {
-                auto* di = static_cast<const NodeDefIntegral*>(node);
-                const auto& lowerL = di->lower()->layout();
-                const auto& upperL = di->upper()->layout();
-                const auto& bodyL  = di->body()->layout();
-
-                FontMetrics fmLim = fm.superscript();
-                const auto symMetrics = DelimiterAssembler::glyphMetricsForHeightPx(
-                    0x222B, largeOperatorTargetHeightPx(fm), fm.emSize);
-                int16_t symW = symMetrics.valid ? symMetrics.widthPx : 0;
-                int16_t symH = symMetrics.valid ? symMetrics.heightPx : fm.height();
-                if (symW < 6) symW = std::max<int16_t>(6, fm.charWidth);
-
-                const int16_t limitGapPx = MathConstantsProvider(fm.emSize).upperLimitGapMin();
-                const int16_t bodyGapPx = largeOperatorBodyGapPx(fm);
-                const int16_t dGapPx = integralDifferentialGapPx(fm);
-
-                if (shouldUseDisplayLimits(fm, symH)) {
-                    const DisplayLimitGeometry geom = displayLimitGeometry(
-                        x, yBaseline, symW, symH, lowerL, upperL, bodyL,
-                        fm, limitGapPx, bodyGapPx);
-
-                    search(di->upper(), geom.upperX, geom.upperBaseline, fmLim, fmLim.superscript());
-                    if (result.found) return;
-
-                    search(di->lower(), geom.lowerX, geom.lowerBaseline, fmLim, fmLim.superscript());
-                    if (result.found) return;
-
-                    search(di->body(), geom.bodyX, yBaseline, fm, fmSmall);
-                    if (result.found) return;
-
-                    int16_t varX = static_cast<int16_t>(geom.bodyX + bodyL.width
-                                  + dGapPx + fm.charWidth + dGapPx);
-                    search(di->variable(), varX, yBaseline, fm, fmSmall);
-                } else {
-                    const InlineLimitGeometry geom = inlineLimitGeometry(
-                        x, yBaseline, symW, lowerL, upperL, fm, bodyGapPx);
-
-                    search(di->upper(), geom.upperX, geom.upperBaseline, fmLim, fmLim.superscript());
-                    if (result.found) return;
-                    search(di->lower(), geom.lowerX, geom.lowerBaseline, fmLim, fmLim.superscript());
-                    if (result.found) return;
-
-                    search(di->body(), geom.bodyX, yBaseline, fm, fmSmall);
-                    if (result.found) return;
-
-                    int16_t varX = static_cast<int16_t>(geom.bodyX + bodyL.width
-                                  + dGapPx + fm.charWidth + dGapPx);
-                    search(di->variable(), varX, yBaseline, fm, fmSmall);
-                }
-            }
-            else if (node->type() == NodeType::Summation) {
-                auto* sm = static_cast<const NodeSummation*>(node);
-                const auto& lowerL = sm->lower()->layout();
-                const auto& upperL = sm->upper()->layout();
-                const auto& bodyL  = sm->body()->layout();
-
-                FontMetrics fmLim = fm.superscript();
-                const auto symMetrics = DelimiterAssembler::glyphMetricsForHeightPx(
-                    0x2211, largeOperatorTargetHeightPx(fm), fm.emSize);
-                int16_t symW = symMetrics.valid ? symMetrics.widthPx : 0;
-                int16_t symH = symMetrics.valid ? symMetrics.heightPx : fm.height();
-                if (symW < 6) symW = std::max<int16_t>(6, fm.charWidth);
-
-                const int16_t limitGapPx = MathConstantsProvider(fm.emSize).upperLimitGapMin();
-                const int16_t bodyGapPx = largeOperatorBodyGapPx(fm);
-
-                if (shouldUseDisplayLimits(fm, symH)) {
-                    const DisplayLimitGeometry geom = displayLimitGeometry(
-                        x, yBaseline, symW, symH, lowerL, upperL, bodyL,
-                        fm, limitGapPx, bodyGapPx);
-
-                    search(sm->upper(), geom.upperX, geom.upperBaseline, fmLim, fmLim.superscript());
-                    if (result.found) return;
-
-                    search(sm->lower(), geom.lowerX, geom.lowerBaseline, fmLim, fmLim.superscript());
-                    if (result.found) return;
-
-                    search(sm->body(), geom.bodyX, yBaseline, fm, fmSmall);
-                } else {
-                    const InlineLimitGeometry geom = inlineLimitGeometry(
-                        x, yBaseline, symW, lowerL, upperL, fm, bodyGapPx);
-
-                    search(sm->upper(), geom.upperX, geom.upperBaseline, fmLim, fmLim.superscript());
-                    if (result.found) return;
-                    search(sm->lower(), geom.lowerX, geom.lowerBaseline, fmLim, fmLim.superscript());
-                    if (result.found) return;
-
-                    search(sm->body(), geom.bodyX, yBaseline, fm, fmSmall);
-                }
-            }
-            else if (node->type() == NodeType::Subscript) {
-                auto* sub = static_cast<const NodeSubscript*>(node);
-                const auto& baseL = sub->base()->layout();
-
-                // Base (fuente normal)
-                search(sub->base(), x, yBaseline, fm, fmSmall);
-                if (result.found) return;
-
-                // Subscript (fuente reducida, bajada)
-                FontMetrics fmSub = fm.superscript();
-                int16_t subDrop = MathConstantsProvider(fm.emSize).subscriptShiftDown();
-                if (subDrop < 2) subDrop = 2;
-                int16_t subX = static_cast<int16_t>(x + baseL.width);
-                int16_t subBaseline = static_cast<int16_t>(yBaseline + subDrop);
-                search(sub->subscript(), subX, subBaseline, fmSub, fmSub.superscript());
-            }
-            else if (node->type() == NodeType::BigOp) {
-                auto* bo = static_cast<const NodeBigOp*>(node);
-                const auto& lowerL = bo->lower()->layout();
-                const auto& upperL = bo->upper()->layout();
-                const auto& bodyL  = bo->body()->layout();
-
-                FontMetrics fmLim = fm.superscript();
-                const auto opMetrics = DelimiterAssembler::glyphMetricsForHeightPx(
-                    bo->operatorCodepoint(), largeOperatorTargetHeightPx(fm), fm.emSize);
-                int16_t opW = opMetrics.valid ? opMetrics.widthPx : 0;
-                int16_t opH = opMetrics.valid ? opMetrics.heightPx : fm.height();
-                if (opW < 6) opW = std::max<int16_t>(6, fm.charWidth);
-
-                int16_t limitGapPx = MathConstantsProvider(fm.emSize).upperLimitGapMin();
-                int16_t bodyGapX = largeOperatorBodyGapPx(fm);
-
-                if (bo->useDisplayLimits()) {
-                    const DisplayLimitGeometry geom = displayLimitGeometry(
-                        x, yBaseline, opW, opH, lowerL, upperL, bodyL,
-                        fm, limitGapPx, bodyGapX);
-
-                    search(bo->upper(), geom.upperX, geom.upperBaseline, fmLim, fmLim.superscript());
-                    if (result.found) return;
-
-                    search(bo->lower(), geom.lowerX, geom.lowerBaseline, fmLim, fmLim.superscript());
-                    if (result.found) return;
-
-                    search(bo->body(), geom.bodyX, yBaseline, fm, fmSmall);
-                } else {
-                    // TEXT/SCRIPT: limits as sub/superscript to the right
-                    MathConstantsProvider mcT2(fm.emSize);
-                    int16_t supShift = mcT2.superscriptShiftUp();
-                    int16_t subDrop  = mcT2.subscriptShiftDown();
-                    if (subDrop < 2) subDrop = 2;
-                    if (supShift < 1) supShift = 1;
-
-                    int16_t limitsX = static_cast<int16_t>(x + opW);
-                    int16_t upperBaseline = static_cast<int16_t>(yBaseline - supShift);
-                    int16_t lowerBaseline = static_cast<int16_t>(yBaseline + subDrop);
-
-                    int16_t limitsW = std::max(upperL.width, lowerL.width);
-                    int16_t upperLimitX = static_cast<int16_t>(limitsX + (limitsW - upperL.width) / 2);
-                    int16_t lowerLimitX = static_cast<int16_t>(limitsX + (limitsW - lowerL.width) / 2);
-
-                    search(bo->upper(), upperLimitX, upperBaseline, fmLim, fmLim.superscript());
-                    if (result.found) return;
-                    search(bo->lower(), lowerLimitX, lowerBaseline, fmLim, fmLim.superscript());
-                    if (result.found) return;
-
-                    int16_t bodyX = static_cast<int16_t>(limitsX + limitsW + bodyGapX);
-                    search(bo->body(), bodyX, yBaseline, fm, fmSmall);
-                }
-            }
-        }
-    };
-
-    Finder finder;
-    finder.target = cur.row;
-    finder.result = { false, 0, 0, _fmNormal };
-    finder.search(_root, baseX, rootBaseline, _fmNormal, _fmSmall);
-
-    if (finder.result.found) {
-        int16_t offsetX = childXOffset(cur.row, cur.index, finder.result.fm);
-        _cursorX = static_cast<int16_t>(finder.result.x + offsetX);
-        const auto& rowL = cur.row->layout();
-        int16_t cursorTop = static_cast<int16_t>(
-            finder.result.yBaseline - finder.result.fm.ascent - CURSOR_PAD);
-        int16_t cursorBottom = static_cast<int16_t>(
-            finder.result.yBaseline + finder.result.fm.descent + CURSOR_PAD);
-
-        bool clamped = false;
-        const int16_t minX = static_cast<int16_t>(objArea.x1);
-        int16_t maxX = static_cast<int16_t>(objArea.x2 - CURSOR_WIDTH + 1);
-        if (maxX < minX) maxX = minX;
-        if (_cursorX < minX) {
-            _cursorX = minX;
-            clamped = true;
-        } else if (_cursorX > maxX) {
-            _cursorX = maxX;
-            clamped = true;
-        }
-        if (cursorTop < objArea.y1) {
-            cursorTop = static_cast<int16_t>(objArea.y1);
-            clamped = true;
-        }
-        if (cursorBottom > objArea.y2) {
-            cursorBottom = static_cast<int16_t>(objArea.y2);
-            clamped = true;
-        }
-        if (cursorBottom < cursorTop) {
-            cursorBottom = cursorTop;
-            clamped = true;
-        }
-
-        _cursorY = cursorTop;
-        _cursorH = static_cast<int16_t>(cursorBottom - cursorTop + 1);
+    const auto& placement = cur.row->_paint;
+    const FontMetrics fm = placementMetrics(cur.row);
+    const int16_t rowOrigin = static_cast<int16_t>(baseX + placement.x);
+    const int16_t rowBaseline = static_cast<int16_t>(rootBaseline + placement.baseline);
+    const int16_t offsetX = childXOffset(cur.row, cur.index, fm);
+    _cursorX = static_cast<int16_t>(rowOrigin + offsetX);
+    _cursorY = static_cast<int16_t>(rowBaseline - fm.ascent - CURSOR_PAD);
+    _cursorH = static_cast<int16_t>(fm.ascent + fm.descent + 2 * CURSOR_PAD + 1);
 #if defined(NUMOS_MATH_RENDER_TRACE_ONCE)
-        traceCursorState(rootLayout, cur.row, static_cast<int16_t>(cur.index),
-                         &rowL, finder.result.yBaseline,
-                         layoutTopFromBaseline(rowL, finder.result.yBaseline),
-                         finder.result.fm, objArea, clamped);
+    traceCursorState(rootLayout, cur.row, static_cast<int16_t>(cur.index),
+        &cur.row->layout(), rowBaseline, layoutTopFromBaseline(cur.row->layout(), rowBaseline),
+        fm, objArea, false);
+#else
+    (void)objArea; (void)rootLayout; (void)rootYTop;
 #endif
-    } else {
-        // Fallback: inicio de la expresión
-        _cursorX = baseX;
-        int16_t cursorTop = static_cast<int16_t>(
-            rootBaseline - _fmNormal.ascent - CURSOR_PAD);
-        int16_t cursorBottom = static_cast<int16_t>(
-            rootBaseline + _fmNormal.descent + CURSOR_PAD);
-        bool clamped = false;
-        const int16_t minX = static_cast<int16_t>(objArea.x1);
-        int16_t maxX = static_cast<int16_t>(objArea.x2 - CURSOR_WIDTH + 1);
-        if (maxX < minX) maxX = minX;
-        if (_cursorX < minX) {
-            _cursorX = minX;
-            clamped = true;
-        } else if (_cursorX > maxX) {
-            _cursorX = maxX;
-            clamped = true;
-        }
-        if (cursorTop < objArea.y1) {
-            cursorTop = static_cast<int16_t>(objArea.y1);
-            clamped = true;
-        }
-        if (cursorBottom > objArea.y2) {
-            cursorBottom = static_cast<int16_t>(objArea.y2);
-            clamped = true;
-        }
-        if (cursorBottom < cursorTop) {
-            cursorBottom = cursorTop;
-            clamped = true;
-        }
-        _cursorY = cursorTop;
-        _cursorH = static_cast<int16_t>(cursorBottom - cursorTop + 1);
-#if defined(NUMOS_MATH_RENDER_TRACE_ONCE)
-        traceCursorState(rootLayout, nullptr, static_cast<int16_t>(cur.index),
-                         nullptr, rootBaseline, rootYTop, _fmNormal, objArea,
-                         clamped);
-#endif
-    }
 }
 
 #if defined(NUMOS_MATH_RENDER_TRACE_ONCE)
@@ -1497,32 +1129,12 @@ void MathCanvas::traceCursorState(const LayoutResult& rootLayout,
 #endif
 
 int16_t MathCanvas::childXOffset(const NodeRow* row, int index,
-                                  const FontMetrics& fm) const {
-    int16_t offset = 0;
-    int count = std::min(index, row->childCount());
-    MathClass prevRight = MathClass::ORD;
-    bool hasPrev = false;
-    for (int i = 0; i < count; ++i) {
-        MathNode* child = row->child(i);
-        if (hasPrev) {
-            offset = static_cast<int16_t>(
-                offset + interAtomSpacingPx(prevRight, child->leftMathClass(), fm.style, fm.emSize));
-        }
-        offset += child->layout().width;
-        prevRight = child->rightMathClass();
-        hasPrev = true;
-    }
-    // Añadir gap antes del cursor si no está al inicio y hay más nodos
-    if (count > 0 && count < row->childCount()) {
-        MathNode* nextChild = row->child(count);
-        offset = static_cast<int16_t>(
-            offset + interAtomSpacingPx(prevRight, nextChild->leftMathClass(), fm.style, fm.emSize));
-    }
-    return offset;
+                                  const FontMetrics& /*fm*/) const {
+    return row->childXOffset(index);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// Motor de dibujo recursivo
+// Motor de dibujo iterativo
 // ════════════════════════════════════════════════════════════════════════════
 
 void MathCanvas::drawNode(lv_layer_t* layer, const MathNode* node,
@@ -1532,10 +1144,11 @@ void MathCanvas::drawNode(lv_layer_t* layer, const MathNode* node,
     if (!node) return;
 
     // WHY: External callers enter with yTop and may not have a fresh layout.
-    // Compute layout once for this subtree, then keep render recursion on the
+    // Compute layout once for this subtree, then keep the iterative drawing walk on the
     // cached-layout path to avoid repeated layout work on ESP32-S3 frames.
     MathNode* mutableNode = const_cast<MathNode*>(node);
     mutableNode->calculateLayout(fm);
+    preparePlacements(node, fm);
     drawNodeWithLayout(layer, node, x, yTop, fm, font, depth);
 }
 
@@ -1546,14 +1159,71 @@ void MathCanvas::drawNodeWithLayout(lv_layer_t* layer, const MathNode* node,
                                     int depth) {
     if (!node) return;
 
-    // WHY: The recursive renderer contract is top-of-bounding-box. Existing
+    // WHY: The child placement contract is top-of-bounding-box. Existing
     // specialized draw methods remain baseline-oriented, so this is the
     // top -> baseline conversion boundary after layout is already available.
     const int16_t yBaseline = layoutBaselineFromTop(node->layout(), yTop);
     drawNodeBaseline(layer, node, x, yBaseline, fm, font, depth);
 }
 
+FontMetrics MathCanvas::placementMetrics(const MathNode* node) const {
+    const auto& p = node->_paint;
+    FontMetrics fm = p.level >= 2 ? _fmScriptScript : p.level == 1 ? _fmSmall : _fmNormal;
+    fm.style = p.style;
+    return fm;
+}
+
+const MathNode* MathCanvas::nextPaintNode(const MathNode* node, const MathNode* root) {
+    while (node) {
+        while (node->_paint.nextChild < node->childCount()) {
+            const MathNode* child = node->child(node->_paint.nextChild++);
+            if (child) return child;
+        }
+        if (node == root) return nullptr;
+        node = node->parent();
+    }
+    return nullptr;
+}
+
+void MathCanvas::preparePlacements(const MathNode* root, const FontMetrics& fm) {
+    root->_paint = {0, 0, 0, fm.style, fm.scriptLevel, false};
+    _placingChildren = true;
+    for (const MathNode* n = root; n; n = nextPaintNode(n, root)) {
+        n->_paint.nextChild = 0;
+        _highlightActive = n->_paint.highlighted || n == _highlightNode;
+        // WHY: Leaf nodes have no origins to prepare. Composite methods
+        // reuse their geometry with a null layer, without emitting draw tasks.
+        if (n->childCount() != 0)
+            paintNode(nullptr, n, n->_paint.x, n->_paint.baseline,
+                      placementMetrics(n), _fontNormal, 0);
+    }
+    _placingChildren = false;
+    _highlightActive = false;
+}
+
 void MathCanvas::drawNodeBaseline(lv_layer_t* layer, const MathNode* node,
+                                 int16_t x, int16_t yBaseline,
+                                 const FontMetrics& fm, const lv_font_t* font,
+                                 int depth) {
+    if (!node) return;
+    if (_placingChildren) {
+        node->_paint = {x, yBaseline, 0, fm.style, fm.scriptLevel, _highlightActive};
+        return;
+    }
+    // Child calls during painting already have placements; the outer walk
+    // visits them exactly once. No recursive frame or fixed-capacity queue.
+    if (depth != 0) return;
+    for (const MathNode* n = node; n; n = nextPaintNode(n, node)) {
+        n->_paint.nextChild = 0;
+        _highlightActive = n->_paint.highlighted;
+        paintNode(layer, n, static_cast<int16_t>(x + n->_paint.x),
+                  static_cast<int16_t>(yBaseline + n->_paint.baseline),
+                  placementMetrics(n), font, 0);
+    }
+    _highlightActive = false;
+}
+
+void MathCanvas::paintNode(lv_layer_t* layer, const MathNode* node,
                           int16_t x, int16_t yBaseline,
                           const FontMetrics& fm, const lv_font_t* font,
                           int depth) {
@@ -1565,15 +1235,6 @@ void MathCanvas::drawNodeBaseline(lv_layer_t* layer, const MathNode* node,
     } else {
         font = _fontNormal;
     }
-    if (depth > MAX_RENDER_DEPTH) {
-        // Draw a red overflow indicator instead of recursing further
-        drawFilledRect(layer, x, static_cast<int16_t>(yBaseline - fm.ascent),
-                       static_cast<int16_t>(fm.charWidth * 3), fm.height(),
-                       lv_color_hex(0xFF0000), LV_OPA_60);
-        drawTextBaseline(layer, x, yBaseline, "...", fm.scriptLevel, lv_color_hex(0xFF0000));
-        return;
-    }
-
     // ── Smart Highlighter: activate colour override when entering highlighted sub-tree ──
     bool wasHighlight = _highlightActive;
     if (_highlightNode && node == _highlightNode) _highlightActive = true;
@@ -1704,19 +1365,10 @@ void MathCanvas::drawRow(lv_layer_t* layer, const NodeRow* row,
     if (_highlightNode && row == _highlightNode) _highlightActive = true;
 
     const auto& rowL = row->layout();
-    int16_t cx = x;
-    MathClass prevRight = MathClass::ORD;
-    bool hasPrev = false;
-
     for (int i = 0; i < row->childCount(); ++i) {
         MathNode* child = row->child(i);
         const auto& childL = child->layout();
-
-        // ── TeX Inter-Atom Spacing (match layout in NodeRow::calculateLayout) ──
-        if (hasPrev) {
-            cx = static_cast<int16_t>(
-                cx + interAtomSpacingPx(prevRight, child->leftMathClass(), fm.style, fm.emSize));
-        }
+        const int16_t cx = static_cast<int16_t>(x + row->childXOffset(i));
 
         const int16_t childYTop = rowChildTopFromRowTop(rowL, childL, rowYTop);
 #if defined(NUMOS_MATH_COORD_TRACE) && defined(ARDUINO)
@@ -1725,9 +1377,6 @@ void MathCanvas::drawRow(lv_layer_t* layer, const NodeRow* row,
                       layoutBaselineFromTop(childL, childYTop));
 #endif
         drawNodeWithLayout(layer, child, cx, childYTop, fm, font, depth + 1);
-        cx += childL.width;
-        prevRight = child->rightMathClass();
-        hasPrev = true;
     }
 
     // ── Smart Highlighter: restore state ──
@@ -1773,15 +1422,28 @@ void MathCanvas::drawOperatorBaseline(lv_layer_t* layer, const NodeOperator* nod
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// drawEmpty — Empty placeholder (no visual box; cursor position is sufficient)
+// drawEmpty — show pending operands in editable expressions, even off-cursor
 // ════════════════════════════════════════════════════════════════════════════
 
 void MathCanvas::drawEmptyBaseline(lv_layer_t* layer, const NodeEmpty* node,
                            int16_t x, int16_t yBaseline,
                            const FontMetrics& fm) {
-    // Intentionally empty: the blinking cursor renders at this position,
-    // so no additional placeholder glyph (▯) is needed.
-    (void)layer; (void)node; (void)x; (void)yBaseline; (void)fm;
+    if (!layer) return;
+    // WHY: Calculation keeps a completely blank input clean. This presentation
+    // option never hides a template slot, changes its geometry, or removes AST.
+    if (!_emptyRootPlaceholderVisible && node->parent() == _root &&
+        _root && _root->childCount() == 1) return;
+    const auto& box = node->layout();
+    lv_area_t area = {x, static_cast<int16_t>(yBaseline - box.ascent),
+                     static_cast<int16_t>(x + box.width - 1),
+                     static_cast<int16_t>(yBaseline + box.descent - 1)};
+    lv_draw_rect_dsc_t border;
+    lv_draw_rect_dsc_init(&border);
+    border.bg_opa = LV_OPA_TRANSP;
+    border.border_width = 1;
+    border.border_color = lv_color_hex(0x808080);
+    lv_draw_rect(layer, &border, &area);
+    (void)fm; // Geometry comes exclusively from the node's measured box.
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -1930,11 +1592,12 @@ void MathCanvas::drawRootBaseline(lv_layer_t* layer, const NodeRoot* node,
                           int16_t x, int16_t yBaseline,
                           const FontMetrics& fm, const lv_font_t* font,
                           int depth) {
-    const auto& rootL = node->layout();
     const auto& radL  = node->radicand()->layout();
     int16_t hookW     = NodeRoot::RADICAL_HOOK_W;
     int16_t slopeW    = NodeRoot::RADICAL_SLOPE_W;
     int16_t radSymW   = static_cast<int16_t>(hookW + slopeW);
+
+    const int16_t symbolX = x + node->radicalX();
 
     // MATH table-driven values
     int16_t ruleT    = node->radicalRuleThickness();
@@ -1943,8 +1606,8 @@ void MathCanvas::drawRootBaseline(lv_layer_t* layer, const NodeRoot* node,
     int16_t rightPad = NodeRoot::RADICAL_RIGHT_PAD;
 
     // ── Key coordinates ──
-    int16_t yTop      = static_cast<int16_t>(yBaseline - rootL.ascent);
-    int16_t yBottom   = static_cast<int16_t>(yBaseline + rootL.descent);
+    int16_t yTop      = static_cast<int16_t>(yBaseline - node->radicalAscent());
+    int16_t yBottom   = static_cast<int16_t>(yBaseline + radL.descent);
     int16_t yOverline = static_cast<int16_t>(yTop + ruleT + extraAsc - 1);
 
     // Midpoint for hook start (~60% from top)
@@ -1953,33 +1616,31 @@ void MathCanvas::drawRootBaseline(lv_layer_t* layer, const NodeRoot* node,
     lv_color_t strokeColor = _highlightActive ? _highlightColor : lv_color_black();
 
     // ── Hook: small descending stroke ──
-    drawLine(layer, x, hookStartY,
-             static_cast<int16_t>(x + hookW), yBottom,
+    drawLine(layer, symbolX, hookStartY,
+             static_cast<int16_t>(symbolX + hookW), yBottom,
              1, strokeColor);
 
     // ── Slope: ascending stroke from bottom to overline ──
     drawLine(layer,
-             static_cast<int16_t>(x + hookW), yBottom,
-             static_cast<int16_t>(x + radSymW), yOverline,
+             static_cast<int16_t>(symbolX + hookW), yBottom,
+             static_cast<int16_t>(symbolX + radSymW), yOverline,
              1, strokeColor);
 
     // ── Overline: horizontal line above the radicand ──
-    int16_t overlineX1 = static_cast<int16_t>(x + radSymW);
-    int16_t overlineX2 = static_cast<int16_t>(x + radSymW + radL.width + rightPad);
+    int16_t overlineX1 = static_cast<int16_t>(symbolX + radSymW);
+    int16_t overlineX2 = static_cast<int16_t>(symbolX + radSymW + radL.width + rightPad - 1);
     drawLine(layer, overlineX1, yOverline, overlineX2, yOverline,
              ruleT, strokeColor);
 
     // ── Radicand ──
-    int16_t radX = static_cast<int16_t>(x + radSymW);
+    int16_t radX = static_cast<int16_t>(symbolX + radSymW);
     drawNodeBaseline(layer, node->radicand(), radX, yBaseline, fm, font, depth + 1);
 
     // ── Degree (if present) ──
     if (node->hasDegree()) {
         FontMetrics fmDeg = fm.superscript();
-        const auto& degL  = node->degree()->layout();
-        int16_t kernBefore = node->radicalKernBefore();
-        int16_t degX = static_cast<int16_t>(x + kernBefore);
-        int16_t degBaseline = static_cast<int16_t>(yTop + degL.ascent);
+        int16_t degX = x + node->degreeX();
+        int16_t degBaseline = yBaseline + node->degreeBaseline();
         drawNodeBaseline(layer, node->degree(), degX, degBaseline, fmDeg, _fontSmall, depth + 1);
     }
 }
@@ -2045,11 +1706,11 @@ void MathCanvas::drawFunctionBaseline(lv_layer_t* layer, const NodeFunction* nod
         parenW + innerPad + argL.width + innerPad + parenW);
 
     // ── Label (texto de la función) ──
-    drawTextBaseline(layer, x, yBaseline, node->label(), node->scriptLevel(),
+    drawTextBaseline(layer, node->funcKind() == FuncKind::Factorial ? x + parenBlock : x, yBaseline, node->label(), node->scriptLevel(),
              _highlightActive ? _highlightColor : lv_color_hex(0x1a1a1a));
 
     // ── Automatic parentheses + argument ──
-    int16_t parenX = static_cast<int16_t>(x + node->labelWidth() + NodeFunction::LABEL_GAP);
+    int16_t parenX = static_cast<int16_t>(x + (node->funcKind() == FuncKind::Factorial ? 0 : node->labelWidth() + NodeFunction::LABEL_GAP));
     int16_t yTop    = static_cast<int16_t>(yBaseline - node->parenAscent());
     int16_t yBottom = static_cast<int16_t>(yBaseline + node->parenDescent());
     lv_color_t parenColor = _highlightActive ? _highlightColor : lv_color_black();
@@ -2061,7 +1722,7 @@ void MathCanvas::drawFunctionBaseline(lv_layer_t* layer, const NodeFunction* nod
     }
 #endif
     // Left assembled delimiter (always parentheses for functions)
-    drawDelimiterGlyph(layer, parenX, yTop, yBottom, 0x0028, parenColor, font, fm.emSize);
+    if (parenW) drawDelimiterGlyph(layer, parenX, yTop, yBottom, 0x0028, parenColor, font, fm.emSize);
 
     // Content (argument)
     int16_t contentX = static_cast<int16_t>(parenX + parenW + innerPad);
@@ -2069,7 +1730,7 @@ void MathCanvas::drawFunctionBaseline(lv_layer_t* layer, const NodeFunction* nod
 
     // Right assembled delimiter
     int16_t rpX = static_cast<int16_t>(parenX + parenBlock - parenW);
-    drawDelimiterGlyph(layer, rpX, yTop, yBottom, 0x0029, parenColor, font, fm.emSize);
+    if (parenW) drawDelimiterGlyph(layer, rpX, yTop, yBottom, 0x0029, parenColor, font, fm.emSize);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -2190,28 +1851,26 @@ void MathCanvas::drawPeriodicDecimalBaseline(lv_layer_t* layer,
     int16_t drawX = x;
     if (node->isNegative()) {
         drawTextBaseline(layer, drawX, yBaseline, "-", node->scriptLevel(), lv_color_black());
-        drawX = static_cast<int16_t>(drawX + fm.charWidth);
+        drawX = static_cast<int16_t>(drawX + fm.textAdvance("-"));
     }
     if (!intPart.empty()) {
         drawTextBaseline(layer, drawX, yBaseline, intPart.c_str(), node->scriptLevel(), lv_color_black());
-        drawX = static_cast<int16_t>(drawX + intPart.size() * fm.charWidth);
+        drawX = static_cast<int16_t>(drawX + fm.textAdvance(intPart.c_str()));
     }
     if (!nonRepeat.empty() || !rep.empty()) {
         drawTextBaseline(layer, drawX, yBaseline, ".", node->scriptLevel(), lv_color_black());
-        drawX = static_cast<int16_t>(drawX + fm.charWidth);
+        drawX = static_cast<int16_t>(drawX + fm.textAdvance("."));
     }
     if (!nonRepeat.empty()) {
         drawTextBaseline(layer, drawX, yBaseline, nonRepeat.c_str(), node->scriptLevel(), lv_color_black());
     }
 
-    const std::size_t prefixChars = periodicDecimalPrefixCharCount(
-        node->isNegative(), intPart.size(), nonRepeat.size(), rep.size());
-    int16_t cx = static_cast<int16_t>(x + prefixChars * fm.charWidth);
+    int16_t cx = static_cast<int16_t>(x + node->prefixAdvance(fm));
 
     // Dibujar la parte periódica (con overline)
     if (!rep.empty()) {
         drawTextBaseline(layer, cx, yBaseline, rep.c_str(), node->scriptLevel(), lv_color_black());
-        int16_t repW = static_cast<int16_t>(rep.size() * fm.charWidth);
+        int16_t repW = fm.textAdvance(rep.c_str());
 
         // Overline: línea horizontal sobre los dígitos periódicos
         int16_t overY = static_cast<int16_t>(yBaseline - fm.ascent
@@ -2490,6 +2149,7 @@ void MathCanvas::drawSubscriptBaseline(lv_layer_t* layer, const NodeSubscript* n
 
 void MathCanvas::drawSymbolBaseline(lv_layer_t* layer, const NodeSymbol* node,
                                     int16_t x, int16_t yBaseline) {
+    if (!layer) return;
     const lv_color_t color = _highlightActive ? _highlightColor : lv_color_black();
     drawTextBaseline(layer, x, yBaseline, node->name().c_str(),
                      node->scriptLevel(), color);
@@ -2498,6 +2158,7 @@ void MathCanvas::drawSymbolBaseline(lv_layer_t* layer, const NodeSymbol* node,
 void MathCanvas::drawSpecialValueBaseline(lv_layer_t* layer,
                                           const NodeSpecialValue* node,
                                           int16_t x, int16_t yBaseline) {
+    if (!layer) return;
     const lv_color_t color = _highlightActive
         ? _highlightColor
         : (node->specialKind() == SpecialValueKind::Undefined
@@ -2687,6 +2348,7 @@ void MathCanvas::drawCursor(lv_layer_t* layer) {
 void MathCanvas::drawTextBaseline(lv_layer_t* layer, int16_t x, int16_t yBaseline,
                           const char* text, uint8_t scriptLevel,
                           lv_color_t color) {
+    if (!layer) return;
     if (!text || !text[0]) return;
 
     char normalized[numos::mathsym::kNormalizedTextBufferBytes] = {};
@@ -2711,29 +2373,33 @@ void MathCanvas::drawTextBaseline(lv_layer_t* layer, int16_t x, int16_t yBaselin
         }
 
         lv_font_glyph_dsc_t glyph;
-        const auto* glyphFont = ui::mathGlyphFont(font, cp);
-        const bool ok = lv_font_get_glyph_dsc(glyphFont, &glyph, cp, nextCp);
+        const lv_font_t* glyphFont;
+        const bool ok = ui::mathTextGlyph(font, cp, nextCp, glyph, glyphFont);
         if (ok) {
             lv_draw_letter_dsc_t dsc;
             lv_draw_letter_dsc_init(&dsc);
             dsc.font = glyphFont;
             dsc.color = color;
             dsc.opa = LV_OPA_COVER;
-            dsc.unicode = cp;
+            dsc.unicode = ui::mathTextCodepoint(cp);
 
             // WHY: LVGL 9 lv_draw_letter() consumes a pivot point.  Its
             // internal renderer subtracts (adv_w/2, lineAscent), so passing
             // the mathematical baseline here makes the final bitmap top equal
             // baseline - box_h - ofs_y, matching glyphInkAscentPx().
             lv_point_t letterPos;
-            letterPos.x = static_cast<int32_t>(penX + glyph.adv_w / 2);
+            // WHY: lv_draw_letter() resolves its pivot with next=0. Pair
+            // kerning advances the pen, but must not also shift this glyph.
+            lv_font_glyph_dsc_t unkerned;
+            lv_font_get_glyph_dsc(glyphFont, &unkerned, dsc.unicode, 0);
+            letterPos.x = static_cast<int32_t>(penX + unkerned.adv_w / 2);
             letterPos.y = static_cast<int32_t>(yBaseline);
 
             lv_draw_letter(layer, &dsc, &letterPos);
             penX += glyph.adv_w;
         } else {
             // Fallback de avance mínimo para no superponer caracteres desconocidos.
-            penX += std::max<int32_t>(1, font->line_height / 3);
+            penX += ui::missingMathGlyphAdvance(font);
         }
 
         p += step;
@@ -2743,6 +2409,7 @@ void MathCanvas::drawTextBaseline(lv_layer_t* layer, int16_t x, int16_t yBaselin
 void MathCanvas::drawLine(lv_layer_t* layer,
                           int16_t x1, int16_t y1, int16_t x2, int16_t y2,
                           int16_t width, lv_color_t color) {
+    if (!layer) return;
     lv_draw_line_dsc_t dsc;
     lv_draw_line_dsc_init(&dsc);
     dsc.color = color;
@@ -2758,6 +2425,7 @@ void MathCanvas::drawLine(lv_layer_t* layer,
 void MathCanvas::drawFilledRect(lv_layer_t* layer,
                                 int16_t x, int16_t y, int16_t w, int16_t h,
                                 lv_color_t color, lv_opa_t opa) {
+    if (!layer) return;
     lv_draw_rect_dsc_t dsc;
     lv_draw_rect_dsc_init(&dsc);
     dsc.bg_color = color;
@@ -2777,6 +2445,7 @@ void MathCanvas::drawBorderRect(lv_layer_t* layer,
                                 int16_t x, int16_t y, int16_t w, int16_t h,
                                 lv_color_t color, lv_opa_t opa,
                                 int16_t borderW) {
+    if (!layer) return;
     lv_draw_rect_dsc_t dsc;
     lv_draw_rect_dsc_init(&dsc);
     dsc.bg_opa        = LV_OPA_TRANSP;
