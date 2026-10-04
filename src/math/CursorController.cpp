@@ -46,9 +46,51 @@ CursorController::CursorController()
 }
 
 void CursorController::init(NodeRow* rootRow) {
+    ++_epoch;
     _root      = rootRow;
     _cur.row   = rootRow;
     _cur.index = 0;
+}
+
+bool CursorController::insertPrepared(NodePtr node, NodeRow* slot, int index) {
+    if (!node || !_cur.row || _cur.index < 0 || _cur.index > _cur.row->childCount()) return false;
+    if (slot) {
+        const MathNode* ancestor=slot;
+        unsigned depth=0;
+        while(ancestor && ancestor!=node.get() && ++depth<=82) ancestor=ancestor->parent();
+        if(ancestor!=node.get() || index<0 || index>slot->childCount()) return false;
+    }
+#if defined(__cpp_exceptions)
+    try {
+#endif
+        // WHY: explicit multiplication also preserves adjacent mantissas in
+        // receivers whose serializer does not synthesize implicit products.
+        const bool multiply=isCapturable(_cur.nodeLeft()) || scanUnits(_cur.nodeLeft())==UnitScan::Present ||
+            (_cur.nodeLeft() && _cur.nodeLeft()->type()==NodeType::Call);
+        OpKind operation=OpKind::Mul;
+        if(scanUnits(node.get())==UnitScan::Present) {
+            operation=scanUnits(_cur.nodeLeft())==UnitScan::Present?OpKind::UnitProduct:OpKind::UnitAttach;
+            if(operation==OpKind::UnitAttach && node->type()==NodeType::Unit &&
+               numos::units::angularTight(static_cast<NodeUnit*>(node.get())->atom()))operation=OpKind::UnitAttachTight;
+        }
+        NodePtr product=multiply ? makeOperator(operation) : nullptr;
+        auto* sequence=!slot && node->type()==NodeType::Row && scanUnits(node.get())==UnitScan::Present
+            ? static_cast<NodeRow*>(node.get()):nullptr;
+        // WHY: a unit product has editable components, not an invisible nested
+        // row that the cursor cannot enter. Reserve the whole batch before
+        // removing any authored node or publishing the first component.
+        const int added=sequence?sequence->childCount():1;
+        _cur.row->reserveChildren(_cur.row->childCount()+added+(multiply?1:0));
+        replaceEmptyIfNeeded();
+        if(product) _cur.row->insertChild(_cur.index++,std::move(product));
+        if(sequence)while(sequence->childCount())_cur.row->insertChild(_cur.index++,sequence->removeChild(0));
+        else _cur.row->insertChild(_cur.index++,std::move(node));
+        if(slot) _cur={slot,index};
+        ++_epoch;
+        return true;
+#if defined(__cpp_exceptions)
+    } catch(const std::bad_alloc&) { return false; }
+#endif
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -94,6 +136,10 @@ bool CursorController::isCapturable(const MathNode* node) {
         case NodeType::LogBase:
         case NodeType::Constant:
         case NodeType::Variable:
+        case NodeType::Unit:
+        case NodeType::QuantityReference:
+        case NodeType::Symbol:
+        case NodeType::SpecialValue:
             return true;
         default:
             return false;
@@ -121,7 +167,7 @@ NodeRow* CursorController::firstSlot(MathNode* node) {
         }
         case NodeType::Root: {
             auto* r = static_cast<NodeRoot*>(node);
-            auto* rad = r->radicand();
+            auto* rad = r->hasDegree() ? r->degree() : r->radicand();
             return (rad && rad->type() == NodeType::Row)
                        ? static_cast<NodeRow*>(rad)
                        : nullptr;
@@ -147,6 +193,11 @@ NodeRow* CursorController::firstSlot(MathNode* node) {
             return (base && base->type() == NodeType::Row)
                        ? static_cast<NodeRow*>(base)
                        : nullptr;
+        }
+        case NodeType::Call:
+        case NodeType::DefIntegral: {
+            auto* child=node->child(0);
+            return child && child->type()==NodeType::Row ? static_cast<NodeRow*>(child) : nullptr;
         }
         default:
             return nullptr;
@@ -200,6 +251,11 @@ NodeRow* CursorController::lastSlot(MathNode* node) {
             return (arg && arg->type() == NodeType::Row)
                        ? static_cast<NodeRow*>(arg)
                        : nullptr;
+        }
+        case NodeType::Call:
+        case NodeType::DefIntegral: {
+            auto* child=node->child(node->childCount()-1);
+            return child && child->type()==NodeType::Row ? static_cast<NodeRow*>(child) : nullptr;
         }
         default:
             return nullptr;
@@ -481,9 +537,21 @@ void CursorController::insertPower() {
         auto base = std::make_unique<NodeRow>();
         base->reserveChildren(1);
         if (!capture) base->appendChild(std::make_unique<NodeEmpty>());
+        auto* baseSlot = base.get();
+        if (capture && _cur.nodeLeft()->type()==NodeType::SpecialValue) {
+            const auto kind=static_cast<const NodeSpecialValue*>(_cur.nodeLeft())->specialKind();
+            if (kind==SpecialValueKind::PositiveInfinity ||
+                kind==SpecialValueKind::NegativeInfinity || kind==SpecialValueKind::BothInfinities) {
+                // WHY: the whole signed atom is captured. Show (-infinity)^2,
+                // not -infinity^2; use the ordinary MATH delimiter path.
+                auto signedBase=std::make_unique<NodeRow>();
+                signedBase->reserveChildren(1);
+                baseSlot=signedBase.get();
+                base->appendChild(std::make_unique<NodeParen>(std::move(signedBase)));
+            }
+        }
         auto exponent = std::make_unique<NodeRow>();
         exponent->appendChild(std::make_unique<NodeEmpty>());
-        auto* baseSlot = base.get();
         auto* exponentSlot = exponent.get();
         auto power = std::make_unique<NodePower>(std::move(base), std::move(exponent));
         // WHY: prepare all ownership/capacity before removing the user's base.
@@ -580,7 +648,7 @@ void CursorController::moveRight() {
             right->type() == NodeType::Root     ||
             right->type() == NodeType::Paren    ||
             right->type() == NodeType::Function ||
-            right->type() == NodeType::LogBase) {
+            right->type() == NodeType::LogBase || right->type() == NodeType::Call || right->type() == NodeType::DefIntegral) {
             if (enterNodeFromLeft(right)) return;
         }
 
@@ -639,6 +707,26 @@ void CursorController::moveRight() {
         }
     }
 
+    if (structParent && (structParent->type()==NodeType::Call || structParent->type()==NodeType::DefIntegral)) {
+        for(int i=0;i<structParent->childCount();++i) {
+            if(structParent->child(i)!=_cur.row) continue;
+            auto* sibling=structParent->child(i+1);
+            if(sibling && sibling->type()==NodeType::Row) {
+                _cur.row=static_cast<NodeRow*>(sibling);
+                _cur.index=0;
+                return;
+            }
+            break;
+        }
+    }
+    if(structParent && structParent->type()==NodeType::Root) {
+        auto* root=static_cast<NodeRoot*>(structParent);
+        if(root->hasDegree() && _cur.row==root->degree()) {
+            _cur.row=static_cast<NodeRow*>(root->radicand());
+            _cur.index=0;
+            return;
+        }
+    }
     // Caso general: salir a la derecha del nodo padre
     exitRowRight();
 }
@@ -667,7 +755,7 @@ void CursorController::moveLeft() {
             left->type() == NodeType::Root     ||
             left->type() == NodeType::Paren    ||
             left->type() == NodeType::Function ||
-            left->type() == NodeType::LogBase) {
+            left->type() == NodeType::LogBase || left->type() == NodeType::Call || left->type() == NodeType::DefIntegral) {
             _cur.index--;   // "Saltar por encima" para posicionarnos
             if (enterNodeFromRight(left)) return;
             // Si falló, quedamos a la izquierda del nodo (index ya decrementado)
@@ -728,6 +816,26 @@ void CursorController::moveLeft() {
         }
     }
 
+    if (structParent && (structParent->type()==NodeType::Call || structParent->type()==NodeType::DefIntegral)) {
+        for(int i=0;i<structParent->childCount();++i) {
+            if(structParent->child(i)!=_cur.row) continue;
+            auto* sibling=structParent->child(i-1);
+            if(sibling && sibling->type()==NodeType::Row) {
+                _cur.row=static_cast<NodeRow*>(sibling);
+                _cur.index=_cur.row->childCount();
+                return;
+            }
+            break;
+        }
+    }
+    if(structParent && structParent->type()==NodeType::Root) {
+        auto* root=static_cast<NodeRoot*>(structParent);
+        if(root->hasDegree() && _cur.row==root->radicand()) {
+            _cur.row=static_cast<NodeRow*>(root->degree());
+            _cur.index=_cur.row->childCount();
+            return;
+        }
+    }
     // Caso general: salir a la izquierda del nodo padre
     exitRowLeft();
 }

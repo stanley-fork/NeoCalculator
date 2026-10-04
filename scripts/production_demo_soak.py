@@ -57,7 +57,8 @@ def windows_working_set(pid: int) -> tuple[int, int] | None:
 def find_executable() -> Path:
     configured = os.environ.get("PLATFORMIO_BUILD_DIR")
     roots = [
-        Path(configured) if configured else Path("C:/.piobuild/numOS"),
+        Path(configured) if configured else Path("C:/.piobuild/numOS-build"),
+        Path("C:/.piobuild/numOS"),  # Published Windows release survives build cleanup.
         ROOT / ".pio/build",
     ]
     for root in roots:

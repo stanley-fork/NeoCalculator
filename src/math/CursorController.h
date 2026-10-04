@@ -99,6 +99,10 @@ public:
 
     /// Acceso a la fila raíz (la expresión completa)
     NodeRow* rootRow() const { return _root; }
+    uint32_t epoch() const { return _epoch; }
+    // Publish a fully built template, without capturing any preceding operand.
+    // Reservation and validation precede every mutation of the live expression.
+    bool insertPrepared(NodePtr node, NodeRow* slot, int index = 0);
 
     // Select an existing slot owned by this editor (e.g. an authored root index).
     // No ownership transfer, allocation, or alteration of the root expression.
@@ -229,6 +233,7 @@ public:
 private:
     Cursor   _cur;
     NodeRow* _root;
+    uint32_t _epoch = 0;
 
     // ── Helpers de navegación ───────────────────────────────────────────
 

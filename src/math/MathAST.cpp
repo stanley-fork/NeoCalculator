@@ -33,6 +33,7 @@
 
 #include "MathAST.h"
 #include "MathRowLayout.h"
+#include "InputSymbols.h"
 #include <algorithm>
 
 #include "../ui/MathSymbols.h"
@@ -293,6 +294,11 @@ NodeOperator::NodeOperator(OpKind op)
 
 void NodeOperator::calculateLayout(const FontMetrics& fm) {
     applyScriptLevel(this, fm);
+    if(_op==OpKind::UnitAttach || _op==OpKind::UnitAttachTight) {
+        // WHY: semantic spacing is geometry, not invisible string characters.
+        _layout.width=_op==OpKind::UnitAttach ? MathConstantsProvider(fm.emSize).muToPx(3):0;
+        _layout.ascent=fm.ascent;_layout.descent=fm.descent;return;
+    }
     // Width is purely the character width. All inter-atom padding is handled
     // exclusively by the TeX spacing logic in NodeRow::calculateLayout.
     // WHY: STIX plus-minus is wider than a digit. Use the captured glyph extent
@@ -305,6 +311,8 @@ void NodeOperator::calculateLayout(const FontMetrics& fm) {
 
 const char* NodeOperator::symbol() const {
     switch (_op) {
+        case OpKind::UnitProduct: return "·";
+        case OpKind::UnitAttach: case OpKind::UnitAttachTight: return "";
         case OpKind::Add:       return "+";
         case OpKind::Sub:       return "-";              // ASCII hyphen-minus (U+002D)
         case OpKind::Mul:       return numos::mathsym::SYMB_TIMES;
@@ -466,29 +474,20 @@ void NodePower::calculateLayout(const FontMetrics& fm) {
     //    Uses the canonical vpam::utf8Decode() — the previously hand-rolled
     //    UTF-8 byte-length scan is replaced by the returned advance count.
     _italicCorrectionPx = 0;
-    if (_base->type() == NodeType::Variable) {
-        auto* var = static_cast<const NodeVariable*>(_base.get());
-        const char* lbl = var->label();
-        uint32_t cp = 0;
-        uint8_t len = decodeFirstUtf8(lbl, cp);
-        // Single-codepoint variables only — len > 0 && lbl[len] == '\0'
-        if (cp != 0 && len > 0 && lbl[len] == '\0') {
-            int16_t corrDu = lookupItalicsCorrection(cp);
-            if (corrDu > 0) {
-                _italicCorrectionPx = mc.duToPx(corrDu);
-            }
-        }
-    } else if (_base->type() == NodeType::Constant) {
-        auto* cnst = static_cast<const NodeConstant*>(_base.get());
-        const char* symb = cnst->symbol();
-        uint32_t cp = 0;
-        uint8_t len = decodeFirstUtf8(symb, cp);
-        if (cp != 0 && len > 0) {
-            int16_t corrDu = lookupItalicsCorrection(cp);
-            if (corrDu > 0) {
-                _italicCorrectionPx = mc.duToPx(corrDu);
-            }
-        }
+    const MathNode* atom=_base.get();
+    // WHY: editor slots wrap their base in rows. Inspect without recursion or
+    // allocation so typed Greek and Latin bases get the same MATH correction.
+    for(unsigned depth=0;depth<64 &&
+        (atom->type()==NodeType::Row || atom->type()==NodeType::QuantityReference) &&
+        atom->childCount()==1;++depth)
+        atom=atom->child(0);
+    const char* text=atom->type()==NodeType::Variable?static_cast<const NodeVariable*>(atom)->label():
+        atom->type()==NodeType::Constant?static_cast<const NodeConstant*>(atom)->symbol():
+        atom->type()==NodeType::Symbol?static_cast<const NodeSymbol*>(atom)->name().c_str():nullptr;
+    if(text) {
+        uint32_t cp=0;const uint8_t len=decodeFirstUtf8(text,cp);
+        if(cp && len && text[len]=='\0')
+            _italicCorrectionPx=std::max<int16_t>(0,mc.duToPx(lookupItalicsCorrection(numos::inputsymbol::glyphCodepoint(cp))));
     }
 
     // 5. Ancho: base + italics correction + exponente
@@ -817,17 +816,24 @@ NodeConstant::NodeConstant(ConstKind kind)
 const char* NodeConstant::symbol() const {
     switch (_kind) {
         case ConstKind::Pi:   return numos::mathsym::SYMB_PI;
-        case ConstKind::E:    return "e";          // Euler's number (blue via drawConstant)
-        case ConstKind::Imag: return "i";          // imaginary unit (blue via drawConstant)
+        case ConstKind::E:    return "e";          // Euler's number
+        case ConstKind::Imag: return "i";          // imaginary unit
     }
     return "?";
 }
 
+// WHY: digits alone do not describe Greek/Latin descenders or italic overhang.
+// The font adapter measures actual ink once; rendering uses this cached offset.
+static int16_t layoutTextAtom(MathNode* node,LayoutResult& layout,const char* text,const FontMetrics& fm) {
+    applyScriptLevel(node,fm);
+    const auto ink=fm.measureAtom && fm.textFont?fm.measureAtom(fm.textFont,text):TextAtomMetrics{fm.textAdvance(text),fm.ascent,fm.descent,0};
+    layout.width=ink.width;
+    layout.ascent=layout.inkAscent=std::max(fm.ascent,ink.ascent);
+    layout.descent=layout.inkDescent=std::max(fm.descent,ink.descent);
+    return ink.leftPad;
+}
 void NodeConstant::calculateLayout(const FontMetrics& fm) {
-    applyScriptLevel(this, fm);
-    _layout.width = fm.textAdvance(symbol());
-    _layout.ascent  = fm.ascent;
-    _layout.descent = fm.descent;
+    _textOffset=layoutTextAtom(this,_layout,symbol(),fm);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -906,11 +912,8 @@ const char* NodeVariable::label() const {
 }
 
 void NodeVariable::calculateLayout(const FontMetrics& fm) {
-    applyScriptLevel(this, fm);
-    _labelWidth = fm.textAdvance(label());
-    _layout.width   = _labelWidth;
-    _layout.ascent  = fm.ascent;
-    _layout.descent = fm.descent;
+    _textOffset=layoutTextAtom(this,_layout,label(),fm);
+    _labelWidth=_layout.width;
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -1420,10 +1423,110 @@ static void setTextLayout(MathNode* node, LayoutResult& layout,
     layout.inkDescent = fm.descent;
 }
 
+NodePtr makeUnit(numos::units::Atom atom) {
+    if(!numos::units::valid(atom))return {};
+    return NodePtr(new NodeUnit(atom));
+}
+void NodeUnit::calculateLayout(const FontMetrics& fm) {
+    char text[32]{};numos::units::symbol(_atom,text,sizeof(text));
+    _textOffset=layoutTextAtom(this,_layout,text,fm);
+}
+
+NodePtr makeQuantityReference(numos::units::ReferenceAtom atom) {
+    if (!numos::units::valid(atom)) return {};
+    const auto& definition = *numos::units::reference(atom.reference);
+    // Registry strings are immutable; bounds protect the constructor from bad
+    // generated metadata as well as keeping each owned notation tree tiny.
+    auto bounded = [](const char* text, bool required) {
+        if (!text) return !required;
+        unsigned length = 0;
+        while (text[length] && length < 48) ++length;
+        return length < 48 && (!required || length != 0);
+    };
+    if (!bounded(definition.base, true) || !bounded(definition.subscript, false) ||
+        !bounded(definition.denominatorBase, false) || !bounded(definition.denominatorSubscript, false) ||
+        !bounded(definition.superscript, false)) return {};
+    auto notationPart = [&definition](const char* base, const char* subscript, const char* prefix) -> NodePtr {
+        std::string text(prefix ? prefix : "");
+        uint32_t codepoint = 0;
+        const auto bytes = utf8Decode(reinterpret_cast<const uint8_t*>(base), codepoint);
+        if (definition.kind == numos::units::ReferenceKind::PhysicalConstant && bytes && base[bytes] == 0) {
+            // WHY: only the private notation of physical quantities is italic.
+            // Unit symbols, prefixes and descriptive subscripts remain upright;
+            // no global variable normalization or font/style policy is changed.
+            if (codepoint >= 'A' && codepoint <= 'Z') codepoint += 0x1D434 - 'A';
+            else if (codepoint == 'h') codepoint = 0x210E;
+            else if (codepoint >= 'a' && codepoint <= 'z') codepoint += 0x1D44E - 'a';
+            else if (codepoint >= 0x391 && codepoint <= 0x3A9 && codepoint != 0x3A2) codepoint += 0x1D6E2 - 0x391;
+            else if (codepoint >= 0x3B1 && codepoint <= 0x3C9) codepoint += 0x1D6FC - 0x3B1;
+            char glyph[5]{};
+            if (codepoint < 0x80) glyph[0] = char(codepoint);
+            else if (codepoint < 0x800) { glyph[0] = char(0xC0 | (codepoint >> 6)); glyph[1] = char(0x80 | (codepoint & 63)); }
+            else if (codepoint < 0x10000) {
+                glyph[0] = char(0xE0 | (codepoint >> 12)); glyph[1] = char(0x80 | ((codepoint >> 6) & 63)); glyph[2] = char(0x80 | (codepoint & 63));
+            } else {
+                glyph[0] = char(0xF0 | (codepoint >> 18)); glyph[1] = char(0x80 | ((codepoint >> 12) & 63));
+                glyph[2] = char(0x80 | ((codepoint >> 6) & 63)); glyph[3] = char(0x80 | (codepoint & 63));
+            }
+            text += glyph;
+        } else text += base;
+        auto glyphs = makeSymbol(text);
+        if (subscript && *subscript) return makeSubscript(std::move(glyphs), makeSymbol(subscript));
+        return glyphs;
+    };
+    auto notation = notationPart(definition.base, definition.subscript,
+                                numos::units::prefix(atom.prefix)->symbol);
+    if (definition.superscript && *definition.superscript)
+        notation = makePower(std::move(notation), makeSymbol(definition.superscript));
+    if (definition.denominatorBase && *definition.denominatorBase)
+        notation = makeFraction(std::move(notation),
+            notationPart(definition.denominatorBase, definition.denominatorSubscript, nullptr));
+    else if (definition.denominatorSubscript && *definition.denominatorSubscript) return {};
+    return NodePtr(new NodeQuantityReference(atom, std::move(notation)));
+}
+
+void NodeQuantityReference::calculateLayout(const FontMetrics& fm) {
+    applyScriptLevel(this, fm);
+    _notation->calculateLayout(fm);
+    // Same rectangle and baseline for layout, common paint traversal and the
+    // containing row's cursor; no duplicated script or fraction formula.
+    _layout = _notation->layout();
+}
+
+UnitScan scanUnits(const MathNode* root) {
+    if(!root)return UnitScan::None;
+    // WHY: inspect the authored tree before any zero-product/cancellation pass.
+    struct Frame {const MathNode* node=nullptr;uint16_t next=0;};
+    std::array<Frame,82> stack{};size_t depth=1,visited=0;stack[0]={root,0};
+    bool found=false;
+    while(depth) {
+        auto& frame=stack[depth-1];const auto* n=frame.node;
+        if(!frame.next) {
+            if(++visited>400)return UnitScan::Limit;
+            if(n->type()==NodeType::Unit) {
+                if(!numos::units::valid(static_cast<const NodeUnit*>(n)->atom()))return UnitScan::Invalid;
+                found=true;
+            }
+            if(n->type()==NodeType::QuantityReference) {
+                if(!numos::units::valid(static_cast<const NodeQuantityReference*>(n)->atom()))return UnitScan::Invalid;
+                found=true;
+            }
+        }
+        if(frame.next>=n->childCount()){--depth;continue;}
+        const auto* child=n->child(frame.next++);if(!child)continue;
+        // WHY: bound depth, not the number of siblings. A flat 300-node input
+        // remains inside Calculation's existing 400-node admission contract.
+        if(depth==stack.size())return UnitScan::Limit;
+        stack[depth++]={child,0};
+    }
+    return found?UnitScan::Present:UnitScan::None;
+}
+
 NodeSymbol::NodeSymbol(std::string name)
     : MathNode(NodeType::Symbol), _name(std::move(name)) {}
 
 void NodeSymbol::calculateLayout(const FontMetrics& fm) {
+    _textOffset=0;
     if (_name == "\xCE\x94" && fm.deltaWidth) {
         // WHY: a UTF-8 quantity is one glyph, not one-byte variable D. The
         // canvas captures its real font box before allocation-free layout.
@@ -1433,7 +1536,7 @@ void NodeSymbol::calculateLayout(const FontMetrics& fm) {
         _layout.descent = _layout.inkDescent = fm.deltaDescent;
         return;
     }
-    setTextLayout(this, _layout, _name, fm);
+    _textOffset=layoutTextAtom(this,_layout,_name.c_str(),fm);
 }
 
 NodeSpecialValue::NodeSpecialValue(SpecialValueKind kind)
@@ -1445,6 +1548,8 @@ const char* NodeSpecialValue::label() const {
         case SpecialValueKind::NegativeInfinity: return "-\xE2\x88\x9E";
         case SpecialValueKind::UnsignedInfinity: return "\xE2\x88\x9E";
         case SpecialValueKind::Undefined:        return "undefined";
+        case SpecialValueKind::BarePositiveInfinity: return "\xE2\x88\x9E";
+        case SpecialValueKind::BothInfinities: return "\xC2\xB1\xE2\x88\x9E";
     }
     return "undefined";
 }
@@ -2128,6 +2233,18 @@ std::string dumpTree(const MathNode* node, int indent) {
             out += dumpTree(node->child(2), indent + 2);
             break;
         }
+        case NodeType::Unit: {
+            const auto a=static_cast<const NodeUnit*>(node)->atom();char text[32]{};
+            numos::units::symbol(a,text,sizeof(text));
+            out += "Unit["+std::to_string(uint16_t(a.unit))+":"+std::to_string(uint8_t(a.prefix))+"] "+text+metrics()+"\n";break;
+        }
+        case NodeType::QuantityReference: {
+            const auto a=static_cast<const NodeQuantityReference*>(node)->atom();
+            out += "QuantityReference["+std::to_string(uint16_t(a.reference))+":"+
+                std::to_string(uint8_t(a.prefix))+"]"+metrics()+"\n";
+            out += dumpTree(node->child(0), indent + 1);
+            break;
+        }
         case NodeType::Symbol:
             out += "Symbol \"" + static_cast<const NodeSymbol*>(node)->name() +
                    "\"" + metrics() + "\n";
@@ -2257,6 +2374,10 @@ NodePtr cloneNode(const MathNode* node) {
                              cloneNode(bo->upper()),
                              cloneNode(bo->body()));
         }
+        case NodeType::Unit:
+            return makeUnit(static_cast<const NodeUnit*>(node)->atom());
+        case NodeType::QuantityReference:
+            return makeQuantityReference(static_cast<const NodeQuantityReference*>(node)->atom());
         case NodeType::Symbol:
             return makeSymbol(static_cast<const NodeSymbol*>(node)->name());
         case NodeType::SpecialValue:

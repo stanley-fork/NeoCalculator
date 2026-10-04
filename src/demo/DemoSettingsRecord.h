@@ -6,6 +6,7 @@
 #include <cstring>
 #include "../apps/BrightnessSettingPolicy.h"
 #include "../display/ProductionDisplayProfile.h"
+#include "../i18n/Locale.h"
 
 namespace numos::demo {
 
@@ -15,7 +16,9 @@ inline constexpr uint8_t kPreviousSettingsFormatVersion = 2;
 inline constexpr std::size_t kSettingsRecordSize = 16;
 
 struct DecodedSettings {
-    uint8_t tutorLanguage = 0; // Reserved byte 10: old records contain zero (English).
+    // Legacy member name, now the system locale ID. Byte 10 and old 0/1 keep
+    // their meaning; regional choices use stable IDs 4/5, not menu positions.
+    uint8_t tutorLanguage = 0;
     bool angleValid = false;
     bool angleDeg = false;
     bool complexValid = false;
@@ -58,7 +61,7 @@ inline std::array<uint8_t, kSettingsRecordSize> encodeSettingsRecord(
     record[7] = educationEnabled ? 1 : 0;
     record[8] = settingsPrecisionValid(precision) ? precision : 10;
     record[9] = numos::settings::normalizePersistedBrightness(brightness);
-    record[10] = tutorLanguage == 1 ? 1 : 0;
+    record[10] = i18n::localeStorageValue(i18n::storedLocale(tutorLanguage));
     const uint32_t checksum = settingsRecordChecksum(record.data(), 12);
     std::memcpy(record.data() + 12, &checksum, sizeof(checksum));
     return record;
@@ -79,7 +82,7 @@ inline bool decodeSettingsRecord(const uint8_t* data, const std::size_t length,
     std::memcpy(&storedChecksum, data + 12, sizeof(storedChecksum));
     if (storedChecksum != settingsRecordChecksum(data, 12)) return false;
 
-    decoded.tutorLanguage = data[10] == 1 ? 1 : 0;
+    decoded.tutorLanguage = i18n::localeStorageValue(i18n::storedLocale(data[10]));
     if (data[5] <= 1) {
         decoded.angleValid = true;
         decoded.angleDeg = data[5] != 0;

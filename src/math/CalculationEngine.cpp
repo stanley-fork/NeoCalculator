@@ -1,3 +1,5 @@
+#include "MathInputCalls.h"
+#include "InputSymbols.h"
 /*
  * NeoCalculator - NumOS
  * Copyright (C) 2026 Juan Ramon
@@ -317,11 +319,44 @@ struct Serializer {
                 const char v = static_cast<const vpam::NodeVariable*>(n)->name();
                 if (v == vpam::VAR_ANS)    { out += "numos_Ans";    return true; }
                 if (v == vpam::VAR_PREANS) { out += "numos_PreAns"; return true; }
-                if ((v >= 'A' && v <= 'F') || v == 'x' || v == 'y' || v == 'z') {
-                    out += v;
+                if (inputsymbol::latin(v)) {
+                    const char text[]={v,0};out += inputsymbol::toCas(text);
                     return true;
                 }
                 return fail("unsupported variable");
+            }
+            case NodeType::Unit: return fail("typed units require the quantity engine");
+            case NodeType::QuantityReference: return fail("typed quantity references require the quantity engine");
+            case NodeType::Symbol: {
+                const auto& text=static_cast<const vpam::NodeSymbol*>(n)->name();
+                if(!inputsymbol::greek(text))return fail("unsupported input symbol");
+                out += inputsymbol::toCas(text);return true;
+            }
+            case NodeType::SpecialValue:
+                switch(static_cast<const vpam::NodeSpecialValue*>(n)->specialKind()) {
+                    case vpam::SpecialValueKind::PositiveInfinity:
+                    case vpam::SpecialValueKind::BarePositiveInfinity:
+                        out += "infinity";return true;
+                    case vpam::SpecialValueKind::NegativeInfinity:
+                        // WHY: Preserve this signed atom under powers and
+                        // implicit multiplication, rather than emitting a subtraction.
+                        out += "(-infinity)";return true;
+                    case vpam::SpecialValueKind::BothInfinities:
+                        // WHY: Plus/minus denotes two values, not Giac's
+                        // unsigned complex infinity. Keep both signs explicit.
+                        out += "[-infinity,infinity]";return true;
+                    default: break;
+                }
+                return fail("unsupported input special value");
+            case NodeType::Call: {
+                const auto* call=static_cast<const vpam::NodeCall*>(n);
+                if(!inputCall(call->name().c_str(),call->childCount())) return fail("unsupported input function");
+                out+=call->name(); out+='(';
+                for(int i=0;i<call->childCount();++i) {
+                    if(i) out+=',';
+                    if(!emitSlot(call->child(i),"incomplete function argument")) return false;
+                }
+                out+=')'; return true;
             }
             case NodeType::DefIntegral: {
                 auto* d = static_cast<const vpam::NodeDefIntegral*>(n);
@@ -566,12 +601,12 @@ bool appendParenthesized(const EngineResultNode& n, vpam::NodeRow* row,
     return true;
 }
 
-bool mapSymbolChar(const std::string& name, char& out) {
+bool mapSymbolChar(std::string_view name, char& out) {
     if (name == "numos_Ans")    { out = vpam::VAR_ANS;    return true; }
     if (name == "numos_PreAns") { out = vpam::VAR_PREANS; return true; }
     if (name.size() == 1) {
         const char c = name[0];
-        if ((c >= 'A' && c <= 'F') || c == 'x' || c == 'y' || c == 'z') {
+        if (inputsymbol::latin(c)) {
             out = c;
             return true;
         }
@@ -633,11 +668,12 @@ bool appendConverted(const EngineResultNode& n, vpam::NodeRow* row,
         }
 
         case EngineNodeKind::Symbol: {
+            const auto name=inputsymbol::fromCas(n.text);
             char c;
-            if (mapSymbolChar(n.text, c))
+            if (mapSymbolChar(name, c))
                 row->appendChild(vpam::makeVariable(c));
-            else if (!n.text.empty())
-                row->appendChild(vpam::makeSymbol(n.text));
+            else if (!name.empty())
+                row->appendChild(vpam::makeSymbol(std::string(name)));
             else
                 return false;
             return true;
@@ -1162,7 +1198,8 @@ void CalculationEngine::syncVariablesToGiac(std::string& diagnostic) {
     }
 }
 
-void CalculationEngine::noteAnsRotated(const std::string& exactGiacText, bool mirrorRotated) {
+void CalculationEngine::noteAnsRotated(const std::string& exactGiacText, bool mirrorRotated,
+                                     ResultPresentation presentation) {
     auto& vm = vpam::VariableManager::instance();
     SessionExact& ans = _session[sessionIndex(vpam::VAR_ANS)];
     SessionExact& pre = _session[sessionIndex(vpam::VAR_PREANS)];
@@ -1171,6 +1208,7 @@ void CalculationEngine::noteAnsRotated(const std::string& exactGiacText, bool mi
     pre.valid = ans.valid && ans.revision + (mirrorRotated ? 1u : 0u) == vm.revision(vpam::VAR_ANS);
     pre.text = ans.text;
     pre.sessionOnly = ans.sessionOnly;
+    pre.presentation = ans.presentation;
     pre.snapshot = vm.getPreAns();
     pre.revision = vm.revision(vpam::VAR_PREANS);
     ans.valid = !exactGiacText.empty();
@@ -1178,6 +1216,7 @@ void CalculationEngine::noteAnsRotated(const std::string& exactGiacText, bool mi
     ans.snapshot = vm.getAns();
     ans.revision = vm.revision(vpam::VAR_ANS);
     ans.text = exactGiacText;
+    ans.presentation = presentation;
 }
 
 void CalculationEngine::noteVariableStored(char varName) {
@@ -1193,6 +1232,7 @@ void CalculationEngine::noteVariableStored(char varName) {
         slot.revision = vm.revision(varName);
         slot.text = ans.text;
         slot.sessionOnly = ans.sessionOnly;
+        slot.presentation = ans.presentation;
     } else {
         slot.valid = false;   // sync falls back to exactValToGiacText
     }
@@ -1232,8 +1272,39 @@ CalculationEngine& CalculationEngine::instance() {
     return engine;
 }
 
+ResultPresentation CalculationEngine::inputPresentation(const vpam::MathNode* root) const {
+    // WHY: only a direct object or an unchanged reference carries this intent.
+    // Arithmetic (even one that happens to return the same pair) drops it.
+    for (unsigned depth=0;root && depth<82;++depth) {
+        if ((root->type()==vpam::NodeType::Row || root->type()==vpam::NodeType::Paren) && root->childCount()==1) {
+            root=root->child(0);continue;
+        }
+        if (root->type()==vpam::NodeType::SpecialValue &&
+            static_cast<const vpam::NodeSpecialValue*>(root)->specialKind()==vpam::SpecialValueKind::BothInfinities)
+            return ResultPresentation::BothInfinities;
+        if (root->type()==vpam::NodeType::Variable) {
+            const char name=static_cast<const vpam::NodeVariable*>(root)->name();
+            const int index=sessionIndex(name);
+            if (index>=0) {
+                const auto& slot=_session[index];const auto& vm=vpam::VariableManager::instance();
+                if (slot.valid && slot.revision==vm.revision(name) && exactValEquals(slot.snapshot,vm.getVariable(name)))
+                    return slot.presentation;
+            }
+        }
+        break;
+    }
+    return ResultPresentation::Canonical;
+}
+
 CalculationEvaluation CalculationEngine::evaluate(const vpam::MathNode* root) {
     CalculationEvaluation ev;
+    const auto units=vpam::scanUnits(root);
+    if(units!=vpam::UnitScan::None) {
+        ev.status=units==vpam::UnitScan::Present?MathEngineStatus::UnitsUnavailable:MathEngineStatus::Unsupported;
+        ev.diagnostic=units==vpam::UnitScan::Present?"Quantity calculation is not available in this version":
+            units==vpam::UnitScan::Invalid?"Invalid quantity identity":"Expression limit";
+        return ev; // No Giac call, session mutation, simplification or Ans update.
+    }
 
     std::string serErr;
     if (!serializeForGiac(root, ev.serialized, serErr, true)) {
@@ -1266,7 +1337,18 @@ CalculationEvaluation CalculationEngine::evaluate(const vpam::MathNode* root) {
         if (resultTreeToExactVal(sr.tree, ev.exactVal)) {
             ev.exactValValid = true;
         }
-        ev.exactAST = resultTreeToAST(sr.tree, ProductNotation::ScalarNatural);
+        // WHY: a generic list, interval or unsigned infinity never acquires
+        // this display. Verify both the authored provenance AND the result tree.
+        const bool compactBoth=ev.ok() && inputPresentation(root)==ResultPresentation::BothInfinities &&
+            sr.tree.kind==EngineNodeKind::List && sr.tree.children.size()==2 &&
+            sr.tree.children[0].kind==EngineNodeKind::MinusInfinity &&
+            sr.tree.children[1].kind==EngineNodeKind::PlusInfinity;
+        if (compactBoth) {
+            ev.presentation=ResultPresentation::BothInfinities;
+            ev.sToDPolicy=ResultSToDPolicy::Unavailable;
+            ev.exactAST=vpam::makeRow();
+            static_cast<vpam::NodeRow*>(ev.exactAST.get())->appendChild(vpam::makeSpecialValue(vpam::SpecialValueKind::BothInfinities));
+        } else ev.exactAST = resultTreeToAST(sr.tree, ProductNotation::ScalarNatural);
         if (ev.exactAST) {
             ev.exactAST->calculateLayout(vpam::defaultFontMetrics());
             const auto& layout = ev.exactAST->layout();

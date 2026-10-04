@@ -38,6 +38,13 @@ EM_JS(void, numosFilesystemDidMutate, (int operation), {
 
 #ifdef _WIN32
     #include <direct.h>
+    #ifndef WIN32_LEAN_AND_MEAN
+    #define WIN32_LEAN_AND_MEAN
+    #endif
+    #ifndef NOMINMAX
+    #define NOMINMAX
+    #endif
+    #include <windows.h>
     #define MKDIR_P(path) ::_mkdir(path)
 #else
     #include <sys/stat.h>
@@ -119,7 +126,14 @@ bool LittleFSClass::remove(const char* path) {
 bool LittleFSClass::rename(const char* from, const char* to) {
     const std::string source = fullPath(from);
     const std::string destination = fullPath(to);
+#ifdef _WIN32
+    // WHY: C rename cannot replace an existing Windows file. Match LittleFS /
+    // POSIX replacement semantics without deleting the last valid record first.
+    const bool renamed = MoveFileExA(source.c_str(), destination.c_str(),
+        MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != 0;
+#else
     const bool renamed = std::rename(source.c_str(), destination.c_str()) == 0;
+#endif
 #ifdef __EMSCRIPTEN__
     if (renamed) numosFilesystemDidMutate(4);
 #endif

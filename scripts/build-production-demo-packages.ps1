@@ -26,7 +26,7 @@ foreach ($environment in $environments) {
     $buildRoot = if ($env:PLATFORMIO_BUILD_DIR) {
         $env:PLATFORMIO_BUILD_DIR
     } else {
-        'C:/.piobuild/numOS'
+        'C:/.piobuild/numOS-build'
     }
     $source = Join-Path $buildRoot "$environment\factory-package"
     $destination = Join-Path $output $environment

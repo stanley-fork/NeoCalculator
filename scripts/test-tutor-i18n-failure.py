@@ -14,7 +14,7 @@ eq=importlib.util.module_from_spec(spec);spec.loader.exec_module(eq)
 p=argparse.ArgumentParser();p.add_argument('--steps-bin',required=True);p.add_argument('--results-bin',required=True);p.add_argument('--out',type=Path,required=True)
 a=p.parse_args();a.out.mkdir(parents=True,exist_ok=True)
 env=dict(os.environ,PATH='C:/mingw64/bin;C:/SDL2/x86_64-w64-mingw32/bin;'+os.environ['PATH'])
-spanish='wait 200\nopen_app Settings\nwait 30\n'+eq.keys('DOWN DOWN DOWN DOWN ENTER HOME')+'wait 30\n'
+spanish='wait 200\nopen_app Settings\nwait 30\n'+eq.keys('DOWN DOWN DOWN DOWN ENTER ENTER HOME')+'wait 30\n'
 def run(name,binary,script,extra=None):
     script+='log I18N_FAULT_DONE\n';path=a.out/(name+'.numos');path.write_text(script,encoding='utf-8')
     result=subprocess.run([binary,'--headless','--deterministic','--quiet','--frames','1800','--script',os.path.relpath(path,ROOT)],cwd=ROOT,env=dict(env,**(extra or {})),capture_output=True,timeout=90)

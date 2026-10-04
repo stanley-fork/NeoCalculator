@@ -82,6 +82,9 @@ enum class ResultSToDPolicy : uint8_t {
     Unavailable
 };
 
+// A display intent with provenance, never a replacement for the canonical value.
+enum class ResultPresentation : uint8_t { Canonical, BothInfinities };
+
 struct CalculationEvaluation {
     MathEngineStatus status = MathEngineStatus::Unsupported;
     CalcResultKind kind = CalcResultKind::None;
@@ -100,6 +103,7 @@ struct CalculationEvaluation {
     EngineFallbackReason fallbackReason = EngineFallbackReason::None;
     ResultReusePolicy reusePolicy = ResultReusePolicy::NonReusable;
     ResultSToDPolicy sToDPolicy = ResultSToDPolicy::Unavailable;
+    ResultPresentation presentation = ResultPresentation::Canonical;
 
     bool ok() const { return status == MathEngineStatus::Ok; }
     bool displayable() const {
@@ -118,7 +122,8 @@ public:
     /// Call AFTER VariableManager::updateAns(): rotates the session-exact
     /// Ans text (Ans -> PreAns) so exact chains (sqrt(2), 2^100) survive
     /// the int64 ExactVal store.
-    void noteAnsRotated(const std::string& exactGiacText, bool mirrorRotated = true);
+    void noteAnsRotated(const std::string& exactGiacText, bool mirrorRotated = true,
+                       ResultPresentation presentation = ResultPresentation::Canonical);
 
     /// Call AFTER an STO wrote VariableManager: keeps the stored variable's
     /// session-exact text coherent (STO copies Ans).
@@ -152,6 +157,7 @@ private:
     struct SessionExact {
         bool valid = false;
         bool sessionOnly = false;
+        ResultPresentation presentation = ResultPresentation::Canonical;
         uint32_t revision = 0;
         vpam::ExactVal snapshot;   // VariableManager value the text mirrors
         std::string text;          // exact Giac expression for that value
@@ -160,6 +166,7 @@ private:
     static int sessionIndex(char varName);           // A-F,'#','$' -> 0..7
     static const char* giacNameFor(char varName);    // 'A'..'F', numos_Ans...
     void syncVariablesToGiac(std::string& diagnostic);
+    ResultPresentation inputPresentation(const vpam::MathNode* root) const;
 
     SessionExact _session[8];
 };

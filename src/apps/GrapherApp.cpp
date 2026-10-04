@@ -1,3 +1,4 @@
+#include "ui/Toolbox.h"
 /*
  * NeoCalculator - NumOS
  * Copyright (C) 2026 Juan Ramon
@@ -180,6 +181,7 @@ void GrapherApp::begin() {
 }
 
 void GrapherApp::end() {
+    ui::toolbox::closeOwner(this);
     // ── Stop lazy loading timer ──
     if (_tplLoadTimer) {
         lv_timer_delete(_tplLoadTimer);
@@ -1767,6 +1769,7 @@ uint8_t GrapherApp::retainedExpressionCount() const {
 }
 
 bool GrapherApp::navigateBack() {
+    if (ui::toolbox::back()) return true;
     if (_tplOpen) {
         closeTemplates();
         return true;
@@ -3064,6 +3067,7 @@ void GrapherApp::rebuildTable() {
 // ═══════════════════════════════════════════════════════════════════════
 
 void GrapherApp::handleKey(const KeyEvent& ev) {
+    if (ui::toolbox::handle(ev)) return;
     if (ev.action != KeyAction::PRESS && ev.action != KeyAction::REPEAT) return;
 
     // Templates modal intercept — all keys go to modal when open
@@ -3078,6 +3082,12 @@ void GrapherApp::handleKey(const KeyEvent& ev) {
         return;
     }
 
+    if(ev.code==KeyCode::TOOLBOX && _tab==Tab::EXPRESSIONS && _focus==Focus::CONTENT &&
+       _exprMode==ExprMode::EDITING && ev.action==KeyAction::PRESS) {
+        ui::toolbox::open(_screen,{this,&_exprCursor[_exprIdx],numos::toolbox::Grapher,[](void* owner) {
+            auto* self=static_cast<GrapherApp*>(owner);self->refreshVPAMExpr(self->_exprIdx);self->refreshTemplateButtons();
+        }});return;
+    }
     // Global shortcuts: GRAPH → Graph tab, TABLE → Table tab
     if (ev.code == KeyCode::GRAPH && _tab != Tab::GRAPH) {
         _focus = Focus::CONTENT;

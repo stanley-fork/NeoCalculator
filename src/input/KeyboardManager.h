@@ -56,6 +56,10 @@ public:
     void consumeForPlane(bool usesShift, bool usesAlpha);
 
     void reset();
+    // Logical latches only; never a snapshot of scanner/down-key state.
+    void restoreLogical(ModifierPhase shift, ModifierPhase alpha) {
+        _shift=shift; _alpha=alpha; _store=false;
+    }
     const char* indicatorText() const;
 
 private:

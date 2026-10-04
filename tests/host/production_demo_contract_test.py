@@ -72,8 +72,9 @@ def test_profile_isolation() -> None:
     require(
         "#if NUMOS_PRODUCTION_DEMO_PROFILE" in settings
         and '#include "../demo/DemoSettingsRecord.h"' in settings
-        and "#elif defined(__EMSCRIPTEN__)" in settings
-        and "SETTINGS_FORMAT_VERSION = 1" in settings,
+        and "#elif defined(NATIVE_SIM) || defined(__EMSCRIPTEN__)" in settings
+        and '#include "CompactSettingsRecord.h"' in settings
+        and "encodeCompactSettings" in settings,
         "demo settings format must not replace normal WASM persistence",
     )
 

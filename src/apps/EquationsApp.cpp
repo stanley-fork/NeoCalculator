@@ -1,3 +1,4 @@
+#include "ui/Toolbox.h"
 /*
  * NeoCalculator - NumOS
  * Copyright (C) 2026 Juan Ramon
@@ -136,7 +137,15 @@ void EquationsApp::begin() {
     showEqList();
 }
 void EquationsApp::load() {
-    begin(); lv_screen_load_anim(_screen,LV_SCREEN_LOAD_ANIM_FADE_IN,200,0,false); _statusBar.update();
+    begin();
+    if (_stepLocale != numos::i18n::productLocale) {
+        _stepLocale = numos::i18n::productLocale;
+        // WHY: a retained result/derivation changes presentation only after a
+        // system-language change. Preserve mathematical snapshots and page/pan.
+        if (_state == State::STEPS) { if (_stepProse) drawStep(true, true); else showSteps(); }
+        else if (_state == State::RESULT) showResult();
+    }
+    lv_screen_load_anim(_screen,LV_SCREEN_LOAD_ANIM_FADE_IN,200,0,false); _statusBar.update();
 }
 void EquationsApp::clearView() {
     closeVariables();
@@ -150,6 +159,7 @@ void EquationsApp::clearView() {
     if (_body) { lv_obj_clean(_body); lv_obj_scroll_to(_body,0,0,LV_ANIM_OFF); }
 }
 void EquationsApp::end() {
+    ui::toolbox::closeOwner(this);
     clearView(); _editCursor.init(nullptr); _editNode.reset(); _editRow=nullptr;
     for (int i=0;i<MAX_EQS;++i) { _eqNode[i].reset(); _eqRowData[i]=nullptr; }
     _giacResult={}; _derivation={}; _stepIndex=0; _teachingPage=0; _stepDetail=true;
@@ -380,6 +390,7 @@ void EquationsApp::handleEditor(const KeyEvent& ev) {
     }
 }
 void EquationsApp::handleKey(const KeyEvent& ev) {
+    if (ui::toolbox::handle(ev)) return;
     if(ev.action!=KeyAction::PRESS && ev.action!=KeyAction::REPEAT) return;
     if(ev.action==KeyAction::REPEAT && !navigation(ev.code) && !(ev.code==KeyCode::DEL && _state==State::EDITING && !_variableMenu)) return;
     if(ev.code==KeyCode::SHIFT || ev.code==KeyCode::ALPHA) {
@@ -398,6 +409,11 @@ void EquationsApp::handleKey(const KeyEvent& ev) {
         if(ev.code==KeyCode::AC) { closeVariables(); return; }
         for(int i=0;i<3;++i) lv_obj_set_style_text_color(lv_obj_get_child(_variableMenu,i+1),lv_color_hex(i==_variableFocus?FOCUS:0x333333),0);
         return;
+    }
+    if(ev.code==KeyCode::TOOLBOX && _state==State::EDITING && ev.action==KeyAction::PRESS) {
+        ui::toolbox::open(_screen,{this,&_editCursor,numos::toolbox::Equations,[](void* owner) {
+            auto* self=static_cast<EquationsApp*>(owner);self->_draftTouched=true;self->refreshEditor();
+        }});return;
     }
     switch(_state) {
         case State::EQ_LIST:
@@ -471,6 +487,7 @@ void EquationsApp::handleKey(const KeyEvent& ev) {
     _statusBar.update();
 }
 bool EquationsApp::navigateBack() {
+    if (ui::toolbox::back()) return true;
     if(_variableMenu) { closeVariables(); return true; }
     switch(_state) {
         case State::TEMPLATE: showEqList(); return true;

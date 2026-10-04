@@ -38,7 +38,7 @@ for entry in homes:
  for key in ('objects','timers','pool_total','pool_free'):assert entry[key]==homes[0][key],(key,entry,homes[0])
 records.append(dict(id='pool-50-dialogs',passed=True,homes=homes))
 for locale in ('en','es'):
- body=('open_app Settings\nwait 30\n'+keys('DOWN DOWN DOWN DOWN ENTER HOME')+'wait 30\n' if locale=='es' else '')+'open_app Calculation\nwait 30\n'
+ body=('open_app Settings\nwait 30\n'+keys('DOWN DOWN DOWN DOWN ENTER ENTER HOME')+'wait 30\n' if locale=='es' else '')+'open_app Calculation\nwait 30\n'
  for name,input,select in [('fraction','7 / 3',''),('complex','[ SQRT neg 1 ] + 1',''),('precision','9 . 9 9 5','DOWN '*8+'ENTER')]:
   body+=keys('AC '+input+' ENTER '+menu+' '+select)+'wait 3\nscreenshot '+(a.out/(locale+'-'+name+'.ppm')).as_posix()+'\n'+keys('BACK')
  run(locale,body)

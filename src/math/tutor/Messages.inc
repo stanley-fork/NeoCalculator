@@ -233,7 +233,7 @@ constexpr CatalogEntry catalog[] = {
     {"view.count_real_many", "{0} solutions | x | Real", "i", "{0} soluciones | x | Real", nullptr},
     {"view.count_complex_one", "1 solution | x | Complex", "", "1 solución | x | Complejo", nullptr},
     {"view.count_complex_many", "{0} solutions | x | Complex", "i", "{0} soluciones | x | Complejo", nullptr},
-    {"view.language", "Tutor language", "", "Idioma del tutor", nullptr},
+    {"view.language", "Language", "", "Idioma", nullptr},
     {"view.english", "English", "", "English", nullptr},
     {"view.spanish", "Español", "", "Español", nullptr},
     {"view.solving", "Solving with Giac...", "", "Resolviendo con Giac...", nullptr},
@@ -303,6 +303,7 @@ const char *messageKey(Message k) {
     return unsigned(k) < unsigned(Message::Count) ? catalog[unsigned(k)].key : "unknown";
 }
 bool hasTranslation(Message k, Locale locale) {
+    locale = baseLocale(locale);
     if(unsigned(k)>=unsigned(Message::Count))return false;
     const auto& e=catalog[unsigned(k)];
     const char* value=locale==Locale::Spanish?e.spanish:locale==Locale::French?e.french:e.english;
@@ -312,6 +313,7 @@ const char *messageSchema(Message k) {
     return unsigned(k)<unsigned(Message::Count)?catalog[unsigned(k)].schema:nullptr;
 }
 const char *messageFallback(Message k, Locale locale) {
+    locale = baseLocale(locale);
     if(unsigned(k)>=unsigned(Message::Count)||catalog[unsigned(k)].schema[0])return "";
     const auto& e=catalog[unsigned(k)];
     return locale==Locale::Spanish&&e.spanish?e.spanish:locale==Locale::French&&e.french?e.french:e.english;
@@ -350,6 +352,7 @@ bool validateCatalogs() {
     return true;
 }
 std::string explain(Message k, const Vector<Parameter> &p, Locale locale) {
+    locale = baseLocale(locale);
     if (!validateMessage(k, p))
         return "[invalid message parameters]";
     const auto &entry = catalog[unsigned(k)];

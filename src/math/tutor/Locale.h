@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
-#include <cstdint>
+#include "../../i18n/Locale.h"
 namespace numos::tutor {
-enum class Locale : uint8_t { English, Spanish, French, Pseudo };
-// Presentation preference only: never part of a mathematical snapshot.
-inline Locale productLocale = Locale::English;
-inline Locale storedLocale(uint8_t value) { return value==1?Locale::Spanish:Locale::English; }
-inline uint8_t localeStorageValue() { return productLocale==Locale::Spanish?1:0; }
+// Compatibility names: there is one system preference, not a second Tutor one.
+using numos::i18n::Locale;
+using numos::i18n::productLocale;
+using numos::i18n::storedLocale;
+using numos::i18n::localeStorageValue;
+using numos::i18n::baseLocale;
 }

@@ -33,7 +33,7 @@ startup = begin[begin.index('    if (LittleFS.begin('):].rsplit('\n}', 1)[0]
 assert begin.index('_mainMenu.load();') < begin.index('LittleFS.begin(')
 assert '->begin()' not in '\n'.join(line for line in begin.splitlines() if not line.lstrip().startswith('//'))
 settings = (ROOT/'src/apps/SettingsApp.cpp').read_text(encoding='utf-8')
-settings = settings.split('#if NUMOS_BOARD_PROD_WROOM1U_N16R8\nnamespace {', 1)[1].split('#elif defined(__EMSCRIPTEN__)', 1)[0]
+settings = settings.split('#if NUMOS_BOARD_PROD_WROOM1U_N16R8\nnamespace {', 1)[1].split('#elif defined(NATIVE_SIM) || defined(__EMSCRIPTEN__)', 1)[0]
 (out/'settings.inc').write_text('namespace {' + settings, encoding='utf-8')
 retry_counts = {}
 for name, expected in [('CircuitCoreApp.cpp', 3), ('Fluid2DApp.cpp', 3), ('NeoLanguageApp.cpp', 2)]:

@@ -170,6 +170,13 @@ static bool assemblyGlyphsAvailable(const lv_font_t* font,
     return true;
 }
 
+static lv_point_t delimiterGlyphPivot(int32_t x, int32_t top,
+                                      const lv_font_glyph_dsc_t& glyph) {
+    // WHY: LVGL 9 consumes the advance-centred baseline. Keep every generic
+    // delimiter path on the same bitmap-top-to-pivot conversion.
+    return {x + glyph.adv_w / 2, top + glyph.box_h + glyph.ofs_y};
+}
+
 static bool drawDelimiterGlyph(lv_layer_t* layer,
                                int16_t x, int16_t yTop, int16_t yBottom,
                                uint32_t delimCp, lv_color_t color,
@@ -257,10 +264,7 @@ static bool drawDelimiterGlyph(lv_layer_t* layer,
         dsc.color = color;
         dsc.opa  = LV_OPA_COVER;
         dsc.unicode = delimCp;
-        lv_point_t pos;
-        pos.x = static_cast<int32_t>(x);
-        // Center the base glyph vertically in the available space
-        pos.y = static_cast<int32_t>((yTop + yBottom) / 2 - glyph.ofs_y);
+        lv_point_t pos = delimiterGlyphPivot(x, yTop + (yBottom-yTop-glyph.box_h)/2, glyph);
         lv_draw_letter(layer, &dsc, &pos);
         return true;
     }
@@ -280,9 +284,7 @@ static bool drawDelimiterGlyph(lv_layer_t* layer,
         dsc.color = color;
         dsc.opa  = LV_OPA_COVER;
         dsc.unicode = table->baseCodepoint;
-        lv_point_t pos;
-        pos.x = static_cast<int32_t>(x);
-        pos.y = static_cast<int32_t>((yTop + yBottom) / 2 - glyph.ofs_y);
+        lv_point_t pos = delimiterGlyphPivot(x, yTop + (yBottom-yTop-glyph.box_h)/2, glyph);
         lv_draw_letter(layer, &dsc, &pos);
         return true;
     }
@@ -306,9 +308,7 @@ static bool drawDelimiterGlyph(lv_layer_t* layer,
         dsc.opa = LV_OPA_COVER;
         dsc.unicode = cp;
 
-        lv_point_t pos;
-        pos.x = static_cast<int32_t>(x);
-        pos.y = static_cast<int32_t>(topY - glyph.ofs_y);
+        lv_point_t pos = delimiterGlyphPivot(x, topY, glyph);
         lv_draw_letter(layer, &dsc, &pos);
     };
 
@@ -503,6 +503,7 @@ FontMetrics MathCanvas::metricsFromFont(const lv_font_t* font) {
     fm.emSize   = ui::nominalMathEmSizeForFont(font);
     fm.textFont = font;
     fm.measureText = ui::measureMathTextAdvance;
+    fm.measureAtom = ui::measureMathAtom;
 
     // ── Canonical ascent / descent from LVGL font header ────────────────
     // LVGL line-box metrics only. The visual layout box is narrowed to glyph
@@ -1308,6 +1309,18 @@ void MathCanvas::paintNode(lv_layer_t* layer, const MathNode* node,
             drawBigOpBaseline(layer, static_cast<const NodeBigOp*>(node),
                       x, yBaseline, fm, font, depth);
             break;
+        case NodeType::Unit: {
+            const auto* unit=static_cast<const NodeUnit*>(node);char text[32]{};
+            numos::units::symbol(unit->atom(),text,sizeof(text));
+            drawTextBaseline(layer,x+unit->textOffset(),yBaseline,text,unit->scriptLevel(),
+                             _highlightActive?_highlightColor:lv_color_black());break;
+        }
+        case NodeType::QuantityReference:
+            // Registers exactly one child placement; the common iterative
+            // painter visits its notation once with the same bounding box.
+            drawNodeBaseline(layer, static_cast<const NodeQuantityReference*>(node)->notation(),
+                             x, yBaseline, fm, font, depth + 1);
+            break;
         case NodeType::Symbol:
             drawSymbolBaseline(layer, static_cast<const NodeSymbol*>(node),
                                x, yBaseline);
@@ -1803,28 +1816,19 @@ void MathCanvas::drawLogBaseBaseline(lv_layer_t* layer, const NodeLogBase* node,
 void MathCanvas::drawConstantBaseline(lv_layer_t* layer, const NodeConstant* node,
                               int16_t x, int16_t yBaseline,
                               const FontMetrics& fm, const lv_font_t* font) {
-    lv_color_t color = _highlightActive ? _highlightColor : lv_color_hex(0x0060C0);
-    drawTextBaseline(layer, x, yBaseline, node->symbol(), node->scriptLevel(), color);
+    lv_color_t color = _highlightActive ? _highlightColor : lv_color_black();
+    drawTextBaseline(layer, x + node->textOffset(), yBaseline, node->symbol(), node->scriptLevel(), color);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// drawVariable — Variable algebraica: x, y, z (azul), A-F, Ans, PreAns
-//
-// Estilo visual:
-//   · x, y, z      → Azul #4A90D9 para diferenciar de la × de multiplicar
-//   · A-F           → Negro normal
-//   · Ans, PreAns   → Bloque de texto integrado en negro
-// ════════════════════════════════════════════════════════════════════════════
+// Latin variables and memory references use the normal mathematical ink.
 
 void MathCanvas::drawVariableBaseline(lv_layer_t* layer, const NodeVariable* node,
                               int16_t x, int16_t yBaseline,
                               const FontMetrics& fm, const lv_font_t* font) {
-    // All variables render in black — x, y, z are independent variables,
-    // NOT multiplication.  Previously blue, now black to avoid confusion
-    // with the × operator.
     lv_color_t color = _highlightActive ? _highlightColor : lv_color_black();
 
-    drawTextBaseline(layer, x, yBaseline, node->label(), node->scriptLevel(), color);
+    drawTextBaseline(layer, x + node->textOffset(), yBaseline, node->label(), node->scriptLevel(), color);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -2151,7 +2155,7 @@ void MathCanvas::drawSymbolBaseline(lv_layer_t* layer, const NodeSymbol* node,
                                     int16_t x, int16_t yBaseline) {
     if (!layer) return;
     const lv_color_t color = _highlightActive ? _highlightColor : lv_color_black();
-    drawTextBaseline(layer, x, yBaseline, node->name().c_str(),
+    drawTextBaseline(layer, x + node->textOffset(), yBaseline, node->name().c_str(),
                      node->scriptLevel(), color);
 }
 
@@ -2376,6 +2380,9 @@ void MathCanvas::drawTextBaseline(lv_layer_t* layer, int16_t x, int16_t yBaselin
         const lv_font_t* glyphFont;
         const bool ok = ui::mathTextGlyph(font, cp, nextCp, glyph, glyphFont);
         if (ok) {
+            // Blank glyphs carry an advance, not a drawable bitmap. In
+            // particular U+0020 is supplied by the shared STIX metric path.
+            if(!glyph.box_w || !glyph.box_h) {penX+=glyph.adv_w;p+=step;continue;}
             lv_draw_letter_dsc_t dsc;
             lv_draw_letter_dsc_init(&dsc);
             dsc.font = glyphFont;

@@ -80,7 +80,8 @@ public:
 
     void close() {
         if (_fp) {
-            const bool notify = _mutating && std::fclose(_fp) == 0;
+            const bool closed = std::fclose(_fp) == 0;
+            const bool notify = _mutating && closed;
             _fp = nullptr;
             _mutating = false;
 #ifdef __EMSCRIPTEN__

@@ -57,6 +57,8 @@
 #include <string>
 
 #include "MathTypography.h"
+#include "units/UnitRegistry.h"
+#include "units/ReferenceRegistry.h"
 #include "font/stix_math_variants.h"
 
 namespace vpam {
@@ -97,6 +99,8 @@ enum class NodeType : uint8_t {
     Piecewise,        // Bounded expression/condition branches
     Call,             // Named function call not covered by FuncKind
     Unevaluated,      // Valid expression explicitly marked unevaluated
+    Unit,             // Validated unit identity, never a free variable
+    QuantityReference, // Physical constant/contextual scale, distinct from units
 };
 
 enum class CollectionKind : uint8_t { List, Set };
@@ -105,7 +109,11 @@ enum class SpecialValueKind : uint8_t {
     PositiveInfinity,
     NegativeInfinity,
     UnsignedInfinity,
-    Undefined
+    Undefined,
+    // WHY: Bare positive infinity is a presentation choice, distinct from
+    // Giac's unsigned/complex infinity. Append values to preserve old kinds.
+    BarePositiveInfinity,
+    BothInfinities
 };
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -124,11 +132,14 @@ enum class OpKind : uint8_t {
     Le,        // ≤
     Ge,        // ≥
     Ne,        // ≠
+    UnitProduct, // explicit centred dot between units
+    UnitAttach,  // structural multiplication, thin value/unit separation
+    UnitAttachTight, // angular degree/minute/second attachment
 };
 
 /// Returns true if the OpKind is a relation operator (=, <, >, ≤, ≥, ≠).
 constexpr bool isRelation(OpKind op) {
-    return op >= OpKind::Eq;
+    return op >= OpKind::Eq && op <= OpKind::Ne;
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -226,6 +237,8 @@ enum class ConstKind : uint8_t {
 // No depende de tipos LVGL, pero transporta tanto la caja visual de tinta
 // como la line-box necesaria para convertir baseline -> top al dibujar.
 // ════════════════════════════════════════════════════════════════════════════
+struct TextAtomMetrics {int16_t width=0,ascent=0,descent=0,leftPad=0;};
+
 struct FontMetrics {
     int16_t charWidth;   ///< Ancho promedio de un dígito (monoespaciado)
     int16_t ascent;      ///< Píxeles del baseline al tope visual de la tinta
@@ -248,6 +261,7 @@ struct FontMetrics {
     // charWidth fallback. This callback is per text run, not per glyph.
     const void* textFont = nullptr;
     int16_t (*measureText)(const void*, const char*) = nullptr;
+    TextAtomMetrics (*measureAtom)(const void*, const char*) = nullptr;
 
     int16_t textAdvance(const char* text) const {
         if (measureText && textFont) return measureText(textFont, text);
@@ -801,7 +815,8 @@ public:
 
     void calculateLayout(const FontMetrics& fm) override;
     MathClass mathClass() const override {
-        return isRelation(_op) ? MathClass::REL : MathClass::BINARY;
+        return _op==OpKind::UnitAttach || _op==OpKind::UnitAttachTight ? MathClass::ORD :
+            isRelation(_op) ? MathClass::REL : MathClass::BINARY;
     }
 
     OpKind      op()     const { return _op; }
@@ -1163,25 +1178,18 @@ public:
     void calculateLayout(const FontMetrics& fm) override;
 
     ConstKind   constKind() const { return _kind; }
+    int16_t textOffset() const { return _textOffset; }
     const char* symbol()    const;   ///< "π" o "e"
 
 private:
     ConstKind _kind;
+    int16_t _textOffset=0;
 };
 
 // ════════════════════════════════════════════════════════════════════════════
-// NodeVariable — Variable algebraica: x, y, z, A-F, Ans, PreAns
-//
-// Se renderiza como texto (nombre), con estilo visual especial:
-//   · x, y, z → azul (#4A90D9), cursiva si la fuente lo soporta
-//   · A-F     → color normal, texto en mayúscula
-//   · Ans     → bloque "Ans"
-//   · PreAns  → bloque "PreAns"
-//
-// En evaluación, pide su valor al VariableManager::instance().
-//
-// El char 'name_' identifica la variable:
-//   '#' = Ans, '$' = PreAns, 'A'-'F', 'x', 'y', 'z'
+// NodeVariable — Latin letters, A-F memory slots, Ans and PreAns.
+// All use normal mathematical ink. Free Latin letters serialize as symbols;
+// A-F, '#' (Ans) and '$' (PreAns) keep their established memory semantics.
 // ════════════════════════════════════════════════════════════════════════════
 class NodeVariable : public MathNode {
 public:
@@ -1191,6 +1199,7 @@ public:
 
     char        name()  const { return _name; }
     const char* label() const;   ///< "x", "A", "Ans", "PreAns", etc.
+    int16_t textOffset() const { return _textOffset; }
 
     /// ¿Es una variable de función (x, y, z)?
     bool isFunctionVar() const { return _name == 'x' || _name == 'y' || _name == 'z'; }
@@ -1200,6 +1209,7 @@ public:
 
 private:
     char _name;
+    int16_t _textOffset=0;
     int16_t _labelWidth;   ///< Ancho calculado del label
 };
 
@@ -1454,13 +1464,50 @@ private:
 // during typed conversion; calculateLayout() only traverses them and uses
 // fixed-capacity geometry, so the rendering hot path performs no allocation.
 
+class NodeUnit final : public MathNode {
+public:
+    void calculateLayout(const FontMetrics& fm) override;
+    numos::units::Atom atom() const { return _atom; }
+    int16_t textOffset() const { return _textOffset; }
+private:
+    friend NodePtr makeUnit(numos::units::Atom);
+    explicit NodeUnit(numos::units::Atom atom):MathNode(NodeType::Unit),_atom(atom){}
+    numos::units::Atom _atom;
+    int16_t _textOffset=0;
+};
+enum class UnitScan : uint8_t { None, Present, Invalid, Limit };
+UnitScan scanUnits(const MathNode* root);
+NodePtr makeUnit(numos::units::Atom atom);
+
+class NodeQuantityReference final : public MathNode {
+public:
+    void calculateLayout(const FontMetrics& fm) override;
+    numos::units::ReferenceAtom atom() const { return _atom; }
+    const MathNode* notation() const { return _notation.get(); }
+    int childCount() const override { return 1; }
+    MathNode* child(int index) const override { return index == 0 ? _notation.get() : nullptr; }
+private:
+    friend NodePtr makeQuantityReference(numos::units::ReferenceAtom);
+    NodeQuantityReference(numos::units::ReferenceAtom atom, NodePtr notation)
+        : MathNode(NodeType::QuantityReference), _atom(atom), _notation(std::move(notation)) {
+        _notation->setParent(this);
+    }
+    numos::units::ReferenceAtom _atom;
+    // WHY: notation uses common STIX script/fraction geometry, constructed once
+    // before publication. It is not an editable decomposition of this identity.
+    NodePtr _notation;
+};
+NodePtr makeQuantityReference(numos::units::ReferenceAtom atom);
+
 class NodeSymbol : public MathNode {
 public:
     explicit NodeSymbol(std::string name);
     void calculateLayout(const FontMetrics& fm) override;
     const std::string& name() const { return _name; }
+    int16_t textOffset() const { return _textOffset; }
 private:
     std::string _name;
+    int16_t _textOffset=0;
 };
 
 class NodeSpecialValue : public MathNode {

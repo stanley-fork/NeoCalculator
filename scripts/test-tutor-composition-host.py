@@ -50,7 +50,9 @@ for name in a.tests:
     obj=out/(name+'.o');binary=out/(name+('.exe' if os.name=='nt' else ''))
     run(name+'-compile',[a.compiler,*flags,'-c','tests/host/'+name+'.cpp','-o',str(obj)])
     testObjects=objects
-    if name == 'calculation_input_checks':
+    if name in ('toolbox_visual_checks','math_brackets_checks'):
+        testObjects=[*objects,build/'src/ui/MathRenderer.o']
+    if name in ('calculation_input_checks', 'toolbox_checks'):
         # Exercise the existing node allocator boundary as well as C++ vectors;
         # this instrumented object is never linked into a product image.
         allocator=out/'MathAST-test-allocator.o'
@@ -58,7 +60,7 @@ for name in a.tests:
             '-c','src/math/MathAST.cpp','-o',str(allocator)])
         testObjects=[allocator if p.name=='MathAST.o' else p for p in objects]
     extra=[]
-    if 'bool setting_complex_enabled' not in (source/'tests/host'/str(name+'.cpp')).read_text():
+    if 'bool setting_complex_enabled' not in (source/'tests/host'/str(name+'.cpp')).read_text(encoding='utf8'):
         stub=out/'settings.cpp';stub.write_text('bool setting_complex_enabled=false;\n')
         run(name+'-settings',[a.compiler,*flags,'-c',str(stub),'-o',str(out/'settings.o')]);extra=[out/'settings.o']
     rsp=out/(name+'.rsp');rsp.write_text('\n'.join('"'+p.as_posix()+'"' for p in [obj,*extra,*testObjects,*libraries]))

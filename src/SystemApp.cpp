@@ -1,3 +1,4 @@
+#include "ui/Toolbox.h"
 /*
  * NeoCalculator - NumOS
  * Copyright (C) 2026 Juan Ramon
@@ -615,6 +616,7 @@ void SystemApp::renderMenu() {
 // handleKey() — Global input dispatcher
 // ═════════════════════════════════════════════════
 void SystemApp::handleKey(const KeyEvent &rawEvent) {
+    if (rawEvent.action == KeyAction::RELEASE && ui::toolbox::handle(rawEvent)) return;
     // Only act on PRESS and REPEAT (no duplicate processing)
     if (rawEvent.action != KeyAction::PRESS &&
         rawEvent.action != KeyAction::REPEAT) {
@@ -623,13 +625,19 @@ void SystemApp::handleKey(const KeyEvent &rawEvent) {
 
     KeyEvent ev = rawEvent;
 
+    // WHY: the open modal owns modifier keys. ALPHA also opens its search;
+    // the global resolver would consume it before Toolbox saw that action.
+    if (ui::toolbox::active() &&
+        (ev.code == KeyCode::SHIFT || ev.code == KeyCode::ALPHA) &&
+        ui::toolbox::handle(ev)) return;
+
 #if NUMOS_BOARD_PROD_WROOM1U_N16R8
     // WHY: electrical scanning only emits the stable physical KeyCode. Plane
     // and context resolution stays here at the shared application seam, so
     // editor-specific strings never enter the GPIO scanner.
     if (ev.row >= 0) {
         numos::input::InputContext context =
-            numos::input::InputContext::Math;
+            ui::toolbox::searching() ? numos::input::InputContext::Text : numos::input::InputContext::Math;
         if (_mode == Mode::APP_PYTHON ||
             _mode == Mode::APP_NEO_LANGUAGE ||
             _mode == Mode::APP_CIRCUIT_CORE) {
@@ -646,6 +654,8 @@ void SystemApp::handleKey(const KeyEvent &rawEvent) {
         ev.text = resolved.text;
     }
 #endif
+
+    if (ui::toolbox::handle(ev)) return;
 
     // Debug: log key events de teclado físico (row>=0) para detectar ghosts.
     // Eventos de SerialBridge (row=-1) ya se logean en SerialBridge.cpp.

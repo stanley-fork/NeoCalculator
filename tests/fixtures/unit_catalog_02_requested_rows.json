@@ -1,0 +1,2836 @@
+{
+  "source": "User attachment: Catálogo ampliado de unidades y escalas",
+  "source_sha256": "3dbea454b403e74ba0c2f75d464fef0143a5593f958b2481c4a23d0bfcb7465a",
+  "section_counts": {
+    "1": 301,
+    "2": 31,
+    "3": 9,
+    "4": 12
+  },
+  "rows": [
+    {
+      "section": 1,
+      "row": 1,
+      "source_row": 1,
+      "category": "Longitud",
+      "name": "Metro",
+      "symbol": "m"
+    },
+    {
+      "section": 1,
+      "row": 2,
+      "source_row": 2,
+      "category": "Longitud",
+      "name": "Pulgada internacional",
+      "symbol": "in / ″"
+    },
+    {
+      "section": 1,
+      "row": 3,
+      "source_row": 3,
+      "category": "Longitud",
+      "name": "Pie internacional",
+      "symbol": "ft / ′"
+    },
+    {
+      "section": 1,
+      "row": 4,
+      "source_row": 4,
+      "category": "Longitud",
+      "name": "Yarda internacional",
+      "symbol": "yd"
+    },
+    {
+      "section": 1,
+      "row": 5,
+      "source_row": 5,
+      "category": "Longitud",
+      "name": "Milla terrestre internacional",
+      "symbol": "mi"
+    },
+    {
+      "section": 1,
+      "row": 6,
+      "source_row": 6,
+      "category": "Longitud",
+      "name": "Mil / thou",
+      "symbol": "mil / thou"
+    },
+    {
+      "section": 1,
+      "row": 7,
+      "source_row": 7,
+      "category": "Longitud",
+      "name": "Milla náutica internacional",
+      "symbol": "nmi / NM"
+    },
+    {
+      "section": 1,
+      "row": 8,
+      "source_row": 8,
+      "category": "Longitud",
+      "name": "Braza / fathom",
+      "symbol": "ftm"
+    },
+    {
+      "section": 1,
+      "row": 9,
+      "source_row": 9,
+      "category": "Longitud",
+      "name": "Cable, convención de un décimo de milla náutica",
+      "symbol": "—"
+    },
+    {
+      "section": 1,
+      "row": 10,
+      "source_row": 10,
+      "category": "Longitud",
+      "name": "Cable, convención estadounidense de 720 pies",
+      "symbol": "—"
+    },
+    {
+      "section": 1,
+      "row": 11,
+      "source_row": 11,
+      "category": "Longitud",
+      "name": "Cadena / chain",
+      "symbol": "ch"
+    },
+    {
+      "section": 1,
+      "row": 12,
+      "source_row": 12,
+      "category": "Longitud",
+      "name": "Eslabón / link",
+      "symbol": "link"
+    },
+    {
+      "section": 1,
+      "row": 13,
+      "source_row": 13,
+      "category": "Longitud",
+      "name": "Rod / pole / perch",
+      "symbol": "rd"
+    },
+    {
+      "section": 1,
+      "row": 14,
+      "source_row": 14,
+      "category": "Longitud",
+      "name": "Furlong",
+      "symbol": "fur"
+    },
+    {
+      "section": 1,
+      "row": 15,
+      "source_row": 15,
+      "category": "Longitud",
+      "name": "Hand / mano ecuestre",
+      "symbol": "hand / hh"
+    },
+    {
+      "section": 1,
+      "row": 16,
+      "source_row": 16,
+      "category": "Longitud",
+      "name": "Pie topográfico estadounidense histórico",
+      "symbol": "ft (US survey)"
+    },
+    {
+      "section": 1,
+      "row": 17,
+      "source_row": 17,
+      "category": "Longitud",
+      "name": "Unidad astronómica",
+      "symbol": "au / UA"
+    },
+    {
+      "section": 1,
+      "row": 18,
+      "source_row": 18,
+      "category": "Longitud",
+      "name": "Año luz",
+      "symbol": "ly"
+    },
+    {
+      "section": 1,
+      "row": 19,
+      "source_row": 19,
+      "category": "Longitud",
+      "name": "Pársec",
+      "symbol": "pc"
+    },
+    {
+      "section": 1,
+      "row": 20,
+      "source_row": 20,
+      "category": "Longitud",
+      "name": "Segundo luz",
+      "symbol": "—"
+    },
+    {
+      "section": 1,
+      "row": 21,
+      "source_row": 21,
+      "category": "Longitud",
+      "name": "Ángstrom",
+      "symbol": "Å"
+    },
+    {
+      "section": 1,
+      "row": 22,
+      "source_row": 22,
+      "category": "Longitud",
+      "name": "Punto tipográfico DTP / PostScript",
+      "symbol": "pt"
+    },
+    {
+      "section": 1,
+      "row": 23,
+      "source_row": 23,
+      "category": "Longitud",
+      "name": "Pica DTP",
+      "symbol": "pc (tipografía)"
+    },
+    {
+      "section": 1,
+      "row": 24,
+      "source_row": 24,
+      "category": "Longitud",
+      "name": "Unidad de rack",
+      "symbol": "U"
+    },
+    {
+      "section": 1,
+      "row": 25,
+      "source_row": 25,
+      "category": "Longitud",
+      "name": "French / Charrière",
+      "symbol": "Fr / Ch"
+    },
+    {
+      "section": 1,
+      "row": 26,
+      "source_row": 26,
+      "category": "Área",
+      "name": "Metro cuadrado",
+      "symbol": "m²"
+    },
+    {
+      "section": 1,
+      "row": 27,
+      "source_row": 27,
+      "category": "Área",
+      "name": "Área",
+      "symbol": "a"
+    },
+    {
+      "section": 1,
+      "row": 28,
+      "source_row": 28,
+      "category": "Área",
+      "name": "Hectárea",
+      "symbol": "ha"
+    },
+    {
+      "section": 1,
+      "row": 29,
+      "source_row": 29,
+      "category": "Área",
+      "name": "Acre internacional",
+      "symbol": "ac"
+    },
+    {
+      "section": 1,
+      "row": 30,
+      "source_row": 30,
+      "category": "Área",
+      "name": "Pulgada cuadrada",
+      "symbol": "in²"
+    },
+    {
+      "section": 1,
+      "row": 31,
+      "source_row": 31,
+      "category": "Área",
+      "name": "Pie cuadrado",
+      "symbol": "ft²"
+    },
+    {
+      "section": 1,
+      "row": 32,
+      "source_row": 32,
+      "category": "Área",
+      "name": "Yarda cuadrada",
+      "symbol": "yd²"
+    },
+    {
+      "section": 1,
+      "row": 33,
+      "source_row": 33,
+      "category": "Área",
+      "name": "Milla cuadrada",
+      "symbol": "mi²"
+    },
+    {
+      "section": 1,
+      "row": 34,
+      "source_row": 34,
+      "category": "Área",
+      "name": "Barn / barnio",
+      "symbol": "b"
+    },
+    {
+      "section": 1,
+      "row": 35,
+      "source_row": 35,
+      "category": "Área",
+      "name": "Circular mil",
+      "symbol": "cmil"
+    },
+    {
+      "section": 1,
+      "row": 36,
+      "source_row": 36,
+      "category": "Volumen",
+      "name": "Metro cúbico",
+      "symbol": "m³"
+    },
+    {
+      "section": 1,
+      "row": 37,
+      "source_row": 37,
+      "category": "Volumen",
+      "name": "Litro",
+      "symbol": "L / l"
+    },
+    {
+      "section": 1,
+      "row": 38,
+      "source_row": 38,
+      "category": "Volumen",
+      "name": "Pulgada cúbica",
+      "symbol": "in³"
+    },
+    {
+      "section": 1,
+      "row": 39,
+      "source_row": 39,
+      "category": "Volumen",
+      "name": "Pie cúbico",
+      "symbol": "ft³"
+    },
+    {
+      "section": 1,
+      "row": 40,
+      "source_row": 40,
+      "category": "Volumen",
+      "name": "Yarda cúbica",
+      "symbol": "yd³"
+    },
+    {
+      "section": 1,
+      "row": 41,
+      "source_row": 41,
+      "category": "Volumen",
+      "name": "Galón estadounidense líquido",
+      "symbol": "gal (US liq)"
+    },
+    {
+      "section": 1,
+      "row": 42,
+      "source_row": 42,
+      "category": "Volumen",
+      "name": "Galón imperial",
+      "symbol": "gal (imp)"
+    },
+    {
+      "section": 1,
+      "row": 43,
+      "source_row": 43,
+      "category": "Volumen",
+      "name": "Cuarto estadounidense líquido",
+      "symbol": "qt (US liq)"
+    },
+    {
+      "section": 1,
+      "row": 44,
+      "source_row": 44,
+      "category": "Volumen",
+      "name": "Cuarto imperial",
+      "symbol": "qt (imp)"
+    },
+    {
+      "section": 1,
+      "row": 45,
+      "source_row": 45,
+      "category": "Volumen",
+      "name": "Pinta estadounidense líquida",
+      "symbol": "pt (US liq)"
+    },
+    {
+      "section": 1,
+      "row": 46,
+      "source_row": 46,
+      "category": "Volumen",
+      "name": "Pinta imperial",
+      "symbol": "pt (imp)"
+    },
+    {
+      "section": 1,
+      "row": 47,
+      "source_row": 47,
+      "category": "Volumen",
+      "name": "Onza líquida estadounidense",
+      "symbol": "fl oz (US)"
+    },
+    {
+      "section": 1,
+      "row": 48,
+      "source_row": 48,
+      "category": "Volumen",
+      "name": "Onza líquida imperial",
+      "symbol": "fl oz (imp)"
+    },
+    {
+      "section": 1,
+      "row": 49,
+      "source_row": 49,
+      "category": "Volumen",
+      "name": "Gill estadounidense",
+      "symbol": "gi (US)"
+    },
+    {
+      "section": 1,
+      "row": 50,
+      "source_row": 50,
+      "category": "Volumen",
+      "name": "Gill imperial",
+      "symbol": "gi (imp)"
+    },
+    {
+      "section": 1,
+      "row": 51,
+      "source_row": 51,
+      "category": "Volumen",
+      "name": "Galón estadounidense de áridos",
+      "symbol": "gal (US dry)"
+    },
+    {
+      "section": 1,
+      "row": 52,
+      "source_row": 52,
+      "category": "Volumen",
+      "name": "Cuarto estadounidense de áridos",
+      "symbol": "qt (US dry)"
+    },
+    {
+      "section": 1,
+      "row": 53,
+      "source_row": 53,
+      "category": "Volumen",
+      "name": "Pinta estadounidense de áridos",
+      "symbol": "pt (US dry)"
+    },
+    {
+      "section": 1,
+      "row": 54,
+      "source_row": 54,
+      "category": "Volumen",
+      "name": "Bushel estadounidense",
+      "symbol": "bu (US)"
+    },
+    {
+      "section": 1,
+      "row": 55,
+      "source_row": 55,
+      "category": "Volumen",
+      "name": "Bushel imperial",
+      "symbol": "bu (imp)"
+    },
+    {
+      "section": 1,
+      "row": 56,
+      "source_row": 56,
+      "category": "Volumen",
+      "name": "Peck estadounidense",
+      "symbol": "pk (US)"
+    },
+    {
+      "section": 1,
+      "row": 57,
+      "source_row": 57,
+      "category": "Volumen",
+      "name": "Peck imperial",
+      "symbol": "pk (imp)"
+    },
+    {
+      "section": 1,
+      "row": 58,
+      "source_row": 58,
+      "category": "Volumen",
+      "name": "Barril de petróleo",
+      "symbol": "bbl"
+    },
+    {
+      "section": 1,
+      "row": 59,
+      "source_row": 59,
+      "category": "Volumen",
+      "name": "Acre-pie internacional",
+      "symbol": "ac·ft"
+    },
+    {
+      "section": 1,
+      "row": 60,
+      "source_row": 60,
+      "category": "Volumen",
+      "name": "Pie tablar / board foot",
+      "symbol": "board ft"
+    },
+    {
+      "section": 1,
+      "row": 61,
+      "source_row": 61,
+      "category": "Volumen",
+      "name": "Cord",
+      "symbol": "cord"
+    },
+    {
+      "section": 1,
+      "row": 62,
+      "source_row": 62,
+      "category": "Volumen",
+      "name": "Estéreo",
+      "symbol": "st (volumen)"
+    },
+    {
+      "section": 1,
+      "row": 63,
+      "source_row": 63,
+      "category": "Volumen",
+      "name": "Tonelada de registro",
+      "symbol": "register ton"
+    },
+    {
+      "section": 1,
+      "row": 64,
+      "source_row": 64,
+      "category": "Volumen culinario",
+      "name": "Cucharadita estadounidense habitual",
+      "symbol": "tsp (US)"
+    },
+    {
+      "section": 1,
+      "row": 65,
+      "source_row": 65,
+      "category": "Volumen culinario",
+      "name": "Cucharada estadounidense habitual",
+      "symbol": "tbsp (US)"
+    },
+    {
+      "section": 1,
+      "row": 66,
+      "source_row": 66,
+      "category": "Volumen culinario",
+      "name": "Taza estadounidense habitual",
+      "symbol": "cup (US)"
+    },
+    {
+      "section": 1,
+      "row": 67,
+      "source_row": 67,
+      "category": "Volumen culinario",
+      "name": "Cucharadita métrica",
+      "symbol": "tsp (métrica)"
+    },
+    {
+      "section": 1,
+      "row": 68,
+      "source_row": 68,
+      "category": "Volumen culinario",
+      "name": "Cucharada métrica de 15 mL",
+      "symbol": "tbsp (15 mL)"
+    },
+    {
+      "section": 1,
+      "row": 69,
+      "source_row": 69,
+      "category": "Volumen culinario",
+      "name": "Cucharada australiana",
+      "symbol": "tbsp (Australia)"
+    },
+    {
+      "section": 1,
+      "row": 70,
+      "source_row": 70,
+      "category": "Volumen culinario",
+      "name": "Taza métrica",
+      "symbol": "cup (métrica)"
+    },
+    {
+      "section": 1,
+      "row": 71,
+      "source_row": 71,
+      "category": "Volumen culinario",
+      "name": "Taza de etiquetado nutricional estadounidense",
+      "symbol": "cup (FDA)"
+    },
+    {
+      "section": 1,
+      "row": 72,
+      "source_row": 72,
+      "category": "Tiempo",
+      "name": "Segundo",
+      "symbol": "s"
+    },
+    {
+      "section": 1,
+      "row": 73,
+      "source_row": 73,
+      "category": "Tiempo",
+      "name": "Minuto",
+      "symbol": "min"
+    },
+    {
+      "section": 1,
+      "row": 74,
+      "source_row": 74,
+      "category": "Tiempo",
+      "name": "Hora",
+      "symbol": "h"
+    },
+    {
+      "section": 1,
+      "row": 75,
+      "source_row": 75,
+      "category": "Tiempo",
+      "name": "Día como unidad de duración",
+      "symbol": "d"
+    },
+    {
+      "section": 1,
+      "row": 76,
+      "source_row": 76,
+      "category": "Tiempo",
+      "name": "Semana",
+      "symbol": "— / wk"
+    },
+    {
+      "section": 1,
+      "row": 77,
+      "source_row": 77,
+      "category": "Tiempo",
+      "name": "Año juliano",
+      "symbol": "a (juliano)"
+    },
+    {
+      "section": 1,
+      "row": 78,
+      "source_row": 78,
+      "category": "Tiempo",
+      "name": "Shake",
+      "symbol": "shake"
+    },
+    {
+      "section": 1,
+      "row": 79,
+      "source_row": 79,
+      "category": "Ángulo plano",
+      "name": "Radián",
+      "symbol": "rad"
+    },
+    {
+      "section": 1,
+      "row": 80,
+      "source_row": 80,
+      "category": "Ángulo plano",
+      "name": "Grado sexagesimal",
+      "symbol": "°"
+    },
+    {
+      "section": 1,
+      "row": 81,
+      "source_row": 81,
+      "category": "Ángulo plano",
+      "name": "Minuto de arco",
+      "symbol": "′ / arcmin"
+    },
+    {
+      "section": 1,
+      "row": 82,
+      "source_row": 82,
+      "category": "Ángulo plano",
+      "name": "Segundo de arco",
+      "symbol": "″ / arcsec"
+    },
+    {
+      "section": 1,
+      "row": 83,
+      "source_row": 83,
+      "category": "Ángulo plano",
+      "name": "Gon / grado centesimal",
+      "symbol": "gon"
+    },
+    {
+      "section": 1,
+      "row": 84,
+      "source_row": 84,
+      "category": "Ángulo plano",
+      "name": "Vuelta / revolución",
+      "symbol": "rev / turn"
+    },
+    {
+      "section": 1,
+      "row": 85,
+      "source_row": 85,
+      "category": "Ángulo sólido",
+      "name": "Estereorradián",
+      "symbol": "sr"
+    },
+    {
+      "section": 1,
+      "row": 86,
+      "source_row": 86,
+      "category": "Ángulo sólido",
+      "name": "Grado cuadrado",
+      "symbol": "deg²"
+    },
+    {
+      "section": 1,
+      "row": 87,
+      "source_row": 87,
+      "category": "Masa",
+      "name": "Kilogramo",
+      "symbol": "kg"
+    },
+    {
+      "section": 1,
+      "row": 88,
+      "source_row": 88,
+      "category": "Masa",
+      "name": "Libra avoirdupois",
+      "symbol": "lb"
+    },
+    {
+      "section": 1,
+      "row": 89,
+      "source_row": 89,
+      "category": "Masa",
+      "name": "Onza avoirdupois",
+      "symbol": "oz"
+    },
+    {
+      "section": 1,
+      "row": 90,
+      "source_row": 90,
+      "category": "Masa",
+      "name": "Stone",
+      "symbol": "st (masa)"
+    },
+    {
+      "section": 1,
+      "row": 91,
+      "source_row": 91,
+      "category": "Masa",
+      "name": "Grano",
+      "symbol": "gr"
+    },
+    {
+      "section": 1,
+      "row": 92,
+      "source_row": 92,
+      "category": "Masa",
+      "name": "Quilate métrico",
+      "symbol": "ct"
+    },
+    {
+      "section": 1,
+      "row": 93,
+      "source_row": 93,
+      "category": "Masa",
+      "name": "Onza troy",
+      "symbol": "oz t / ozt"
+    },
+    {
+      "section": 1,
+      "row": 94,
+      "source_row": 94,
+      "category": "Masa",
+      "name": "Libra troy",
+      "symbol": "lb t"
+    },
+    {
+      "section": 1,
+      "row": 95,
+      "source_row": 95,
+      "category": "Masa",
+      "name": "Pennyweight",
+      "symbol": "dwt"
+    },
+    {
+      "section": 1,
+      "row": 96,
+      "source_row": 96,
+      "category": "Masa",
+      "name": "Tonelada métrica",
+      "symbol": "t"
+    },
+    {
+      "section": 1,
+      "row": 97,
+      "source_row": 97,
+      "category": "Masa",
+      "name": "Tonelada corta estadounidense",
+      "symbol": "short ton / sh tn"
+    },
+    {
+      "section": 1,
+      "row": 98,
+      "source_row": 98,
+      "category": "Masa",
+      "name": "Tonelada larga imperial",
+      "symbol": "long ton / lg tn"
+    },
+    {
+      "section": 1,
+      "row": 99,
+      "source_row": 99,
+      "category": "Masa",
+      "name": "Hundredweight estadounidense",
+      "symbol": "cwt (US)"
+    },
+    {
+      "section": 1,
+      "row": 100,
+      "source_row": 100,
+      "category": "Masa",
+      "name": "Hundredweight imperial",
+      "symbol": "cwt (imp)"
+    },
+    {
+      "section": 1,
+      "row": 101,
+      "source_row": 101,
+      "category": "Masa",
+      "name": "Quintal métrico",
+      "symbol": "q"
+    },
+    {
+      "section": 1,
+      "row": 102,
+      "source_row": 102,
+      "category": "Masa",
+      "name": "Slug",
+      "symbol": "slug"
+    },
+    {
+      "section": 1,
+      "row": 103,
+      "source_row": 103,
+      "category": "Masa",
+      "name": "Dalton / unidad de masa atómica unificada",
+      "symbol": "Da / u"
+    },
+    {
+      "section": 1,
+      "row": 104,
+      "source_row": 104,
+      "category": "Masa",
+      "name": "Electronvoltio dividido por c²",
+      "symbol": "eV/c²"
+    },
+    {
+      "section": 1,
+      "row": 105,
+      "source_row": 105,
+      "category": "Velocidad lineal",
+      "name": "Metro por segundo",
+      "symbol": "m/s"
+    },
+    {
+      "section": 1,
+      "row": 106,
+      "source_row": 106,
+      "category": "Velocidad lineal",
+      "name": "Kilómetro por hora",
+      "symbol": "km/h"
+    },
+    {
+      "section": 1,
+      "row": 107,
+      "source_row": 107,
+      "category": "Velocidad lineal",
+      "name": "Milla por hora",
+      "symbol": "mph / mi/h"
+    },
+    {
+      "section": 1,
+      "row": 108,
+      "source_row": 108,
+      "category": "Velocidad lineal",
+      "name": "Pie por segundo",
+      "symbol": "ft/s"
+    },
+    {
+      "section": 1,
+      "row": 109,
+      "source_row": 109,
+      "category": "Velocidad lineal",
+      "name": "Pie por minuto",
+      "symbol": "ft/min"
+    },
+    {
+      "section": 1,
+      "row": 110,
+      "source_row": 110,
+      "category": "Velocidad lineal",
+      "name": "Nudo",
+      "symbol": "kn / kt"
+    },
+    {
+      "section": 1,
+      "row": 111,
+      "source_row": 111,
+      "category": "Aceleración",
+      "name": "Metro por segundo cuadrado",
+      "symbol": "m/s²"
+    },
+    {
+      "section": 1,
+      "row": 112,
+      "source_row": 112,
+      "category": "Aceleración",
+      "name": "Pie por segundo cuadrado",
+      "symbol": "ft/s²"
+    },
+    {
+      "section": 1,
+      "row": 113,
+      "source_row": 113,
+      "category": "Aceleración",
+      "name": "Gravedad estándar como referencia de aceleración",
+      "symbol": "g₀ / gₙ"
+    },
+    {
+      "section": 1,
+      "row": 114,
+      "source_row": 114,
+      "category": "Aceleración",
+      "name": "Gal / galileo",
+      "symbol": "Gal"
+    },
+    {
+      "section": 1,
+      "row": 115,
+      "source_row": 115,
+      "category": "Variación de aceleración",
+      "name": "Metro por segundo cúbico",
+      "symbol": "m/s³"
+    },
+    {
+      "section": 1,
+      "row": 116,
+      "source_row": 116,
+      "category": "Frecuencia",
+      "name": "Hercio / hertz",
+      "symbol": "Hz"
+    },
+    {
+      "section": 1,
+      "row": 117,
+      "source_row": 117,
+      "category": "Frecuencia",
+      "name": "Revolución por minuto",
+      "symbol": "rpm / r/min"
+    },
+    {
+      "section": 1,
+      "row": 118,
+      "source_row": 118,
+      "category": "Velocidad angular",
+      "name": "Radián por segundo",
+      "symbol": "rad/s"
+    },
+    {
+      "section": 1,
+      "row": 119,
+      "source_row": 119,
+      "category": "Aceleración angular",
+      "name": "Radián por segundo cuadrado",
+      "symbol": "rad/s²"
+    },
+    {
+      "section": 1,
+      "row": 120,
+      "source_row": 120,
+      "category": "Fuerza",
+      "name": "Newton",
+      "symbol": "N"
+    },
+    {
+      "section": 1,
+      "row": 121,
+      "source_row": 121,
+      "category": "Fuerza",
+      "name": "Dina",
+      "symbol": "dyn"
+    },
+    {
+      "section": 1,
+      "row": 122,
+      "source_row": 122,
+      "category": "Fuerza",
+      "name": "Kilogramo-fuerza / kilopondio",
+      "symbol": "kgf / kp"
+    },
+    {
+      "section": 1,
+      "row": 123,
+      "source_row": 123,
+      "category": "Fuerza",
+      "name": "Libra-fuerza",
+      "symbol": "lbf"
+    },
+    {
+      "section": 1,
+      "row": 124,
+      "source_row": 124,
+      "category": "Fuerza",
+      "name": "Onza-fuerza",
+      "symbol": "ozf"
+    },
+    {
+      "section": 1,
+      "row": 125,
+      "source_row": 125,
+      "category": "Fuerza",
+      "name": "Poundal",
+      "symbol": "pdl"
+    },
+    {
+      "section": 1,
+      "row": 126,
+      "source_row": 126,
+      "category": "Fuerza",
+      "name": "Kip",
+      "symbol": "kip"
+    },
+    {
+      "section": 1,
+      "row": 127,
+      "source_row": 127,
+      "category": "Fuerza",
+      "name": "Tonelada-fuerza métrica",
+      "symbol": "tf"
+    },
+    {
+      "section": 1,
+      "row": 128,
+      "source_row": 128,
+      "category": "Momento de fuerza / par",
+      "name": "Newton-metro",
+      "symbol": "N·m"
+    },
+    {
+      "section": 1,
+      "row": 129,
+      "source_row": 129,
+      "category": "Momento de fuerza / par",
+      "name": "Libra-fuerza pie",
+      "symbol": "lbf·ft"
+    },
+    {
+      "section": 1,
+      "row": 130,
+      "source_row": 130,
+      "category": "Momento de fuerza / par",
+      "name": "Libra-fuerza pulgada",
+      "symbol": "lbf·in"
+    },
+    {
+      "section": 1,
+      "row": 131,
+      "source_row": 131,
+      "category": "Momento de fuerza / par",
+      "name": "Onza-fuerza pulgada",
+      "symbol": "ozf·in"
+    },
+    {
+      "section": 1,
+      "row": 132,
+      "source_row": 132,
+      "category": "Momento de fuerza / par",
+      "name": "Kilogramo-fuerza metro",
+      "symbol": "kgf·m / kp·m"
+    },
+    {
+      "section": 1,
+      "row": 133,
+      "source_row": 133,
+      "category": "Impulso / cantidad de movimiento",
+      "name": "Newton-segundo",
+      "symbol": "N·s"
+    },
+    {
+      "section": 1,
+      "row": 134,
+      "source_row": 134,
+      "category": "Impulso / cantidad de movimiento",
+      "name": "Libra-fuerza segundo",
+      "symbol": "lbf·s"
+    },
+    {
+      "section": 1,
+      "row": 135,
+      "source_row": 135,
+      "category": "Acción / momento angular",
+      "name": "Julio-segundo",
+      "symbol": "J·s"
+    },
+    {
+      "section": 1,
+      "row": 136,
+      "source_row": 136,
+      "category": "Momento de inercia de masa",
+      "name": "Kilogramo metro cuadrado",
+      "symbol": "kg·m²"
+    },
+    {
+      "section": 1,
+      "row": 137,
+      "source_row": 137,
+      "category": "Momento de inercia de masa",
+      "name": "Libra pie cuadrado",
+      "symbol": "lb·ft²"
+    },
+    {
+      "section": 1,
+      "row": 138,
+      "source_row": 138,
+      "category": "Rigidez de resorte",
+      "name": "Newton por metro",
+      "symbol": "N/m"
+    },
+    {
+      "section": 1,
+      "row": 139,
+      "source_row": 139,
+      "category": "Rigidez de resorte",
+      "name": "Libra-fuerza por pulgada",
+      "symbol": "lbf/in"
+    },
+    {
+      "section": 1,
+      "row": 140,
+      "source_row": 140,
+      "category": "Segundo momento de área",
+      "name": "Metro a la cuarta",
+      "symbol": "m⁴"
+    },
+    {
+      "section": 1,
+      "row": 141,
+      "source_row": 141,
+      "category": "Segundo momento de área",
+      "name": "Pulgada a la cuarta",
+      "symbol": "in⁴"
+    },
+    {
+      "section": 1,
+      "row": 142,
+      "source_row": 142,
+      "category": "Presión / tensión mecánica",
+      "name": "Pascal",
+      "symbol": "Pa"
+    },
+    {
+      "section": 1,
+      "row": 143,
+      "source_row": 143,
+      "category": "Presión / tensión mecánica",
+      "name": "Bar",
+      "symbol": "bar"
+    },
+    {
+      "section": 1,
+      "row": 144,
+      "source_row": 144,
+      "category": "Presión / tensión mecánica",
+      "name": "Atmósfera estándar",
+      "symbol": "atm"
+    },
+    {
+      "section": 1,
+      "row": 145,
+      "source_row": 145,
+      "category": "Presión / tensión mecánica",
+      "name": "Atmósfera técnica",
+      "symbol": "at"
+    },
+    {
+      "section": 1,
+      "row": 146,
+      "source_row": 146,
+      "category": "Presión / tensión mecánica",
+      "name": "Torr",
+      "symbol": "Torr"
+    },
+    {
+      "section": 1,
+      "row": 147,
+      "source_row": 147,
+      "category": "Presión / tensión mecánica",
+      "name": "Milímetro de mercurio convencional",
+      "symbol": "mmHg"
+    },
+    {
+      "section": 1,
+      "row": 148,
+      "source_row": 148,
+      "category": "Presión / tensión mecánica",
+      "name": "Metro de columna de agua convencional",
+      "symbol": "mH₂O / mca"
+    },
+    {
+      "section": 1,
+      "row": 149,
+      "source_row": 149,
+      "category": "Presión / tensión mecánica",
+      "name": "Pulgada de agua convencional",
+      "symbol": "inH₂O"
+    },
+    {
+      "section": 1,
+      "row": 150,
+      "source_row": 150,
+      "category": "Presión / tensión mecánica",
+      "name": "Pulgada de mercurio convencional",
+      "symbol": "inHg"
+    },
+    {
+      "section": 1,
+      "row": 151,
+      "source_row": 151,
+      "category": "Presión / tensión mecánica",
+      "name": "Libra-fuerza por pulgada cuadrada",
+      "symbol": "psi"
+    },
+    {
+      "section": 1,
+      "row": 152,
+      "source_row": 152,
+      "category": "Presión / tensión mecánica",
+      "name": "Libra-fuerza por pie cuadrado",
+      "symbol": "psf"
+    },
+    {
+      "section": 1,
+      "row": 153,
+      "source_row": 153,
+      "category": "Presión / tensión mecánica",
+      "name": "Baria / barye",
+      "symbol": "Ba"
+    },
+    {
+      "section": 1,
+      "row": 154,
+      "source_row": 154,
+      "category": "Energía / trabajo / calor",
+      "name": "Julio / joule",
+      "symbol": "J"
+    },
+    {
+      "section": 1,
+      "row": 155,
+      "source_row": 155,
+      "category": "Energía / trabajo / calor",
+      "name": "Vatio-hora",
+      "symbol": "Wh"
+    },
+    {
+      "section": 1,
+      "row": 156,
+      "source_row": 156,
+      "category": "Energía / trabajo / calor",
+      "name": "Caloría termoquímica",
+      "symbol": "cal_th"
+    },
+    {
+      "section": 1,
+      "row": 157,
+      "source_row": 157,
+      "category": "Energía / trabajo / calor",
+      "name": "Caloría de la Tabla Internacional",
+      "symbol": "cal_IT"
+    },
+    {
+      "section": 1,
+      "row": 158,
+      "source_row": 158,
+      "category": "Energía / trabajo / calor",
+      "name": "Unidad térmica británica, Tabla Internacional",
+      "symbol": "Btu_IT"
+    },
+    {
+      "section": 1,
+      "row": 159,
+      "source_row": 159,
+      "category": "Energía / trabajo / calor",
+      "name": "Unidad térmica británica termoquímica",
+      "symbol": "Btu_th"
+    },
+    {
+      "section": 1,
+      "row": 160,
+      "source_row": 160,
+      "category": "Energía / trabajo / calor",
+      "name": "Ergio",
+      "symbol": "erg"
+    },
+    {
+      "section": 1,
+      "row": 161,
+      "source_row": 161,
+      "category": "Energía / trabajo / calor",
+      "name": "Electronvoltio",
+      "symbol": "eV"
+    },
+    {
+      "section": 1,
+      "row": 162,
+      "source_row": 162,
+      "category": "Energía / trabajo / calor",
+      "name": "Pie libra-fuerza",
+      "symbol": "ft·lbf"
+    },
+    {
+      "section": 1,
+      "row": 163,
+      "source_row": 163,
+      "category": "Energía / trabajo / calor",
+      "name": "Therm estadounidense",
+      "symbol": "therm (US)"
+    },
+    {
+      "section": 1,
+      "row": 164,
+      "source_row": 164,
+      "category": "Energía / trabajo / calor",
+      "name": "Therm, convención EC",
+      "symbol": "therm (EC)"
+    },
+    {
+      "section": 1,
+      "row": 165,
+      "source_row": 165,
+      "category": "Energía / trabajo / calor",
+      "name": "Tonelada equivalente de petróleo",
+      "symbol": "tep / toe"
+    },
+    {
+      "section": 1,
+      "row": 166,
+      "source_row": 166,
+      "category": "Energía / trabajo / calor",
+      "name": "Tonelada equivalente de TNT",
+      "symbol": "t TNT"
+    },
+    {
+      "section": 1,
+      "row": 167,
+      "source_row": 167,
+      "category": "Potencia",
+      "name": "Vatio / watt",
+      "symbol": "W"
+    },
+    {
+      "section": 1,
+      "row": 168,
+      "source_row": 168,
+      "category": "Potencia",
+      "name": "Horsepower mecánico",
+      "symbol": "hp"
+    },
+    {
+      "section": 1,
+      "row": 169,
+      "source_row": 169,
+      "category": "Potencia",
+      "name": "Caballo de vapor / horsepower métrico",
+      "symbol": "CV / PS"
+    },
+    {
+      "section": 1,
+      "row": 170,
+      "source_row": 170,
+      "category": "Potencia",
+      "name": "Horsepower eléctrico convencional",
+      "symbol": "hp (electric)"
+    },
+    {
+      "section": 1,
+      "row": 171,
+      "source_row": 171,
+      "category": "Potencia",
+      "name": "Boiler horsepower",
+      "symbol": "hp (boiler)"
+    },
+    {
+      "section": 1,
+      "row": 172,
+      "source_row": 172,
+      "category": "Potencia",
+      "name": "BTU de Tabla Internacional por hora",
+      "symbol": "Btu_IT/h"
+    },
+    {
+      "section": 1,
+      "row": 173,
+      "source_row": 173,
+      "category": "Potencia",
+      "name": "Tonelada de refrigeración estadounidense",
+      "symbol": "TR"
+    },
+    {
+      "section": 1,
+      "row": 174,
+      "source_row": 174,
+      "category": "Potencia",
+      "name": "Frigoría por hora",
+      "symbol": "frig/h"
+    },
+    {
+      "section": 1,
+      "row": 175,
+      "source_row": 175,
+      "category": "Potencia aparente",
+      "name": "Voltio-amperio",
+      "symbol": "VA"
+    },
+    {
+      "section": 1,
+      "row": 176,
+      "source_row": 176,
+      "category": "Potencia reactiva",
+      "name": "Var",
+      "symbol": "var"
+    },
+    {
+      "section": 1,
+      "row": 177,
+      "source_row": 177,
+      "category": "Temperatura",
+      "name": "Kelvin",
+      "symbol": "K"
+    },
+    {
+      "section": 1,
+      "row": 178,
+      "source_row": 178,
+      "category": "Temperatura",
+      "name": "Grado Celsius",
+      "symbol": "°C"
+    },
+    {
+      "section": 1,
+      "row": 179,
+      "source_row": 179,
+      "category": "Temperatura",
+      "name": "Grado Fahrenheit",
+      "symbol": "°F"
+    },
+    {
+      "section": 1,
+      "row": 180,
+      "source_row": 180,
+      "category": "Temperatura",
+      "name": "Grado Rankine",
+      "symbol": "°R"
+    },
+    {
+      "section": 1,
+      "row": 181,
+      "source_row": 181,
+      "category": "Temperatura",
+      "name": "Grado Réaumur",
+      "symbol": "°Ré"
+    },
+    {
+      "section": 1,
+      "row": 182,
+      "source_row": 182,
+      "category": "Capacidad calorífica / entropía",
+      "name": "Julio por kelvin",
+      "symbol": "J/K"
+    },
+    {
+      "section": 1,
+      "row": 183,
+      "source_row": 183,
+      "category": "Calor específico / entropía específica",
+      "name": "Julio por kilogramo kelvin",
+      "symbol": "J/(kg·K)"
+    },
+    {
+      "section": 1,
+      "row": 184,
+      "source_row": 184,
+      "category": "Calor específico / entropía específica",
+      "name": "BTU_IT por libra y grado Fahrenheit de diferencia",
+      "symbol": "Btu_IT/(lb·°F)"
+    },
+    {
+      "section": 1,
+      "row": 185,
+      "source_row": 185,
+      "category": "Conductividad térmica",
+      "name": "Vatio por metro kelvin",
+      "symbol": "W/(m·K)"
+    },
+    {
+      "section": 1,
+      "row": 186,
+      "source_row": 186,
+      "category": "Conductividad térmica",
+      "name": "BTU_IT pie por hora, pie cuadrado y grado Fahrenheit de diferencia",
+      "symbol": "Btu_IT·ft/(h·ft²·°F)"
+    },
+    {
+      "section": 1,
+      "row": 187,
+      "source_row": 187,
+      "category": "Resistencia térmica",
+      "name": "Kelvin por vatio",
+      "symbol": "K/W"
+    },
+    {
+      "section": 1,
+      "row": 188,
+      "source_row": 188,
+      "category": "Resistencia térmica por unidad de superficie",
+      "name": "Metro cuadrado kelvin por vatio",
+      "symbol": "m²·K/W"
+    },
+    {
+      "section": 1,
+      "row": 189,
+      "source_row": 189,
+      "category": "Resistencia térmica por unidad de superficie",
+      "name": "Unidad estadounidense de valor R",
+      "symbol": "h·ft²·°F/Btu_IT"
+    },
+    {
+      "section": 1,
+      "row": 190,
+      "source_row": 190,
+      "category": "Resistencia térmica por unidad de superficie",
+      "name": "Clo",
+      "symbol": "clo"
+    },
+    {
+      "section": 1,
+      "row": 191,
+      "source_row": 191,
+      "category": "Resistencia térmica por unidad de superficie",
+      "name": "Tog",
+      "symbol": "tog"
+    },
+    {
+      "section": 1,
+      "row": 192,
+      "source_row": 192,
+      "category": "Transmitancia / coeficiente de transferencia térmica",
+      "name": "Vatio por metro cuadrado kelvin",
+      "symbol": "W/(m²·K)"
+    },
+    {
+      "section": 1,
+      "row": 193,
+      "source_row": 193,
+      "category": "Coeficiente de dilatación térmica",
+      "name": "Kelvin inverso",
+      "symbol": "K⁻¹"
+    },
+    {
+      "section": 1,
+      "row": 194,
+      "source_row": 194,
+      "category": "Densidad de masa",
+      "name": "Kilogramo por metro cúbico",
+      "symbol": "kg/m³"
+    },
+    {
+      "section": 1,
+      "row": 195,
+      "source_row": 195,
+      "category": "Densidad de masa",
+      "name": "Libra por pie cúbico",
+      "symbol": "lb/ft³"
+    },
+    {
+      "section": 1,
+      "row": 196,
+      "source_row": 196,
+      "category": "Densidad de masa",
+      "name": "Libra por pulgada cúbica",
+      "symbol": "lb/in³"
+    },
+    {
+      "section": 1,
+      "row": 197,
+      "source_row": 197,
+      "category": "Densidad de masa",
+      "name": "Libra por galón estadounidense líquido",
+      "symbol": "lb/gal (US liq)"
+    },
+    {
+      "section": 1,
+      "row": 198,
+      "source_row": 198,
+      "category": "Densidad de masa",
+      "name": "Libra por galón imperial",
+      "symbol": "lb/gal (imp)"
+    },
+    {
+      "section": 1,
+      "row": 199,
+      "source_row": 199,
+      "category": "Masa por superficie / gramaje",
+      "name": "Kilogramo por metro cuadrado",
+      "symbol": "kg/m²"
+    },
+    {
+      "section": 1,
+      "row": 200,
+      "source_row": 200,
+      "category": "Masa por superficie / gramaje",
+      "name": "Onza por yarda cuadrada",
+      "symbol": "oz/yd²"
+    },
+    {
+      "section": 1,
+      "row": 201,
+      "source_row": 201,
+      "category": "Masa por longitud",
+      "name": "Kilogramo por metro",
+      "symbol": "kg/m"
+    },
+    {
+      "section": 1,
+      "row": 202,
+      "source_row": 202,
+      "category": "Masa por longitud",
+      "name": "Tex",
+      "symbol": "tex"
+    },
+    {
+      "section": 1,
+      "row": 203,
+      "source_row": 203,
+      "category": "Masa por longitud",
+      "name": "Denier",
+      "symbol": "den"
+    },
+    {
+      "section": 1,
+      "row": 204,
+      "source_row": 204,
+      "category": "Caudal volumétrico",
+      "name": "Metro cúbico por segundo",
+      "symbol": "m³/s"
+    },
+    {
+      "section": 1,
+      "row": 205,
+      "source_row": 205,
+      "category": "Caudal volumétrico",
+      "name": "Litro por segundo",
+      "symbol": "L/s"
+    },
+    {
+      "section": 1,
+      "row": 206,
+      "source_row": 206,
+      "category": "Caudal volumétrico",
+      "name": "Litro por minuto",
+      "symbol": "L/min"
+    },
+    {
+      "section": 1,
+      "row": 207,
+      "source_row": 207,
+      "category": "Caudal volumétrico",
+      "name": "Pie cúbico por segundo",
+      "symbol": "ft³/s / cfs"
+    },
+    {
+      "section": 1,
+      "row": 208,
+      "source_row": 208,
+      "category": "Caudal volumétrico",
+      "name": "Pie cúbico por minuto",
+      "symbol": "ft³/min / cfm"
+    },
+    {
+      "section": 1,
+      "row": 209,
+      "source_row": 209,
+      "category": "Caudal volumétrico",
+      "name": "Galón estadounidense líquido por minuto",
+      "symbol": "gpm (US)"
+    },
+    {
+      "section": 1,
+      "row": 210,
+      "source_row": 210,
+      "category": "Caudal volumétrico",
+      "name": "Galón imperial por minuto",
+      "symbol": "gpm (imp)"
+    },
+    {
+      "section": 1,
+      "row": 211,
+      "source_row": 211,
+      "category": "Caudal másico",
+      "name": "Kilogramo por segundo",
+      "symbol": "kg/s"
+    },
+    {
+      "section": 1,
+      "row": 212,
+      "source_row": 212,
+      "category": "Caudal másico",
+      "name": "Libra por hora",
+      "symbol": "lb/h"
+    },
+    {
+      "section": 1,
+      "row": 213,
+      "source_row": 213,
+      "category": "Viscosidad dinámica",
+      "name": "Pascal-segundo",
+      "symbol": "Pa·s"
+    },
+    {
+      "section": 1,
+      "row": 214,
+      "source_row": 214,
+      "category": "Viscosidad dinámica",
+      "name": "Poise",
+      "symbol": "P"
+    },
+    {
+      "section": 1,
+      "row": 215,
+      "source_row": 215,
+      "category": "Viscosidad cinemática",
+      "name": "Metro cuadrado por segundo",
+      "symbol": "m²/s"
+    },
+    {
+      "section": 1,
+      "row": 216,
+      "source_row": 216,
+      "category": "Viscosidad cinemática",
+      "name": "Stokes",
+      "symbol": "St"
+    },
+    {
+      "section": 1,
+      "row": 217,
+      "source_row": 217,
+      "category": "Difusividad",
+      "name": "Metro cuadrado por segundo",
+      "symbol": "m²/s"
+    },
+    {
+      "section": 1,
+      "row": 218,
+      "source_row": 218,
+      "category": "Tensión superficial",
+      "name": "Newton por metro",
+      "symbol": "N/m"
+    },
+    {
+      "section": 1,
+      "row": 219,
+      "source_row": 219,
+      "category": "Tensión superficial",
+      "name": "Dina por centímetro",
+      "symbol": "dyn/cm"
+    },
+    {
+      "section": 1,
+      "row": 220,
+      "source_row": 220,
+      "category": "Permeabilidad de un medio poroso",
+      "name": "Metro cuadrado",
+      "symbol": "m²"
+    },
+    {
+      "section": 1,
+      "row": 221,
+      "source_row": 221,
+      "category": "Permeabilidad de un medio poroso",
+      "name": "Darcy",
+      "symbol": "D (darcy)"
+    },
+    {
+      "section": 1,
+      "row": 222,
+      "source_row": 222,
+      "category": "Corriente eléctrica",
+      "name": "Amperio",
+      "symbol": "A"
+    },
+    {
+      "section": 1,
+      "row": 223,
+      "source_row": 223,
+      "category": "Carga eléctrica",
+      "name": "Culombio / coulomb",
+      "symbol": "C"
+    },
+    {
+      "section": 1,
+      "row": 224,
+      "source_row": 224,
+      "category": "Carga eléctrica",
+      "name": "Amperio-hora",
+      "symbol": "Ah"
+    },
+    {
+      "section": 1,
+      "row": 225,
+      "source_row": 225,
+      "category": "Carga eléctrica",
+      "name": "Carga elemental",
+      "symbol": "e"
+    },
+    {
+      "section": 1,
+      "row": 226,
+      "source_row": 226,
+      "category": "Tensión / potencial eléctrico",
+      "name": "Voltio",
+      "symbol": "V"
+    },
+    {
+      "section": 1,
+      "row": 227,
+      "source_row": 227,
+      "category": "Resistencia / impedancia eléctrica",
+      "name": "Ohmio",
+      "symbol": "Ω"
+    },
+    {
+      "section": 1,
+      "row": 228,
+      "source_row": 228,
+      "category": "Conductancia / admitancia eléctrica",
+      "name": "Siemens",
+      "symbol": "S"
+    },
+    {
+      "section": 1,
+      "row": 229,
+      "source_row": 229,
+      "category": "Capacitancia",
+      "name": "Faradio",
+      "symbol": "F"
+    },
+    {
+      "section": 1,
+      "row": 230,
+      "source_row": 230,
+      "category": "Inductancia",
+      "name": "Henrio",
+      "symbol": "H"
+    },
+    {
+      "section": 1,
+      "row": 231,
+      "source_row": 231,
+      "category": "Resistividad eléctrica",
+      "name": "Ohmio metro",
+      "symbol": "Ω·m"
+    },
+    {
+      "section": 1,
+      "row": 232,
+      "source_row": 232,
+      "category": "Conductividad eléctrica",
+      "name": "Siemens por metro",
+      "symbol": "S/m"
+    },
+    {
+      "section": 1,
+      "row": 233,
+      "source_row": 233,
+      "category": "Campo eléctrico",
+      "name": "Voltio por metro",
+      "symbol": "V/m"
+    },
+    {
+      "section": 1,
+      "row": 234,
+      "source_row": 234,
+      "category": "Densidad de corriente",
+      "name": "Amperio por metro cuadrado",
+      "symbol": "A/m²"
+    },
+    {
+      "section": 1,
+      "row": 235,
+      "source_row": 235,
+      "category": "Densidad superficial de carga / desplazamiento eléctrico",
+      "name": "Culombio por metro cuadrado",
+      "symbol": "C/m²"
+    },
+    {
+      "section": 1,
+      "row": 236,
+      "source_row": 236,
+      "category": "Permitividad eléctrica",
+      "name": "Faradio por metro",
+      "symbol": "F/m"
+    },
+    {
+      "section": 1,
+      "row": 237,
+      "source_row": 237,
+      "category": "Momento dipolar eléctrico",
+      "name": "Culombio metro",
+      "symbol": "C·m"
+    },
+    {
+      "section": 1,
+      "row": 238,
+      "source_row": 238,
+      "category": "Momento dipolar eléctrico",
+      "name": "Debye",
+      "symbol": "D (debye)"
+    },
+    {
+      "section": 1,
+      "row": 239,
+      "source_row": 239,
+      "category": "Densidad de flujo magnético",
+      "name": "Tesla",
+      "symbol": "T"
+    },
+    {
+      "section": 1,
+      "row": 240,
+      "source_row": 240,
+      "category": "Densidad de flujo magnético",
+      "name": "Gauss",
+      "symbol": "G / Gs"
+    },
+    {
+      "section": 1,
+      "row": 241,
+      "source_row": 241,
+      "category": "Flujo magnético",
+      "name": "Weber",
+      "symbol": "Wb"
+    },
+    {
+      "section": 1,
+      "row": 242,
+      "source_row": 242,
+      "category": "Flujo magnético",
+      "name": "Maxwell",
+      "symbol": "Mx"
+    },
+    {
+      "section": 1,
+      "row": 243,
+      "source_row": 243,
+      "category": "Intensidad de campo magnético",
+      "name": "Amperio por metro",
+      "symbol": "A/m"
+    },
+    {
+      "section": 1,
+      "row": 244,
+      "source_row": 244,
+      "category": "Intensidad de campo magnético",
+      "name": "Oersted",
+      "symbol": "Oe"
+    },
+    {
+      "section": 1,
+      "row": 245,
+      "source_row": 245,
+      "category": "Fuerza magnetomotriz",
+      "name": "Amperio-vuelta",
+      "symbol": "A·turn / A"
+    },
+    {
+      "section": 1,
+      "row": 246,
+      "source_row": 246,
+      "category": "Fuerza magnetomotriz",
+      "name": "Gilbert",
+      "symbol": "Gi"
+    },
+    {
+      "section": 1,
+      "row": 247,
+      "source_row": 247,
+      "category": "Momento dipolar magnético",
+      "name": "Amperio metro cuadrado",
+      "symbol": "A·m²"
+    },
+    {
+      "section": 1,
+      "row": 248,
+      "source_row": 248,
+      "category": "Permeabilidad magnética",
+      "name": "Henrio por metro",
+      "symbol": "H/m"
+    },
+    {
+      "section": 1,
+      "row": 249,
+      "source_row": 249,
+      "category": "Cantidad de sustancia",
+      "name": "Mol",
+      "symbol": "mol"
+    },
+    {
+      "section": 1,
+      "row": 250,
+      "source_row": 250,
+      "category": "Cantidad de sustancia",
+      "name": "Libra-mol",
+      "symbol": "lbmol"
+    },
+    {
+      "section": 1,
+      "row": 251,
+      "source_row": 251,
+      "category": "Concentración de cantidad de sustancia",
+      "name": "Mol por metro cúbico",
+      "symbol": "mol/m³"
+    },
+    {
+      "section": 1,
+      "row": 252,
+      "source_row": 252,
+      "category": "Concentración de cantidad de sustancia",
+      "name": "Mol por litro / molar",
+      "symbol": "mol/L / M"
+    },
+    {
+      "section": 1,
+      "row": 253,
+      "source_row": 253,
+      "category": "Molalidad",
+      "name": "Mol por kilogramo de disolvente",
+      "symbol": "mol/kg"
+    },
+    {
+      "section": 1,
+      "row": 254,
+      "source_row": 254,
+      "category": "Masa molar",
+      "name": "Kilogramo por mol",
+      "symbol": "kg/mol"
+    },
+    {
+      "section": 1,
+      "row": 255,
+      "source_row": 255,
+      "category": "Energía molar",
+      "name": "Julio por mol",
+      "symbol": "J/mol"
+    },
+    {
+      "section": 1,
+      "row": 256,
+      "source_row": 256,
+      "category": "Volumen molar",
+      "name": "Metro cúbico por mol",
+      "symbol": "m³/mol"
+    },
+    {
+      "section": 1,
+      "row": 257,
+      "source_row": 257,
+      "category": "Actividad catalítica",
+      "name": "Katal",
+      "symbol": "kat"
+    },
+    {
+      "section": 1,
+      "row": 258,
+      "source_row": 258,
+      "category": "Actividad catalítica",
+      "name": "Unidad de actividad enzimática",
+      "symbol": "U"
+    },
+    {
+      "section": 1,
+      "row": 259,
+      "source_row": 259,
+      "category": "Actividad radiactiva",
+      "name": "Becquerel",
+      "symbol": "Bq"
+    },
+    {
+      "section": 1,
+      "row": 260,
+      "source_row": 260,
+      "category": "Actividad radiactiva",
+      "name": "Curie",
+      "symbol": "Ci"
+    },
+    {
+      "section": 1,
+      "row": 261,
+      "source_row": 261,
+      "category": "Dosis absorbida",
+      "name": "Gray",
+      "symbol": "Gy"
+    },
+    {
+      "section": 1,
+      "row": 262,
+      "source_row": 262,
+      "category": "Dosis absorbida",
+      "name": "Rad de dosis absorbida",
+      "symbol": "rad (dosis)"
+    },
+    {
+      "section": 1,
+      "row": 263,
+      "source_row": 263,
+      "category": "Dosis equivalente / efectiva",
+      "name": "Sievert",
+      "symbol": "Sv"
+    },
+    {
+      "section": 1,
+      "row": 264,
+      "source_row": 264,
+      "category": "Dosis equivalente / efectiva",
+      "name": "Rem",
+      "symbol": "rem"
+    },
+    {
+      "section": 1,
+      "row": 265,
+      "source_row": 265,
+      "category": "Exposición a radiación X o gamma",
+      "name": "Culombio por kilogramo",
+      "symbol": "C/kg"
+    },
+    {
+      "section": 1,
+      "row": 266,
+      "source_row": 266,
+      "category": "Exposición a radiación X o gamma",
+      "name": "Roentgen / röntgen",
+      "symbol": "R"
+    },
+    {
+      "section": 1,
+      "row": 267,
+      "source_row": 267,
+      "category": "Tasa de dosis absorbida",
+      "name": "Gray por segundo",
+      "symbol": "Gy/s"
+    },
+    {
+      "section": 1,
+      "row": 268,
+      "source_row": 268,
+      "category": "Tasa de dosis equivalente o efectiva",
+      "name": "Sievert por hora",
+      "symbol": "Sv/h"
+    },
+    {
+      "section": 1,
+      "row": 269,
+      "source_row": 269,
+      "category": "Intensidad luminosa",
+      "name": "Candela",
+      "symbol": "cd"
+    },
+    {
+      "section": 1,
+      "row": 270,
+      "source_row": 270,
+      "category": "Flujo luminoso",
+      "name": "Lumen",
+      "symbol": "lm"
+    },
+    {
+      "section": 1,
+      "row": 271,
+      "source_row": 271,
+      "category": "Iluminancia",
+      "name": "Lux",
+      "symbol": "lx"
+    },
+    {
+      "section": 1,
+      "row": 272,
+      "source_row": 272,
+      "category": "Iluminancia",
+      "name": "Foot-candle",
+      "symbol": "fc"
+    },
+    {
+      "section": 1,
+      "row": 273,
+      "source_row": 273,
+      "category": "Iluminancia",
+      "name": "Phot",
+      "symbol": "ph"
+    },
+    {
+      "section": 1,
+      "row": 274,
+      "source_row": 274,
+      "category": "Luminancia",
+      "name": "Candela por metro cuadrado / nit",
+      "symbol": "cd/m² / nit"
+    },
+    {
+      "section": 1,
+      "row": 275,
+      "source_row": 275,
+      "category": "Luminancia",
+      "name": "Stilb",
+      "symbol": "sb"
+    },
+    {
+      "section": 1,
+      "row": 276,
+      "source_row": 276,
+      "category": "Luminancia",
+      "name": "Lambert",
+      "symbol": "L (lambert)"
+    },
+    {
+      "section": 1,
+      "row": 277,
+      "source_row": 277,
+      "category": "Luminancia",
+      "name": "Foot-lambert",
+      "symbol": "fL"
+    },
+    {
+      "section": 1,
+      "row": 278,
+      "source_row": 278,
+      "category": "Eficacia luminosa",
+      "name": "Lumen por vatio",
+      "symbol": "lm/W"
+    },
+    {
+      "section": 1,
+      "row": 279,
+      "source_row": 279,
+      "category": "Exposición luminosa",
+      "name": "Lux-segundo",
+      "symbol": "lx·s"
+    },
+    {
+      "section": 1,
+      "row": 280,
+      "source_row": 280,
+      "category": "Intensidad radiante",
+      "name": "Vatio por estereorradián",
+      "symbol": "W/sr"
+    },
+    {
+      "section": 1,
+      "row": 281,
+      "source_row": 281,
+      "category": "Irradiancia / exitancia radiante",
+      "name": "Vatio por metro cuadrado",
+      "symbol": "W/m²"
+    },
+    {
+      "section": 1,
+      "row": 282,
+      "source_row": 282,
+      "category": "Radiancia",
+      "name": "Vatio por metro cuadrado estereorradián",
+      "symbol": "W/(m²·sr)"
+    },
+    {
+      "section": 1,
+      "row": 283,
+      "source_row": 283,
+      "category": "Exposición radiante",
+      "name": "Julio por metro cuadrado",
+      "symbol": "J/m²"
+    },
+    {
+      "section": 1,
+      "row": 284,
+      "source_row": 284,
+      "category": "Potencia óptica de una lente",
+      "name": "Dioptría",
+      "symbol": "D (óptica)"
+    },
+    {
+      "section": 1,
+      "row": 285,
+      "source_row": 285,
+      "category": "Número de onda",
+      "name": "Metro inverso",
+      "symbol": "m⁻¹"
+    },
+    {
+      "section": 1,
+      "row": 286,
+      "source_row": 286,
+      "category": "Información digital",
+      "name": "Bit",
+      "symbol": "bit"
+    },
+    {
+      "section": 1,
+      "row": 287,
+      "source_row": 287,
+      "category": "Información digital",
+      "name": "Byte de 8 bits / octeto",
+      "symbol": "B"
+    },
+    {
+      "section": 1,
+      "row": 288,
+      "source_row": 288,
+      "category": "Información digital",
+      "name": "Nibble",
+      "symbol": "nibble"
+    },
+    {
+      "section": 1,
+      "row": 289,
+      "source_row": 289,
+      "category": "Tasa de información digital",
+      "name": "Bit por segundo",
+      "symbol": "bit/s"
+    },
+    {
+      "section": 1,
+      "row": 290,
+      "source_row": 290,
+      "category": "Tasa de información digital",
+      "name": "Byte por segundo",
+      "symbol": "B/s"
+    },
+    {
+      "section": 1,
+      "row": 291,
+      "source_row": 291,
+      "category": "Tasa de símbolos",
+      "name": "Baudio",
+      "symbol": "Bd"
+    },
+    {
+      "section": 1,
+      "row": 292,
+      "source_row": 292,
+      "category": "Tasa de muestreo",
+      "name": "Muestra por segundo",
+      "symbol": "sample/s / Sa/s"
+    },
+    {
+      "section": 1,
+      "row": 293,
+      "source_row": 293,
+      "category": "Tasa de imágenes",
+      "name": "Fotograma por segundo",
+      "symbol": "fps"
+    },
+    {
+      "section": 1,
+      "row": 294,
+      "source_row": 294,
+      "category": "Tasa de eventos",
+      "name": "Evento o pulso por minuto",
+      "symbol": "min⁻¹ / bpm"
+    },
+    {
+      "section": 1,
+      "row": 295,
+      "source_row": 295,
+      "category": "Rendimiento computacional",
+      "name": "Operación de coma flotante por segundo",
+      "symbol": "FLOP/s / FLOPS"
+    },
+    {
+      "section": 1,
+      "row": 296,
+      "source_row": 296,
+      "category": "Rendimiento computacional",
+      "name": "Instrucción por segundo",
+      "symbol": "IPS"
+    },
+    {
+      "section": 1,
+      "row": 297,
+      "source_row": 297,
+      "category": "Rendimiento computacional",
+      "name": "Operación de entrada/salida por segundo",
+      "symbol": "IOPS"
+    },
+    {
+      "section": 1,
+      "row": 298,
+      "source_row": 298,
+      "category": "Consumo de combustible",
+      "name": "Litro por cien kilómetros",
+      "symbol": "L/100 km"
+    },
+    {
+      "section": 1,
+      "row": 299,
+      "source_row": 299,
+      "category": "Consumo de combustible",
+      "name": "Milla por galón estadounidense",
+      "symbol": "mpg (US)"
+    },
+    {
+      "section": 1,
+      "row": 300,
+      "source_row": 300,
+      "category": "Consumo de combustible",
+      "name": "Milla por galón imperial",
+      "symbol": "mpg (imp)"
+    },
+    {
+      "section": 1,
+      "row": 301,
+      "source_row": 301,
+      "category": "Consumo energético por distancia",
+      "name": "Vatio-hora por kilómetro",
+      "symbol": "Wh/km"
+    },
+    {
+      "section": 2,
+      "row": 1,
+      "source_row": 1,
+      "category": "Relaciones adimensionales",
+      "name": "Unidad uno",
+      "symbol": "1"
+    },
+    {
+      "section": 2,
+      "row": 2,
+      "source_row": 2,
+      "category": "Relaciones adimensionales",
+      "name": "Porcentaje, por mil y partes por millón",
+      "symbol": "% / ‰ / ppm"
+    },
+    {
+      "section": 2,
+      "row": 3,
+      "source_row": 3,
+      "category": "Relación logarítmica",
+      "name": "Decibelio",
+      "symbol": "dB"
+    },
+    {
+      "section": 2,
+      "row": 4,
+      "source_row": 4,
+      "category": "Relación logarítmica",
+      "name": "Neper",
+      "symbol": "Np"
+    },
+    {
+      "section": 2,
+      "row": 5,
+      "source_row": 5,
+      "category": "Nivel de potencia",
+      "name": "Decibelio referido a un milivatio",
+      "symbol": "dBm"
+    },
+    {
+      "section": 2,
+      "row": 6,
+      "source_row": 6,
+      "category": "Nivel de potencia",
+      "name": "Decibelio referido a un vatio",
+      "symbol": "dBW"
+    },
+    {
+      "section": 2,
+      "row": 7,
+      "source_row": 7,
+      "category": "Nivel de tensión",
+      "name": "Decibelio referido a un voltio eficaz",
+      "symbol": "dBV"
+    },
+    {
+      "section": 2,
+      "row": 8,
+      "source_row": 8,
+      "category": "Nivel de tensión",
+      "name": "Decibelio referido a aproximadamente 0,775 V eficaces",
+      "symbol": "dBu"
+    },
+    {
+      "section": 2,
+      "row": 9,
+      "source_row": 9,
+      "category": "Nivel de presión sonora",
+      "name": "Decibelio SPL, referencia en aire",
+      "symbol": "dB SPL"
+    },
+    {
+      "section": 2,
+      "row": 10,
+      "source_row": 10,
+      "category": "Nivel de presión sonora",
+      "name": "Nivel con ponderación A",
+      "symbol": "dB(A)"
+    },
+    {
+      "section": 2,
+      "row": 11,
+      "source_row": 11,
+      "category": "Nivel digital",
+      "name": "Decibelio referido a escala completa",
+      "symbol": "dBFS"
+    },
+    {
+      "section": 2,
+      "row": 12,
+      "source_row": 12,
+      "category": "Velocidad relativa al sonido",
+      "name": "Número Mach",
+      "symbol": "M / Ma"
+    },
+    {
+      "section": 2,
+      "row": 13,
+      "source_row": 13,
+      "category": "Acidez",
+      "name": "pH",
+      "symbol": "pH"
+    },
+    {
+      "section": 2,
+      "row": 14,
+      "source_row": 14,
+      "category": "Fracción de sacarosa / escala refractométrica",
+      "name": "Grado Brix",
+      "symbol": "°Bx"
+    },
+    {
+      "section": 2,
+      "row": 15,
+      "source_row": 15,
+      "category": "Densidad relativa",
+      "name": "Specific gravity",
+      "symbol": "SG / d"
+    },
+    {
+      "section": 2,
+      "row": 16,
+      "source_row": 16,
+      "category": "Densidad relativa",
+      "name": "Grado API",
+      "symbol": "°API"
+    },
+    {
+      "section": 2,
+      "row": 17,
+      "source_row": 17,
+      "category": "Cantidad equivalente en una reacción",
+      "name": "Equivalente",
+      "symbol": "eq"
+    },
+    {
+      "section": 2,
+      "row": 18,
+      "source_row": 18,
+      "category": "Concentración equivalente",
+      "name": "Normalidad",
+      "symbol": "N (química)"
+    },
+    {
+      "section": 2,
+      "row": 19,
+      "source_row": 19,
+      "category": "Cantidad osmótica",
+      "name": "Osmol",
+      "symbol": "Osm / osmol"
+    },
+    {
+      "section": 2,
+      "row": 20,
+      "source_row": 20,
+      "category": "Actividad biológica",
+      "name": "Unidad internacional",
+      "symbol": "UI / IU"
+    },
+    {
+      "section": 2,
+      "row": 21,
+      "source_row": 21,
+      "category": "Turbidez",
+      "name": "Unidad nefelométrica o de formazina",
+      "symbol": "NTU / FNU"
+    },
+    {
+      "section": 2,
+      "row": 22,
+      "source_row": 22,
+      "category": "Calibre de conductor",
+      "name": "American Wire Gauge / Standard Wire Gauge",
+      "symbol": "AWG / SWG"
+    },
+    {
+      "section": 2,
+      "row": 23,
+      "source_row": 23,
+      "category": "Tamaño de tamiz",
+      "name": "Mesh",
+      "symbol": "mesh"
+    },
+    {
+      "section": 2,
+      "row": 24,
+      "source_row": 24,
+      "category": "Resolución espacial",
+      "name": "Punto por pulgada / píxel por pulgada",
+      "symbol": "dpi / ppi"
+    },
+    {
+      "section": 2,
+      "row": 25,
+      "source_row": 25,
+      "category": "Longitud gráfica digital",
+      "name": "Píxel CSS, em y rem",
+      "symbol": "px / em / rem"
+    },
+    {
+      "section": 2,
+      "row": 26,
+      "source_row": 26,
+      "category": "Duración de calendario",
+      "name": "Mes y año civil",
+      "symbol": "—"
+    },
+    {
+      "section": 2,
+      "row": 27,
+      "source_row": 27,
+      "category": "Tiempo de procesador",
+      "name": "Ciclo de reloj",
+      "symbol": "cycle"
+    },
+    {
+      "section": 2,
+      "row": 28,
+      "source_row": 28,
+      "category": "Tiempo de sistema",
+      "name": "Jiffy",
+      "symbol": "jiffy"
+    },
+    {
+      "section": 2,
+      "row": 29,
+      "source_row": 29,
+      "category": "Tamaño de dato de arquitectura",
+      "name": "Palabra",
+      "symbol": "word"
+    },
+    {
+      "section": 2,
+      "row": 30,
+      "source_row": 30,
+      "category": "Volumen de gas de referencia",
+      "name": "Metro cúbico normal o estándar; pie cúbico estándar",
+      "symbol": "Nm³ / Sm³ / scf"
+    },
+    {
+      "section": 2,
+      "row": 31,
+      "source_row": 31,
+      "category": "Referencia de presión",
+      "name": "Presión absoluta o manométrica",
+      "symbol": "psia / psig; bar(a) / bar(g)"
+    },
+    {
+      "section": 3,
+      "row": 302,
+      "source_row": 1,
+      "category": "Longitud",
+      "name": "Vara de Burgos, referencia histórica",
+      "symbol": "—"
+    },
+    {
+      "section": 3,
+      "row": 303,
+      "source_row": 2,
+      "category": "Área",
+      "name": "Fanega de tierra castellana, convención indicada",
+      "symbol": "—"
+    },
+    {
+      "section": 3,
+      "row": 304,
+      "source_row": 3,
+      "category": "Volumen",
+      "name": "Fanega castellana de áridos",
+      "symbol": "—"
+    },
+    {
+      "section": 3,
+      "row": 305,
+      "source_row": 4,
+      "category": "Volumen",
+      "name": "Cántara o arroba castellana de vino, convención indicada",
+      "symbol": "—"
+    },
+    {
+      "section": 3,
+      "row": 306,
+      "source_row": 5,
+      "category": "Volumen",
+      "name": "Arroba de aceite, convención histórica indicada",
+      "symbol": "—"
+    },
+    {
+      "section": 3,
+      "row": 307,
+      "source_row": 6,
+      "category": "Masa",
+      "name": "Catty de Hong Kong",
+      "symbol": "catty / kan"
+    },
+    {
+      "section": 3,
+      "row": 308,
+      "source_row": 7,
+      "category": "Masa",
+      "name": "Tael de masa común de Hong Kong",
+      "symbol": "tael"
+    },
+    {
+      "section": 3,
+      "row": 309,
+      "source_row": 8,
+      "category": "Área",
+      "name": "Tsubo",
+      "symbol": "tsubo"
+    },
+    {
+      "section": 3,
+      "row": 310,
+      "source_row": 9,
+      "category": "Área",
+      "name": "Rai",
+      "symbol": "rai"
+    },
+    {
+      "section": 4,
+      "row": 1,
+      "source_row": 1,
+      "category": "Velocidad",
+      "name": "Velocidad de la luz en el vacío",
+      "symbol": "c"
+    },
+    {
+      "section": 4,
+      "row": 2,
+      "source_row": 2,
+      "category": "Longitud",
+      "name": "Radio de Bohr",
+      "symbol": "a₀"
+    },
+    {
+      "section": 4,
+      "row": 3,
+      "source_row": 3,
+      "category": "Masa",
+      "name": "Masa del electrón",
+      "symbol": "mₑ"
+    },
+    {
+      "section": 4,
+      "row": 4,
+      "source_row": 4,
+      "category": "Energía",
+      "name": "Hartree",
+      "symbol": "Eₕ"
+    },
+    {
+      "section": 4,
+      "row": 5,
+      "source_row": 5,
+      "category": "Tiempo",
+      "name": "Unidad atómica de tiempo",
+      "symbol": "ℏ/Eₕ"
+    },
+    {
+      "section": 4,
+      "row": 6,
+      "source_row": 6,
+      "category": "Acción / momento angular",
+      "name": "Constante de Planck reducida",
+      "symbol": "ℏ"
+    },
+    {
+      "section": 4,
+      "row": 7,
+      "source_row": 7,
+      "category": "Longitud",
+      "name": "Longitud de Planck",
+      "symbol": "ℓₚ"
+    },
+    {
+      "section": 4,
+      "row": 8,
+      "source_row": 8,
+      "category": "Tiempo",
+      "name": "Tiempo de Planck",
+      "symbol": "tₚ"
+    },
+    {
+      "section": 4,
+      "row": 9,
+      "source_row": 9,
+      "category": "Masa",
+      "name": "Masa de Planck",
+      "symbol": "mₚ (Planck)"
+    },
+    {
+      "section": 4,
+      "row": 10,
+      "source_row": 10,
+      "category": "Fuerza",
+      "name": "Fuerza de Planck",
+      "symbol": "Fₚ"
+    },
+    {
+      "section": 4,
+      "row": 11,
+      "source_row": 11,
+      "category": "Energía",
+      "name": "Energía de Planck",
+      "symbol": "Eₚ"
+    },
+    {
+      "section": 4,
+      "row": 12,
+      "source_row": 12,
+      "category": "Temperatura",
+      "name": "Temperatura de Planck",
+      "symbol": "Tₚ"
+    }
+  ]
+}

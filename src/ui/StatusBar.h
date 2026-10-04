@@ -85,6 +85,8 @@ public:
     void update();
     // Refresh after input resolution, including modifier events consumed there.
     static void refreshActiveModifier();
+    // Allocation-free emergency notice; caller supplies static-lifetime text.
+    static void showActiveNotice(const char* text);
 
     /** Devuelve el objeto LVGL raíz (para set pos, etc.). */
     lv_obj_t* obj() const { return _bar; }

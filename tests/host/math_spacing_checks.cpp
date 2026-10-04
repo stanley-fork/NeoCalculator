@@ -87,7 +87,11 @@ int main() {
     check(unary.layout().width==glyph(ui::mathPrimaryFont(),0x2212)+glyph(ui::mathPrimaryFont(),'5'),"detect mathematical unary minus advance + zero binary space");
     NodeRow relation; relation.appendChild(makeVariable('x')); relation.appendChild(makeOperator(OpKind::Eq));
     relation.appendChild(makeOperator(OpKind::Sub)); relation.appendChild(makeNumber("5")); relation.calculateLayout(fm);
-    check(relation.layout().width==glyph(ui::mathPrimaryFont(),'x')+glyph(ui::mathPrimaryFont(),'=')+
+    // A variable's box also contains its STIX italic overhang. Keep the
+    // spacing oracle independent: derive that box from the actual font ink.
+    lv_font_glyph_dsc_t xInk{};lv_font_get_glyph_dsc(ui::mathPrimaryFont(),&xInk,'x',0);
+    const int xBox=std::max<int>(xInk.adv_w,xInk.ofs_x+xInk.box_w)-std::min<int>(0,xInk.ofs_x);
+    check(relation.layout().width==xBox+glyph(ui::mathPrimaryFont(),'=')+
           glyph(ui::mathPrimaryFont(),0x2212)+glyph(ui::mathPrimaryFont(),'5')+10,"relation then unary: two thick spaces, no binary gap");
     auto exponent=makeRow(); auto* e=static_cast<NodeRow*>(exponent.get());
     e->appendChild(makeOperator(OpKind::Sub)); e->appendChild(makeNumber("5"));

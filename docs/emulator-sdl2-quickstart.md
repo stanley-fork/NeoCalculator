@@ -7,6 +7,31 @@ compiled against an SDL2 desktop HAL) — **not** a cycle-accurate ESP32 emulato
 **Controls:** [complete keyboard map](#keyboard-map-phase-3a). **Toolbox / Steps: F6;
 Back: F8; Variables: V.**
 
+## Windows: always-available release
+
+Run `./scripts/run-emulator-windows.ps1` at any time, including during development.
+The validated release and its DLLs live at
+`C:/.piobuild/numOS/emulator_pc/program.exe`. PlatformIO builds into the separate
+`C:/.piobuild/numOS-build` tree, so its automatic cleanup cannot remove that release.
+
+To update it after building and checking a candidate:
+
+```powershell
+pio run -e emulator_pc
+./scripts/publish-emulator-windows.ps1 -BuiltExecutable C:/.piobuild/numOS-build/emulator_pc/program.exe
+./scripts/run-emulator-windows.ps1
+```
+
+The publisher checks the runtime and evaluates 2+3 in an isolated headless process
+before replacing `program.exe` atomically. It keeps `previous-program.exe` and
+leaves the active release intact on failure. If Windows refuses replacement while
+the emulator is open, keep using that version and publish again after closing it.
+Runtime DLLs must match the pinned active runtime; they are never overwritten
+individually. The launcher prefers this stable release even when
+`PLATFORMIO_BUILD_DIR` points to a private candidate build.
+
+See [AGENTS.md](../AGENTS.md) for the persistent development rule.
+
 ---
 
 ## Do I need an ESP32-S3?
@@ -100,19 +125,19 @@ convenience wrappers:
 
 ### Where the build goes (the `C:/.piobuild` path)
 
-You may notice build output under a path like `C:/.piobuild/numOS/...` **even on
+You may notice build output under a path like `C:/.piobuild/numOS-build/...` **even on
 macOS or Linux**, which looks wrong. It isn't a bug or a leaked absolute path baked
 into the binary — it's a configured **build directory**:
 
-- [`platformio.ini`](../platformio.ini) sets `build_dir = C:/.piobuild/numOS` in the
+- [`platformio.ini`](../platformio.ini) sets `build_dir = C:/.piobuild/numOS-build` in the
   `[platformio]` section. This is a **Windows-only workaround**: the default
   `.pio/build/...` tree, nested under a long user path plus Giac/LVGL's deep include
   folders, can exceed Windows' 260-character `MAX_PATH` limit and break the
   **firmware** compile. A short absolute root keeps paths under the limit.
-- On Windows, `C:/.piobuild/numOS` is an absolute path on the `C:` drive. On
+- On Windows, `C:/.piobuild/numOS-build` is an absolute path on the `C:` drive. On
   **macOS/Linux there is no `C:` drive**, so the same string is treated as a
   *relative* folder — PlatformIO creates a literal directory named `C:` **inside your
-  repo** (`./C:/.piobuild/numOS/...`). Harmless, but confusing, and it means the
+  repo** (`./C:/.piobuild/numOS-build/...`). Harmless, but confusing, and it means the
   plain run scripts (which look in `.pio/build`) won't find that binary.
 
 **Is it safe to make portable?** Not by simply changing the line: it exists to keep
@@ -153,8 +178,9 @@ keys through the existing dispatch path and capture screenshots, see
 ## TL;DR
 
 ```bash
-# Windows (PowerShell)
+# Windows (PowerShell): build, validate/publish, run
 pio run -e emulator_pc
+./scripts/publish-emulator-windows.ps1 -BuiltExecutable C:/.piobuild/numOS-build/emulator_pc/program.exe
 ./scripts/run-emulator-windows.ps1
 
 # Linux
@@ -1418,17 +1444,17 @@ list): `grapher_aspect_circle_smoke` (`x^2+y^2=1` → true circle),
 
 ## Build directory
 
-This repo sets `build_dir = C:/.piobuild/numOS` in `platformio.ini` (top
+This repo sets `build_dir = C:/.piobuild/numOS-build` in `platformio.ini` (top
 `[platformio]` section) to keep Windows build paths short (MinGW + deep
 PlatformIO paths can hit the Windows path-length limit). Consequences:
 
-- On **Windows** the emulator builds to
-  `C:/.piobuild/numOS/emulator_pc/program.exe`. The run script finds it
-  automatically.
+- On **Windows** candidates build to
+  `C:/.piobuild/numOS-build/emulator_pc/program.exe`. Publish them with the script
+  above; the run script prefers `C:/.piobuild/numOS/emulator_pc/program.exe`.
 - On **Linux/CI**, that `C:/...` value is not a sensible path. Override it with
   `PLATFORMIO_BUILD_DIR=.pio/build` (recommended), which is what the commands and
   CI above do. The firmware CI also strips the line with `sed`.
-- The run scripts resolve the build dir in this order:
+- After the stable-release check on Windows, fallback build directories resolve as:
   `PLATFORMIO_BUILD_DIR` → `build_dir` from `platformio.ini` (ignored on
   non-Windows if it is a `C:\` path) → `.pio/build`.
 

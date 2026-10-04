@@ -34,7 +34,7 @@ for locale in ('en', 'es'):
     folder.mkdir(exist_ok=True)
     script = 'wait 200\n'
     if locale == 'es':
-        script += 'open_app Settings\nwait 30\n' + keys('DOWN DOWN DOWN DOWN ENTER HOME') + 'wait 30\n'
+        script += 'open_app Settings\nwait 30\n' + keys('DOWN DOWN DOWN DOWN ENTER ENTER HOME') + 'wait 30\n'
     script += 'open_app Calculation\nwait 30\n'
     stages = [
         ('empty', '', False), ('power', '2 ^', True),

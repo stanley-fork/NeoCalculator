@@ -52,7 +52,7 @@ public:
     bool isActive() const { return _screen != nullptr; }
     bool navigateBack() { return false; }
 
-#if defined(__EMSCRIPTEN__) || NUMOS_BOARD_PROD_WROOM1U_N16R8
+#if defined(NATIVE_SIM) || defined(__EMSCRIPTEN__) || NUMOS_BOARD_PROD_WROOM1U_N16R8
     /** Persist the compact settings record (LittleFS on hardware/IDBFS on web). */
     static bool loadPersistentState();
     static bool savePersistentState();
@@ -89,4 +89,6 @@ private:
     void updateValues();
     void toggleCurrent();
     void adjustBrightness(int delta);
+    void adjustLanguage(bool forward);
+    void updateHint();
 };

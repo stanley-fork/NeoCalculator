@@ -40,6 +40,11 @@
 
 namespace ui {
 
+void StatusBar::showActiveNotice(const char* text) {
+    if (s_active && s_active->_titleLabel)
+        lv_label_set_text_static(s_active->_titleLabel, text);
+}
+
 StatusBar* StatusBar::s_active = nullptr;
 
 #ifdef NATIVE_SIM

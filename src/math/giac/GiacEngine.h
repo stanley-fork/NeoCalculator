@@ -57,7 +57,8 @@ enum class MathEngineStatus : uint8_t {
     ParseError,       // input never became a valid expression
     EvaluationError,  // Giac raised/diagnosed an error during eval
     Unsupported,      // rejected by the engine contract (e.g. reentrancy)
-    OutOfMemory
+    OutOfMemory,
+    UnitsUnavailable // Authored quantity retained; CALC-UNITS-01 owns evaluation.
 };
 
 struct MathEngineResult {

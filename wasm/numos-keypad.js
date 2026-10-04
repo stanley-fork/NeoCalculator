@@ -93,7 +93,7 @@ export const NUMOS_WEB_KEYPAD_LAYOUT = Object.freeze([
       ["r1c1", "LEFT", "←", "HOME", "", "navigation"],
       ["r1c2", "DOWN", "↓", "Pg↓", "", "navigation"],
       ["r1c3", "RIGHT", "→", "END", "", "navigation"],
-      ["r1c4", "F1", "TOOLS", "CATALOG", "", "system"],
+      ["r1c4", "TOOLBOX", "TOOLS", "CATALOG", "", "system"],
 
       ["r2c0", "VAR_X", "x", "θ", "A", "function"],
       ["r2c1", "DIV", "frac", "mixed", "B", "function"],

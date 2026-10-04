@@ -12,7 +12,7 @@ def run(name,script):
  r=subprocess.run([a.bin,'--headless','--deterministic','--quiet','--frames',str(frames),'--script',os.path.relpath(path,ROOT)],cwd=ROOT,env=env,capture_output=True,timeout=180);(a.out/(name+'.log')).write_bytes(r.stdout+r.stderr);assert r.returncode==0 and b'I18N_PRODUCT_DONE' in r.stdout,(name,r.returncode,r.stdout[-900:])
  return [json.loads(x.split('[TUTOR_VIEW] ',1)[1]) for x in r.stdout.decode().splitlines() if '[TUTOR_VIEW] ' in x]
 def shot(name):return 'wait 4\nscreenshot '+os.path.relpath(a.out/(name+'.ppm'),ROOT).replace('\\','/')+'\n'
-settings='wait 200\nopen_app Settings\nwait 30\n'+eq.keys('DOWN DOWN DOWN DOWN ENTER')+shot('settings-es')+eq.keys('HOME')+'wait 30\n'
+settings='wait 200\nopen_app Settings\nwait 30\n'+eq.keys('DOWN DOWN DOWN DOWN ENTER ENTER')+shot('settings-es')+eq.keys('HOME')+'wait 30\n'
 product=run('settings-product',settings+eq.single('3 x + 5 = 2 0')+eq.keys('tools')+'assert_equations view dump\n'+shot('product-es'))
 assert product[0]['title'].startswith('Paso '),'Spanish must be selected through the real Settings row'
 records=[]

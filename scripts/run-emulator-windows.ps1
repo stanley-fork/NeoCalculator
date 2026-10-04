@@ -6,8 +6,9 @@
 # without mutating the machine's global PATH. It only extends PATH for the
 # child process it spawns.
 #
-# Build first:
+# Build and publish a new version (the previous release stays usable):
 #     pio run -e emulator_pc
+#     ./scripts/publish-emulator-windows.ps1 -BuiltExecutable C:/.piobuild/numOS-build/emulator_pc/program.exe
 # Then run:
 #     ./scripts/run-emulator-windows.ps1
 #
@@ -20,10 +21,9 @@
 #   3. C:\SDL2\x86_64-w64-mingw32\bin\SDL2.dll  (historical project default)
 #   4. already on PATH (where.exe SDL2.dll)
 #
-# Build-dir resolution order (to find program.exe):
-#   1. $env:PLATFORMIO_BUILD_DIR
-#   2. `build_dir` from platformio.ini  (this repo sets C:/.piobuild/numOS)
-#   3. .pio/build  (PlatformIO default)
+# Executable resolution order:
+#   1. C:/.piobuild/numOS/emulator_pc/program.exe (validated stable release)
+#   2. Configured build directory, then .pio/build (first-install fallback)
 # ============================================================================
 [CmdletBinding()]
 param(
@@ -49,20 +49,24 @@ function Resolve-BuildDir {
 
 # ── 1. Locate the emulator executable ───────────────────────────────────────
 $buildDir = Resolve-BuildDir
-$exe = Join-Path $buildDir 'emulator_pc\program.exe'
+$exe = 'C:\.piobuild\numOS\emulator_pc\program.exe'
 
-if (-not (Test-Path $exe)) {
-    # Fall back to the PlatformIO default location too.
+if (-not (Test-Path -LiteralPath $exe)) {
+    $candidate = Join-Path $buildDir 'emulator_pc\program.exe'
     $fallback = Join-Path $RepoRoot '.pio\build\emulator_pc\program.exe'
-    if (Test-Path $fallback) {
+    if (Test-Path -LiteralPath $candidate) {
+        $exe = $candidate
+    } elseif (Test-Path -LiteralPath $fallback) {
         $exe = $fallback
     } else {
         Write-Error @"
 Emulator executable not found.
   Looked for: $exe
+          and: $candidate
           and: $fallback
-Build it first:
+Build and publish it:
   pio run -e emulator_pc
+  .\scripts\publish-emulator-windows.ps1 -BuiltExecutable "$candidate"
 "@
         exit 1
     }

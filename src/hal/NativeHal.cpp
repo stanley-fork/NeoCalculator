@@ -1,3 +1,4 @@
+#include "ui/Toolbox.h"
 /*
  * NeoCalculator - NumOS
  * Copyright (C) 2026 Juan Ramon
@@ -646,6 +647,7 @@ static KeyCode scriptNameToKeyCode(const std::string& raw)
     // cycle Data->Stats->Graph tabs (StatisticsApp.cpp:532); on the Data tab
     // LEFT/RIGHT are column nav, so GRAPH is the only key that reaches a computed
     // tab. Needed by statistics_data_smoke.numos (Phase 6C). Emulator-only.
+    if (n == "format") return KeyCode::FORMAT;
     if (n == "var") return KeyCode::VAR;
     if (n == "square") return KeyCode::SQUARE;
     if (n == "physical_frac") return KeyCode::FRAC;
@@ -722,6 +724,13 @@ static KeyCode scriptNameToKeyCode(const std::string& raw)
 // ════════════════════════════════════════════════════════════════════════════
 static void dispatchKey(KeyCode kc, KeyAction action, bool isDown)
 {
+    KeyEvent modalEvent{}; modalEvent.code=kc; modalEvent.action=action;
+    if(ui::toolbox::searching() && action!=KeyAction::RELEASE && vpam::KeyboardManager::instance().isAlpha() && kc!=KeyCode::ALPHA && kc!=KeyCode::SHIFT) {
+        auto resolved=numos::input::KeySemanticResolver::resolve(kc,numos::input::InputContext::Text,action);
+        if(resolved.dispatch){modalEvent.code=resolved.code;modalEvent.semanticId=uint16_t(resolved.semantic);modalEvent.text=resolved.text;}
+    }
+    if(ui::toolbox::handle(modalEvent))return;
+
     // Public logical input uses HOME directly; desktop aliases still use MODE.
     // Match the production global HOME boundary before dispatching to an app.
     if (kc == KeyCode::HOME) {
@@ -1072,6 +1081,7 @@ static void processSdlEvents()
         // para estas teclas; la auto-repetición del SO reemite TEXTINPUT (PRESS),
         // que es justo lo deseado al mantener pulsada una tecla.
         if (ev.type == SDL_TEXTINPUT) {
+            if (ui::toolbox::text(ev.text.text)) continue;
             for (const char* p = ev.text.text; *p; ++p) {
                 const KeyCode tkc = mapTextChar(*p);
                 if (tkc == KeyCode::NONE) continue;  // letras/otros → vía keysym
@@ -1091,6 +1101,10 @@ static void processSdlEvents()
         const bool        isRepeat = isDown && (ev.key.repeat != 0);
         const SDL_Keycode sym      = ev.key.keysym.sym;
 
+        // WHY: focused text belongs exclusively to SDL_TEXTINPUT. Letter
+        // shortcuts (notably h -> HOME) and OS Shift must not leak from a query.
+        if (ui::toolbox::active() && ((sym >= 0x20 && sym < 0x7f) ||
+            sym == SDLK_LSHIFT || sym == SDLK_RSHIFT)) continue;
         KeyCode kc = mapSdlToKeyCode(sym);
         if (kc == KeyCode::NONE) {
             // Los CARACTERES imprimibles (dígitos/símbolos) ya no se mapean por
@@ -2382,7 +2396,7 @@ static bool loadScript(const char* path)
             if (!(iss >> st)) return scriptErr(path, lineNo, "assert_calc_status requiere un estado");
             if (iss >> extra) return scriptErr(path, lineNo, "assert_calc_status: demasiados argumentos");
             if (st != "ok" && st != "undefined" && st != "parse_error" &&
-                st != "evaluation_error" && st != "unsupported" && st != "out_of_memory")
+                st != "evaluation_error" && st != "unsupported" && st != "out_of_memory" && st != "units_unavailable")
                 return scriptErr(path, lineNo,
                     "assert_calc_status: valor desconocido (ok|undefined|parse_error|evaluation_error|unsupported|out_of_memory)");
             sc.type   = ScriptCmdType::AssertCalcStatus;
@@ -3526,7 +3540,12 @@ static void scriptStepBegin()
             for (const auto& key : numos::input::kProductionKeypadMap) {
                 if (key.electricalRow != row || key.electricalColumn != col) continue;
                 found=true;
-                auto resolved=numos::input::KeySemanticResolver::resolve(key.keyCode,numos::input::InputContext::Math,action);
+                // Match SystemApp's modal ownership before global resolution.
+                if (ui::toolbox::active() && (key.keyCode==KeyCode::SHIFT || key.keyCode==KeyCode::ALPHA)) {
+                    KeyEvent modifier{};modifier.code=key.keyCode;modifier.action=action;
+                    modifier.row=row;modifier.col=col;ui::toolbox::handle(modifier);break;
+                }
+                auto resolved=numos::input::KeySemanticResolver::resolve(key.keyCode,ui::toolbox::searching()?numos::input::InputContext::Text:numos::input::InputContext::Math,action);
                 if (!resolved.dispatch) break;
                 if (resolved.code == KeyCode::HOME) { returnToMenu(); break; }
                 if (resolved.code == KeyCode::BACK) { dispatchKey(KeyCode::BACK,action,true); break; }
@@ -4326,7 +4345,14 @@ extern "C" EMSCRIPTEN_KEEPALIVE const char* numos_diagnostic_state()
     // 9.5 invalidation state; never call its refresh handler from diagnostics.
     const bool drawPending = g_needsPresent || (display &&
         (display->inv_p != 0 || display->rendering_in_progress));
+    const auto toolbox=ui::toolbox::snapshot();
     out << "{\"ready\":" << (numos_is_ready() ? "true" : "false")
+        << ",\"toolbox\":{\"open\":" << (toolbox.open?"true":"false")
+        << ",\"queryFocus\":" << (toolbox.queryFocus?"true":"false")
+        << ",\"group\":" << toolbox.group << ",\"selection\":" << toolbox.selection
+        << ",\"id\":" << toolbox.id << ",\"variant\":" << toolbox.variant
+        << ",\"count\":" << toolbox.count << ",\"queryBytes\":" << toolbox.queryBytes
+        << ",\"favorites\":" << toolbox.favorites << ",\"recent\":" << toolbox.recent << "}"
         << ",\"running\":" << (!g_quit ? "true" : "false")
         << ",\"shutdown\":" << (g_shutdownComplete ? "true" : "false")
         << ",\"app\":\"" << activeAppName() << "\""
@@ -4473,9 +4499,7 @@ int main(int argc, char** argv)
 bool nativeFS_init() {
     if (LittleFS.begin(true)) {
         vpam::VariableManager::instance().loadFromFlash();
-#ifdef __EMSCRIPTEN__
         SettingsApp::loadPersistentState();
-#endif
         std::printf("[FS] %s OK, variables cargadas\n", LittleFSClass::root());
         return true;
     }

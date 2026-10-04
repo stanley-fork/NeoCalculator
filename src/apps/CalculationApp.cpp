@@ -1,3 +1,4 @@
+#include "ui/Toolbox.h"
 /*
  * NeoCalculator - NumOS
  * Copyright (C) 2026 Juan Ramon
@@ -104,6 +105,7 @@ void CalculationApp::begin() {
 // ════════════════════════════════════════════════════════════════════════════
 
 void CalculationApp::end() {
+    ui::toolbox::closeOwner(this);
     closeFormatMenu();
     closeStepViewer();
 
@@ -234,6 +236,7 @@ void CalculationApp::refreshExpression() {
 // ════════════════════════════════════════════════════════════════════════════
 
 void CalculationApp::handleKey(const KeyEvent& ev) {
+    if (ui::toolbox::handle(ev)) return;
 #ifdef NATIVE_SIM
     std::printf("[CALCAPP] handleKey: code=%d action=%d\n",
                 static_cast<int>(ev.code), static_cast<int>(ev.action));
@@ -262,6 +265,14 @@ void CalculationApp::handleKey(const KeyEvent& ev) {
         return;
     }
 
+    if (ev.code == KeyCode::TOOLBOX && !_formatMenu && ev.action == KeyAction::PRESS) {
+        ui::toolbox::open(_screen, {this, &_cursor, numos::toolbox::Calculation, [](void* owner) {
+            auto* self=static_cast<CalculationApp*>(owner);
+            self->clearResult(); self->refreshExpression();
+            self->_mathCanvas.resetCursorBlink();
+        }, _mathCanvas.normalMetrics().style});
+        return;
+    }
     auto& km = vpam::KeyboardManager::instance();
 
     const auto semantic =
@@ -723,15 +734,18 @@ void CalculationApp::evaluateExpression() {
             ansUpdated = true;
         }
         if (_reusePolicy != numos::ResultReusePolicy::NonReusable)
-            numos::CalculationEngine::instance().noteAnsRotated(ev.exactText, ansUpdated);
+            numos::CalculationEngine::instance().noteAnsRotated(ev.exactText, ansUpdated, ev.presentation);
     } else {
         // Typed error statuses keep the legacy error rendering (and the
         // assert_error contract). Failed evaluations never overwrite Ans.
         const char* msg = "Math ERROR";
         if (ev.status == numos::MathEngineStatus::ParseError) msg = "Syntax ERROR";
         if (ev.status == numos::MathEngineStatus::Unsupported)
-            msg = numos::tutor::productLocale == numos::tutor::Locale::Spanish
+            msg = numos::i18n::isSpanish(numos::i18n::productLocale)
                 ? "Limite de expresion" : "Expression limit";
+        if (ev.status == numos::MathEngineStatus::UnitsUnavailable)
+            msg = numos::i18n::isSpanish(numos::i18n::productLocale)
+                ? "Unidades: calculo aun no disponible" : "Units: calculation not available yet";
         _lastResult = vpam::ExactVal::makeError(msg);
     }
     (void)ansUpdated;
@@ -787,6 +801,7 @@ void CalculationApp::evaluateExpression() {
         case numos::MathEngineStatus::ParseError: status = "parse_error"; break;
         case numos::MathEngineStatus::EvaluationError: status = "evaluation_error"; break;
         case numos::MathEngineStatus::Unsupported: status = "unsupported"; break;
+        case numos::MathEngineStatus::UnitsUnavailable: status = "units_unavailable"; break;
         case numos::MathEngineStatus::OutOfMemory: status = "out_of_memory"; break;
     }
     const char* kind = _lastKind == numos::CalcResultKind::Structured
@@ -796,6 +811,7 @@ void CalculationApp::evaluateExpression() {
 }
 
 bool CalculationApp::navigateBack() {
+    if (ui::toolbox::back()) return true;
     if (_formatMenu) { closeFormatMenu(); return true; }
     if (!_stepViewerActive) return false;
     closeStepViewer();
@@ -941,6 +957,11 @@ void CalculationApp::showTextResult(const std::string& text) {
         lv_label_set_long_mode(_resultTextLabel, LV_LABEL_LONG_WRAP);
         lv_obj_set_width(_resultTextLabel, CONTENT_W);
     }
+    // WHY: the unit notice is localized prose; retain ASCII geometry while
+    // supplying the existing Spanish fallback for accented letters.
+    lv_obj_set_style_text_font(_resultTextLabel,
+        _lastStatus == numos::MathEngineStatus::UnitsUnavailable
+            ? ui::tutorFont14() : LV_FONT_DEFAULT, LV_PART_MAIN);
     lv_label_set_text(_resultTextLabel, text.c_str());
     lv_obj_remove_flag(_resultTextLabel, LV_OBJ_FLAG_HIDDEN);
 
@@ -995,6 +1016,12 @@ void CalculationApp::showResult() {
     }
 
     hideTextResult();
+    if (_lastStatus == numos::MathEngineStatus::UnitsUnavailable) {
+        showTextResult(numos::i18n::isSpanish(numos::i18n::productLocale)
+            ? "El cálculo con unidades, constantes físicas y escalas aún no está disponible."
+            : "Calculation with units, physical constants and scales is not available yet.");
+        return;
+    }
 
     if (_lastStatus == numos::MathEngineStatus::Ok &&
         _lastKind == numos::CalcResultKind::TextFallback &&
@@ -1467,6 +1494,7 @@ const char* CalculationApp::debugCalcStatus() const {
         case numos::MathEngineStatus::ParseError:      return "parse_error";
         case numos::MathEngineStatus::EvaluationError: return "evaluation_error";
         case numos::MathEngineStatus::Unsupported:     return "unsupported";
+        case numos::MathEngineStatus::UnitsUnavailable: return "units_unavailable";
         case numos::MathEngineStatus::OutOfMemory:     return "out_of_memory";
     }
     return "?";
@@ -1494,11 +1522,26 @@ bool CalculationApp::debugInput(const std::string& expected) const {
     std::string serialized, diagnostic;
     const bool complete = numos::CalculationEngine::serializeForGiac(_rootRow, serialized, diagnostic);
     const auto& cursor = _cursor.cursor();
+    if (expected.compare(0,8,"toolbox ") == 0) return ui::toolbox::debug(expected.c_str()+8);
     if (expected == "dump") {
         std::printf("[CALC-INPUT] cursor=%d slot=%s complete=%d serialized=%s diagnostic=%s\n%s",
                     cursor.index, cursor.row == _rootRow ? "root" : "nested", complete,
                     serialized.c_str(), diagnostic.c_str(), vpam::dumpTree(_rootRow).c_str());
         return true;
+    }
+    if (expected == "no_result") return !_hasResult;
+    unsigned unitId=0,prefixId=0,expectedCount=0;
+    if (std::sscanf(expected.c_str(),"unit %u %u %u",&unitId,&prefixId,&expectedCount)==3) {
+        std::array<const vpam::MathNode*,82> pending{};size_t size=1;pending[0]=_rootRow;unsigned matches=0;
+        while(size) {
+            const auto* node=pending[--size];if(!node)continue;
+            if(node->type()==vpam::NodeType::Unit) {
+                const auto atom=static_cast<const vpam::NodeUnit*>(node)->atom();
+                if(uint16_t(atom.unit)==unitId && uint8_t(atom.prefix)==prefixId)++matches;
+            }
+            for(int i=0;i<node->childCount();++i){if(size==pending.size())return false;pending[size++]=node->child(i);}
+        }
+        return matches==expectedCount;
     }
     if (expected == "incomplete") return !complete;
     if (expected == "complete") return complete;
@@ -1697,7 +1740,7 @@ void CalculationApp::openFormatMenu(bool pickDigits) {
         _formatChoices[_formatChoiceCount++] = format;
     }
     if (!_formatChoiceCount) return;
-    const bool spanish = numos::tutor::productLocale == numos::tutor::Locale::Spanish;
+    const bool spanish = numos::i18n::isSpanish(numos::i18n::productLocale);
     _formatMenu = lv_obj_create(_screen);
     lv_obj_remove_style_all(_formatMenu);
     lv_obj_set_pos(_formatMenu, 0, 24);
@@ -1779,7 +1822,7 @@ void CalculationApp::openFormatMenu(bool pickDigits) {
 
 void CalculationApp::updateFormatMenu() {
     if (!_formatMenu) return;
-    const bool spanish = numos::tutor::productLocale == numos::tutor::Locale::Spanish;
+    const bool spanish = numos::i18n::isSpanish(numos::i18n::productLocale);
     lv_label_set_text_fmt(_formatMenuCounter, "%u / %u", _formatChoice + 1, _formatChoiceCount);
     const unsigned first = _formatChoice < 5 ? 0 : _formatChoice - 4;
     for (unsigned slot = 0; slot < 5; ++slot) {

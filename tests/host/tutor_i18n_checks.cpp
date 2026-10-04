@@ -18,6 +18,9 @@ int main() {
         }
         check(validateMessage(key,parameters),"typed parameters");
         const auto en=explain(key,parameters,Locale::English),es=explain(key,parameters,Locale::Spanish);
+        check(explain(key,parameters,Locale::EnglishUK)==en,"UK base translation");
+        check(explain(key,parameters,Locale::SpanishLatinAmerica)==es,"LatAm base translation");
+        check(hasTranslation(key,Locale::EnglishUK)&&hasTranslation(key,Locale::SpanishLatinAmerica),"regional catalog coverage");
         check(!en.empty()&&!es.empty()&&es.find('{')==std::string::npos,"resolved text");
         if(!parameters.empty()){
             auto wrong=parameters;wrong[0].kind=parameters[0].kind==ParameterKind::Integer?ParameterKind::Variable:ParameterKind::Integer;
@@ -39,11 +42,11 @@ int main() {
         check(numos::demo::decodeSettingsRecord(old.data(),old.size(),decoded),"legacy record rejected");
         check(decoded.tutorLanguage==0&&decoded.angleDeg&&!decoded.complexEnabled&&decoded.educationEnabled&&decoded.precision==8,"legacy values changed");
     }
-    for(uint8_t language:{uint8_t(0),uint8_t(1),uint8_t(255)}) {
+    for(uint8_t language:{uint8_t(0),uint8_t(1),uint8_t(4),uint8_t(5),uint8_t(2),uint8_t(3),uint8_t(255)}) {
         auto bytes=numos::demo::encodeSettingsRecord(false,true,true,10,128,language);
         numos::demo::DecodedSettings decoded;
         check(numos::demo::decodeSettingsRecord(bytes.data(),bytes.size(),decoded),"settings roundtrip");
-        check(decoded.tutorLanguage==(language==1?1:0),"language roundtrip");
+        check(decoded.tutorLanguage==(language==1||language==4||language==5?language:0),"language roundtrip");
         bytes[10]=253;auto checksum=numos::demo::settingsRecordChecksum(bytes.data(),12);std::memcpy(bytes.data()+12,&checksum,4);
         check(numos::demo::decodeSettingsRecord(bytes.data(),bytes.size(),decoded)&&decoded.tutorLanguage==0,"unknown saved language");
         bytes[0]^=1;check(!numos::demo::decodeSettingsRecord(bytes.data(),bytes.size(),decoded),"corrupt record");

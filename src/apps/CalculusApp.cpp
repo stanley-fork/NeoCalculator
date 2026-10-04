@@ -1,3 +1,4 @@
+#include "ui/Toolbox.h"
 /*
  * NeoCalculator - NumOS
  * Copyright (C) 2026 Juan Ramon
@@ -226,6 +227,7 @@ void CalculusApp::begin() {
 }
 
 void CalculusApp::end() {
+    ui::toolbox::closeOwner(this);
 #ifdef NATIVE_SIM
     CalculusTiming timing("teardown");
 #endif
@@ -547,11 +549,17 @@ void CalculusApp::showSteps() {
 // ════════════════════════════════════════════════════════════════════════════
 
 void CalculusApp::handleKey(const KeyEvent& ev) {
+    if (ui::toolbox::handle(ev)) return;
 #ifdef NATIVE_SIM
     CalculusTiming timing("key", (int)ev.code);
 #endif
     if (ev.action != KeyAction::PRESS && ev.action != KeyAction::REPEAT) return;
 
+    if(ev.code==KeyCode::TOOLBOX && _state==State::EDITING && ev.action==KeyAction::PRESS) {
+        ui::toolbox::open(_scr,{this,&_inputCursor,numos::toolbox::Calculus,[](void* owner) {
+            auto* self=static_cast<CalculusApp*>(owner);self->adjustInputHeight();self->refreshInput();
+        }});return;
+    }
     if (_state != State::COMPUTING &&
         (ev.code == KeyCode::GRAPH || ev.code == KeyCode::F1 || ev.code == KeyCode::F2)) {
         if (ev.action != KeyAction::PRESS) return;
@@ -869,6 +877,7 @@ char CalculusApp::detectVariable(const cas::SymExpr* expr) {
 }
 
 bool CalculusApp::navigateBack() {
+    if (ui::toolbox::back()) return true;
     switch (_state) {
         case State::STEPS:
             showResult();
