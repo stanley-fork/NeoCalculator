@@ -34,7 +34,7 @@ int main() {
         uint8_t data[5]{};units::Atom restored=atom(1);
         check(units::encode(a,data) && units::decode(data,5,restored) && restored==a,"closed machine atom roundtrip");
         std::string text,error;check(!CalculationEngine::serializeForGiac(node.get(),text,error),"unit never serializes as free identifier");
-        check(engine.evaluate(node.get()).status==MathEngineStatus::UnitsUnavailable,"all typed variants guarded");
+        const auto evaluated=engine.evaluate(node.get());check(quantity::admissible(a)==quantity::Error::None?evaluated.ok():evaluated.status==MathEngineStatus::UnitsUnavailable,"metadata admits exact multiplicative variants only");
         char symbol[32]{};check(units::symbol(a,symbol,sizeof(symbol)),"bounded canonical symbol");
         auto fm=defaultFontMetrics();node->calculateLayout(fm);check(node->layout().width>0,"unit layout");
     }
@@ -85,7 +85,7 @@ int main() {
     auto metre=toolbox::prepare(*entry(1));check(cursor.insertPrepared(std::move(metre.node),nullptr),"adjacent units");
     check(static_cast<NodeOperator*>(row->child(3))->op()==OpKind::UnitProduct,"m dot s not millisecond");
     cursor.insertPower();cursor.insertDigit('2');check(scanUnits(root.get())==UnitScan::Present,"power edit keeps unit");
-    check(engine.evaluate(root.get()).status==MathEngineStatus::UnitsUnavailable,"edited quantity unavailable");
+    check(engine.evaluate(root.get()).ok(),"edited quantity computes");
     {
         auto nested=makeRow();CursorController c;c.init(static_cast<NodeRow*>(nested.get()));
         c.insertParen();auto p=toolbox::prepare(*entry(18,10));
@@ -95,12 +95,12 @@ int main() {
         check(scanUnits(nested.get())==UnitScan::None,"cursor and delete remove the unit as one atom");
     }
     auto zero=makeRow();auto* zr=static_cast<NodeRow*>(zero.get());zr->appendChild(makeNumber("0"));zr->appendChild(makeOperator(OpKind::Mul));zr->appendChild(makeUnit(atom(1)));
-    check(engine.evaluate(zr).status==MathEngineStatus::UnitsUnavailable,"zero product cannot erase unit before guard");
+    check(engine.evaluate(zr).quantity && engine.evaluate(zr).quantity->dimension.powers[0]==1,"zero product retains length");
     auto ratio=makeFraction(makeUnit(atom(1)),makeUnit(atom(1)));
-    check(engine.evaluate(ratio.get()).status==MathEngineStatus::UnitsUnavailable,"ratio cannot cancel units before guard");
+    check(engine.evaluate(ratio.get()).exactText=="1" && !engine.evaluate(ratio.get()).quantity,"ratio cancels only after scaling");
     check(engine.evaluate(makeVariable('m').get()).ok(),"free m remains a variable");
     VariableManager::instance().setVariable('A',ExactVal::fromInt(7));
-    check(engine.evaluate(makeUnit(atom(4)).get()).status==MathEngineStatus::UnitsUnavailable,"ampere is a unit despite memory A");
+    check(engine.evaluate(makeUnit(atom(4)).get()).ok(),"ampere is a unit despite memory A");
     check(engine.evaluate(makeVariable('A').get()).exactText=="7","ampere does not read or overwrite memory A");
     check(engine.evaluate(makeSymbol("Ω").get()).ok(),"free Greek omega remains separate from ohm");
     auto ordinary=makeRow();auto* r=static_cast<NodeRow*>(ordinary.get());r->appendChild(makeNumber("2"));r->appendChild(makeOperator(OpKind::Add));r->appendChild(makeNumber("2"));

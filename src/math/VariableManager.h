@@ -115,6 +115,10 @@ public:
      * @return true si se guardó correctamente.
      */
     bool saveToFlash();
+    // Clear the old durable scalar before publishing a session-only quantity.
+    // VR01/VR02 stay unchanged: the slot restarts empty (zero), never as its old
+    // scalar. A failed write leaves both current memory and active file intact.
+    bool clearForSession(char name);
 
     /**
      * Carga las variables desde /vars.dat en LittleFS.
@@ -184,6 +188,7 @@ private:
     ExactVal deserializeExactVal(const uint8_t* buf) const;
     static uint32_t checksum(const uint8_t* data, std::size_t length);
     static bool validatePersistentValue(const ExactVal& value);
+    bool writeSnapshot(int clearedSlot = -1);
 
     PersistentLoadStatus _lastLoadStatus = PersistentLoadStatus::Missing;
 };

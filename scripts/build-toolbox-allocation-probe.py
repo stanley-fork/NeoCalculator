@@ -8,13 +8,14 @@ through the rest of that scope, including recovery, not just one allocation.
 """
 from pathlib import Path
 import argparse,json,shlex,subprocess
-p=argparse.ArgumentParser();p.add_argument('--database',required=True);p.add_argument('--build',required=True);p.add_argument('--out',required=True);a=p.parse_args()
+p=argparse.ArgumentParser();p.add_argument('--database',required=True);p.add_argument('--build',required=True);p.add_argument('--out',required=True);p.add_argument('--quantities',action='store_true');a=p.parse_args()
 root=Path(__file__).resolve().parents[1];out=Path(a.out).resolve();out.mkdir(parents=True,exist_ok=True)
 header='''#pragma once
 #include <cstddef>
 namespace tbprobe {
 struct Scope { bool own=false;const char* name;explicit Scope(const char*);~Scope(); };
 void* node(std::size_t);void releaseNode(void*);
+struct Suspend {bool was;Suspend();~Suspend();};
 }
 '''
 source='''#include "probe.h"
@@ -37,6 +38,7 @@ void* operator new(size_t n){return allocate(n);}void* operator new[](size_t n){
 void operator delete(void* p)noexcept{release(p);}void operator delete[](void* p)noexcept{release(p);}
 void operator delete(void* p,size_t)noexcept{release(p);}void operator delete[](void* p,size_t)noexcept{release(p);}
 namespace tbprobe {
+Suspend::Suspend():was(active){active=false;}Suspend::~Suspend(){active=was;}
 void* node(size_t n){return allocate(n);}void releaseNode(void* p){release(p);}
 Scope::Scope(const char* value):name(value) {
  const char* selected=std::getenv("NUMOS_TOOLBOX_SCOPE");
@@ -70,15 +72,42 @@ math=(root/'src/math/MathAST.cpp').read_text(encoding='utf8')
 assert 'p = std::malloc(size);' in math
 math=math.replace('p = std::malloc(size);','p = tbprobe::node(size);',1).replace('std::free(ptr);','tbprobe::releaseNode(ptr);',1)
 (out/'MathAST.cpp').write_text('#include "probe.h"\n'+math,encoding='utf8')
+overlayNames=['Toolbox','ToolboxStore','MathAST','probe']
+if a.quantities:
+    scopes={
+      'Quantity':{'Analysis evaluate(const MathNode* root,const void* owner,Resolve resolve) {':'analysis',
+       'Error convert(const Value& value,const Descriptor& descriptor,Display& destination) {':'convert',
+       'NodePtr compose(NodePtr coefficient,const Descriptor& descriptor) {':'compose'},
+      'CalculationEngine':{'bool CalculationEngine::commitResultAns(const CalculationEvaluation& result,const vpam::ExactVal* mirror) {':'ans',
+       'bool CalculationEngine::storeAns(char varName) {':'memory'},
+      'CalculationApp':{'void CalculationApp::openOutputSelector(int component) {':'selector',
+       'bool CalculationApp::publishOutput(const numos::quantity::Descriptor& descriptor) {':'publish',
+       'bool CalculationApp::publishQuantityFormat(numos::CalculationFormat mode,int shift,unsigned places) {':'format',
+       'void CalculationApp::loadHistoryEntry(int index) {':'history'}
+    }
+    for name,anchors in scopes.items():
+        directory='apps' if name=='CalculationApp' else 'math'
+        text=(root/'src'/directory/(name+'.cpp')).read_text(encoding='utf8')
+        for anchor,scope in anchors.items():
+            assert text.count(anchor)==1,anchor
+            text=text.replace(anchor,anchor+'\n tbprobe::Scope quantityFault("'+scope+'");')
+        if name=='Quantity':
+            # The injected failures target NumOS ownership/AST, not Giac's
+            # independent allocator/error machinery. Measure those separately.
+            text=text.replace('    result=GiacEngine::instance().evaluateStructured', '    {tbprobe::Suspend pause;result=GiacEngine::instance().evaluateStructured')
+            text=text.replace('GiacEngine::EvaluationAngle::Current);','GiacEngine::EvaluationAngle::Current);}')
+        (out/(name+'.cpp')).write_text('#include "probe.h"\n'+text,encoding='utf8')
+        overlayNames.append(name)
+
 db=json.loads(Path(a.database).read_text())
 record=next(r for r in db if r['file'].endswith('Toolbox.cpp') and 'NATIVE_SIM' in r['command'])
-args=shlex.split(record['command'].replace('\\','/'))+['-Isrc/ui','-Isrc/math','-I'+str(out)]
-for name in ['Toolbox','ToolboxStore','MathAST','probe']:
+args=shlex.split(record['command'].replace('\\','/'))+['-Isrc/ui','-Isrc/math','-Isrc/apps','-I'+str(out)]
+for name in overlayNames:
  command=args.copy();command[command.index('-o')+1]=str(out/(name+'.o'));command[command.index(record['file'].replace('\\','/'))]=str(out/(name+'.cpp'))
  result=subprocess.run(command,cwd=root,capture_output=True);(out/(name+'-compile.log')).write_bytes(result.stdout+result.stderr)
  assert result.returncode==0,result.stderr.decode(errors='replace')[-2500:]
 build=Path(a.build)
-objects=[f for f in (build/'src').rglob('*.o') if f.name not in ('Toolbox.o','ToolboxStore.o','MathAST.o')]+[out/(n+'.o') for n in ['Toolbox','ToolboxStore','MathAST','probe']]
+objects=[f for f in (build/'src').rglob('*.o') if f.stem not in overlayNames]+[out/(n+'.o') for n in overlayNames]
 libs=list(build.rglob('*.a'))
 quoted=lambda paths:'\n'.join('"'+str(f).replace('\\','/')+'"' for f in paths)
 rsp=quoted(objects)+'\n-Wl,--start-group\n'+quoted(libs)+'\n-Wl,--end-group\n-LC:/SDL2/x86_64-w64-mingw32/lib\n-lmingw32\n-lSDL2main\n-lSDL2\n'

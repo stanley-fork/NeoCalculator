@@ -1,5 +1,6 @@
 #include "MathInputCalls.h"
 #include "InputSymbols.h"
+#include "InputRowSyntax.h"
 /*
  * NeoCalculator - NumOS
  * Copyright (C) 2026 Juan Ramon
@@ -130,58 +131,29 @@ struct Serializer {
         if (frames > 2 * enginecontract::kMaxTreeDepth + 2)
             return fail("expression nesting too deep");
         if (!budget()) return false;
-        const auto& kids = row->children();
-        bool prevOperand = false;
-        bool any = false;
-        bool denominatorOperand = false;
-        bool groupedSign = false;
-        for (const auto& kid : kids) {
-            const vpam::MathNode* n = kid.get();
-            if (!n) continue;
-            if (n->type() == vpam::NodeType::Empty)
-                return fail("incomplete expression");
-            if (n->type() == vpam::NodeType::Operator) {
-                const auto op = static_cast<const vpam::NodeOperator*>(n)->op();
-                if (op != vpam::OpKind::Add && op != vpam::OpKind::Sub &&
-                    op != vpam::OpKind::Mul && op != vpam::OpKind::Div)
-                    return fail("unsupported operator");
-                if (!prevOperand) {
-                    // Unary position (row start or after another operator):
-                    // normalize to an explicit (-1)* factor so the emitted
-                    // text never relies on Giac's prefix-minus grammar.
-                    if (op == vpam::OpKind::Sub) {
-                        // WHY: a / -b means a / ((-1)*b), not a / (-1)*b.
-                        // Keep the sign attached to its operand through division.
-                        if (denominatorOperand && !groupedSign) {
-                            out += '(';
-                            groupedSign = true;
-                        }
-                        out += "(-1)*";
-                    }
-                    // unary '+' contributes nothing
-                    else if (op == vpam::OpKind::Mul ||
-                             op == vpam::OpKind::Div)
-                        return fail("misplaced operator");
-                } else {
-                    out += (op == vpam::OpKind::Add) ? '+'
-                         : (op == vpam::OpKind::Sub) ? '-'
-                         : (op == vpam::OpKind::Mul) ? '*'
-                                                     : '/';
-                    prevOperand = false;
-                    denominatorOperand = op == vpam::OpKind::Div;
+        struct Sink {
+            Serializer& s;
+            bool denominator=false,grouped=false;
+            bool fail(const char* text){return s.fail(text);}
+            bool unary(vpam::OpKind op) {
+                if(op==vpam::OpKind::Sub) {
+                    if(denominator && !grouped){s.out+='(';grouped=true;}
+                    s.out+="(-1)*";
                 }
-                continue;
+                return true;
             }
-            if (prevOperand) out += '*';   // explicit implicit-multiplication
-            if (!emitNode(n)) return false;
-            if (groupedSign) out += ')';
-            groupedSign = denominatorOperand = false;
-            prevOperand = true;
-            any = true;
-        }
-        if (!any) return fail("incomplete expression");
-        if (!prevOperand) return fail("incomplete expression");
-        return true;
+            bool binary(vpam::OpKind op) {
+                using O=vpam::OpKind;
+                s.out+=op==O::Add?'+':op==O::Sub?'-':op==O::Mul?'*':'/';
+                denominator=op==O::Div;return true;
+            }
+            bool operand(const vpam::MathNode* node) {
+                if(!s.emitNode(node))return false;
+                if(grouped)s.out+=')';
+                grouped=denominator=false;return true;
+            }
+        } sink{*this};
+        return inputrow::visit(*row,sink);
     }
 
     bool emitNumber(const vpam::NodeNumber* n) {
@@ -1187,7 +1159,7 @@ void CalculationEngine::syncVariablesToGiac(std::string& diagnostic) {
         const SessionExact& se = _session[idx];
         const std::string text =
             (se.valid && se.revision == vm.revision(c) && exactValEquals(se.snapshot, val))
-                ? se.text
+                ? (se.quantity ? "undef" : se.text)
                 : exactValToGiacText(val);
         const MathEngineResult r = eng.assign(giacNameFor(c), text.c_str());
         if (!r.ok()) {
@@ -1199,7 +1171,7 @@ void CalculationEngine::syncVariablesToGiac(std::string& diagnostic) {
 }
 
 void CalculationEngine::noteAnsRotated(const std::string& exactGiacText, bool mirrorRotated,
-                                     ResultPresentation presentation) {
+                                     ResultPresentation presentation, quantity::Owned quantity) {
     auto& vm = vpam::VariableManager::instance();
     SessionExact& ans = _session[sessionIndex(vpam::VAR_ANS)];
     SessionExact& pre = _session[sessionIndex(vpam::VAR_PREANS)];
@@ -1209,6 +1181,7 @@ void CalculationEngine::noteAnsRotated(const std::string& exactGiacText, bool mi
     pre.text = ans.text;
     pre.sessionOnly = ans.sessionOnly;
     pre.presentation = ans.presentation;
+    pre.quantity = ans.quantity;
     pre.snapshot = vm.getPreAns();
     pre.revision = vm.revision(vpam::VAR_PREANS);
     ans.valid = !exactGiacText.empty();
@@ -1217,6 +1190,7 @@ void CalculationEngine::noteAnsRotated(const std::string& exactGiacText, bool mi
     ans.revision = vm.revision(vpam::VAR_ANS);
     ans.text = exactGiacText;
     ans.presentation = presentation;
+    ans.quantity = std::move(quantity);
 }
 
 void CalculationEngine::noteVariableStored(char varName) {
@@ -1233,9 +1207,55 @@ void CalculationEngine::noteVariableStored(char varName) {
         slot.text = ans.text;
         slot.sessionOnly = ans.sessionOnly;
         slot.presentation = ans.presentation;
+        slot.quantity = ans.quantity;
     } else {
         slot.valid = false;   // sync falls back to exactValToGiacText
     }
+}
+
+bool CalculationEngine::ansIsQuantity() const {
+    const auto& ans=_session[6];const auto& vm=vpam::VariableManager::instance();
+    return ans.valid && ans.quantity && ans.revision==vm.revision(vpam::VAR_ANS) && exactValEquals(ans.snapshot,vm.getAns());
+}
+
+bool CalculationEngine::commitResultAns(const CalculationEvaluation& result,const vpam::ExactVal* mirror) {
+    if(!result.ok() || result.reusePolicy==ResultReusePolicy::NonReusable)return false;
+#if defined(__cpp_exceptions)
+    try {
+#endif
+        auto& vm=vpam::VariableManager::instance();
+        const bool rotate=mirror || result.quantity;
+        SessionExact next;next.valid=true;next.sessionOnly=!mirror;next.presentation=result.presentation;
+        next.quantity=result.quantity;next.text=result.quantity?result.quantity->coefficient:result.exactText;
+        next.snapshot=mirror?*mirror:result.quantity?vpam::ExactVal::makeError("Quantity"):vm.getAns();
+        SessionExact previous=_session[6];
+        previous.valid=previous.valid && previous.revision==vm.revision(vpam::VAR_ANS) && exactValEquals(previous.snapshot,vm.getAns());
+        previous.snapshot=rotate?vm.getAns():vm.getPreAns();
+        // All owning copies precede publication, including previous session data.
+        if(rotate)vm.updateAns(next.snapshot);
+        previous.revision=vm.revision(vpam::VAR_PREANS);next.revision=vm.revision(vpam::VAR_ANS);
+        _session[7]=std::move(previous);_session[6]=std::move(next);return true;
+#if defined(__cpp_exceptions)
+    }catch(const std::bad_alloc&){return false;}
+#endif
+}
+
+bool CalculationEngine::commitQuantityAns(quantity::Owned value) {
+    if(!value)return false;
+#if defined(__cpp_exceptions)
+    try {
+#endif
+        auto& vm=vpam::VariableManager::instance();
+        SessionExact next;next.valid=true;next.sessionOnly=true;next.quantity=std::move(value);
+        next.text=next.quantity->coefficient;next.snapshot=vpam::ExactVal::makeError("Quantity");
+        SessionExact previous=_session[6];
+        previous.valid=previous.valid && previous.revision==vm.revision(vpam::VAR_ANS) && exactValEquals(previous.snapshot,vm.getAns());
+        vm.updateAns(next.snapshot);
+        next.revision=vm.revision(vpam::VAR_ANS);previous.revision=vm.revision(vpam::VAR_PREANS);previous.snapshot=vm.getPreAns();
+        _session[7]=std::move(previous);_session[6]=std::move(next);return true;
+#if defined(__cpp_exceptions)
+    } catch(const std::bad_alloc&) {return false;}
+#endif
 }
 
 bool CalculationEngine::storeAns(char varName) {
@@ -1251,8 +1271,11 @@ bool CalculationEngine::storeAns(char varName) {
     }
     if (idx >= 6) return false;
     if (ans.valid && ans.sessionOnly && ans.revision == vm.revision(vpam::VAR_ANS)) {
+        SessionExact prepared=ans;
+        if(ans.quantity && !vm.clearForSession(varName))return false;
+        prepared.snapshot=vm.getVariable(varName);prepared.revision=vm.revision(varName);
         auto& target = _session[idx];
-        target = ans;
+        target = std::move(prepared);
         target.snapshot = vm.getVariable(varName);
         target.revision = vm.revision(varName);
         return true;
@@ -1296,14 +1319,72 @@ ResultPresentation CalculationEngine::inputPresentation(const vpam::MathNode* ro
     return ResultPresentation::Canonical;
 }
 
+bool CalculationEngine::resolveQuantity(const void* owner,char name,quantity::Value& out) {
+    const auto& self=*static_cast<const CalculationEngine*>(owner);
+    const int index=sessionIndex(name);if(index<0)return false;
+    const auto& slot=self._session[index];const auto& vm=vpam::VariableManager::instance();
+    if(!slot.valid || !slot.quantity || slot.revision!=vm.revision(name) ||
+       !exactValEquals(slot.snapshot,vm.getVariable(name)))return false;
+    out=*slot.quantity;return true;
+}
+
 CalculationEvaluation CalculationEngine::evaluate(const vpam::MathNode* root) {
     CalculationEvaluation ev;
-    const auto units=vpam::scanUnits(root);
-    if(units!=vpam::UnitScan::None) {
-        ev.status=units==vpam::UnitScan::Present?MathEngineStatus::UnitsUnavailable:MathEngineStatus::Unsupported;
-        ev.diagnostic=units==vpam::UnitScan::Present?"Quantity calculation is not available in this version":
-            units==vpam::UnitScan::Invalid?"Invalid quantity identity":"Expression limit";
-        return ev; // No Giac call, session mutation, simplification or Ans update.
+    bool hasQuantity=false;
+#if defined(__cpp_exceptions)
+    try {
+#endif
+        hasQuantity=quantity::contains(root,this,resolveQuantity);
+#if defined(__cpp_exceptions)
+    }catch(const std::bad_alloc&){ev.status=MathEngineStatus::OutOfMemory;ev.quantityError=quantity::Error::Allocation;return ev;}
+#endif
+    if(hasQuantity) {
+#if defined(__cpp_exceptions)
+        try {
+#endif
+            syncVariablesToGiac(ev.diagnostic);
+            auto analyzed=quantity::evaluate(root,this,resolveQuantity);
+            auto error=analyzed.error;
+            if(error==quantity::Error::None) {
+                const auto descriptor=quantity::coherent(analyzed.value);
+                quantity::Display display;
+                error=quantity::convert(analyzed.value,descriptor,display);
+                if(error==quantity::Error::None) {
+                    ev.serialized=analyzed.value.coefficient;
+                    ev.exactText=display.exact;ev.approximateText=display.approximate;
+                    ev.exactAST=quantity::compose(std::move(display.exactCoefficient),descriptor);
+                    ev.approximateAST=quantity::compose(std::move(display.approximateCoefficient),descriptor);
+                    if(!ev.exactAST)error=quantity::Error::Allocation;
+                    else {
+                        ev.exactAST->calculateLayout(vpam::defaultFontMetrics());
+                        const auto box=ev.exactAST->layout();
+                        if(box.width>enginecontract::kMaxRenderedWidth || box.ascent+box.descent>enginecontract::kMaxRenderedHeight)
+                            error=quantity::Error::ExpressionLimit;
+                        else {
+                            if(!analyzed.value.dimension.scalar())ev.quantity=std::make_shared<const quantity::Value>(std::move(analyzed.value));
+                            else {
+                                auto scalar=GiacEngine::instance().evaluateStructured(ev.exactText.c_str(),true);
+                                if(scalar.hasTree)ev.exactValValid=resultTreeToExactVal(scalar.tree,ev.exactVal);
+                            }
+                            ev.status=MathEngineStatus::Ok;ev.kind=CalcResultKind::Structured;
+                            ev.reusePolicy=ResultReusePolicy::FullyRoundTrippable;
+                            ev.sToDPolicy=ev.approximateAST?ResultSToDPolicy::Scalar:ResultSToDPolicy::Unavailable;
+                            return ev;
+                        }
+                    }
+                }
+            }
+            ev.quantityError=error;ev.diagnostic=quantity::errorName(error);
+            using E=quantity::Error;
+            ev.status=error==E::Incomplete?MathEngineStatus::ParseError:error==E::Allocation?MathEngineStatus::OutOfMemory:
+                error==E::AffinePending || error==E::ContextPending || error==E::UncertaintyPending || error==E::ApproximatePending ||
+                error==E::SymbolicPending || error==E::ComplexPending || error==E::FunctionUnsupported || error==E::ReferencePending?MathEngineStatus::UnitsUnavailable:MathEngineStatus::QuantityError;
+            ev.exactAST.reset();ev.approximateAST.reset();return ev;
+#if defined(__cpp_exceptions)
+        } catch(const std::bad_alloc&) {
+            ev=CalculationEvaluation{};ev.status=MathEngineStatus::OutOfMemory;ev.quantityError=quantity::Error::Allocation;return ev;
+        }
+#endif
     }
 
     std::string serErr;

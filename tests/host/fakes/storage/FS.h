@@ -43,6 +43,7 @@ inline int esp_vfs_littlefs_register(const esp_vfs_littlefs_conf_t* c) {
     return testMountError;
 }
 
+inline bool testShortWrite=false,testRenameFailure=false,testReadbackFailure=false;
 class File {
     std::vector<uint8_t>* data_ = nullptr;
     size_t offset_ = 0;
@@ -53,12 +54,14 @@ public:
     void close() { data_ = nullptr; }
     size_t size() const { return data_ ? data_->size() : 0; }
     size_t read(uint8_t* dst, size_t n) {
+        if(testReadbackFailure)return 0;
         if (!data_) return 0;
         n = std::min(n, data_->size() - offset_);
         std::copy_n(data_->data() + offset_, n, dst); offset_ += n; return n;
     }
     size_t write(const uint8_t* src, size_t n) {
         ++testWrites;
+        if(testShortWrite)return 0;
         if (!data_) return 0;
         data_->insert(data_->end(), src, src + n); return n;
     }
@@ -85,6 +88,7 @@ public:
     bool remove(const char* path) { ++testRemoves; return testMounted && !testUnavailable && testFiles.erase(path); }
     bool rename(const char* a, const char* b) {
         ++testRenames;
+        if(testRenameFailure)return false;
         if (!exists(a)) return false;
         testFiles[b] = std::move(testFiles[a]); testFiles.erase(a); return true;
     }

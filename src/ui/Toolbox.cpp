@@ -79,16 +79,28 @@ lv_obj_t* label(lv_obj_t* parent,int x,int y,int width,const lv_font_t* font) {
     lv_obj_set_style_text_font(obj,font,0);lv_obj_set_style_text_color(obj,lv_color_hex(Ink),0);
     lv_label_set_long_mode(obj,LV_LABEL_LONG_DOT);return obj;
 }
-bool visibleEntry(const Entry& e) { return (e.recipe!=Recipe::Unit && e.recipe!=Recipe::QuantityReference) || available(e,s->receiver.capabilities); }
+bool visibleEntry(const Entry& e) {
+    return ((e.recipe!=Recipe::Unit && e.recipe!=Recipe::QuantityReference) || available(e,s->receiver.capabilities)) &&
+        (!s->receiver.filter || s->receiver.filter(s->receiver.owner,e));
+}
+bool visibleRow(const Row& row,unsigned depth=0) {
+    if(!(row.capabilities&s->receiver.capabilities))return false;
+    if(!s->receiver.filter)return true;
+    if(row.entry && visibleEntry(*row.entry))return true;
+    if(!row.children || depth>=kDepth)return false;
+    for(size_t i=0;i<provider.count(provider.context,row.children);++i)
+        if(visibleRow(provider.at(provider.context,row.children,i),depth+1))return true;
+    return false;
+}
 size_t providerCount(uint16_t group) {
     size_t total=0;for(size_t i=0;i<provider.count(provider.context,group);++i)
-        if(provider.at(provider.context,group,i).capabilities & s->receiver.capabilities)++total;
+        if(visibleRow(provider.at(provider.context,group,i)))++total;
     return total;
 }
 Row providerAt(uint16_t group,size_t index) {
     for(size_t i=0;i<provider.count(provider.context,group);++i) {
         auto row=provider.at(provider.context,group,i);
-        if((row.capabilities & s->receiver.capabilities) && index--==0)return row;
+        if(visibleRow(row) && index--==0)return row;
     }return {};
 }
 size_t storedCount(bool recent) {
@@ -129,7 +141,7 @@ void refresh();
 void changedQuery();
 void selectTab(unsigned tab) {
     s->tab=s->tabCursor=tab;s->tabsFocus=false;s->help=s->options=false;
-    s->depth=tab?1:0;s->levels[0]={};
+    s->depth=tab?1:0;s->levels[0]={s->receiver.initialGroup};
     if(tab)s->level()={uint16_t(tab),0,0,nullptr,nullptr};
     s->queryFocus=tab==Search;
     if(s->queryFocus){changedQuery();return;}
@@ -181,6 +193,13 @@ void activate(bool right=false) {
     auto& cc=*s->receiver.cursor;
     if(cc.epoch()!=s->epoch || cc.rootRow()!=s->root || cc.cursor().row!=s->cursor.row || cc.cursor().index!=s->cursor.index) {
         notice("Editor changed. Close and reopen.","El editor cambió. Cierra y vuelve a abrir.");return;
+    }
+    if(s->receiver.selected) {
+        const auto receiver=s->receiver;
+        if(!visibleEntry(e) || !receiver.selected(receiver.owner,e.identity)) {
+            notice("Cannot select. Previous result retained.","No se puede elegir. Resultado conservado.");return;
+        }
+        close();return; // EXE is consumed; selecting a target never inserts.
     }
 #if defined(__cpp_exceptions)
     try {
@@ -251,12 +270,12 @@ void refresh() {
     if(level.selection>=level.top+kVisible)level.top=level.selection-kVisible+1;
     const char* heading=s->help?tr("<  Help","<  Ayuda"):s->options?tr("<  Options","<  Opciones"):
         level.group==Search?tr("<  Search","<  Buscar"):level.group==Favorites?tr("<  Favorites","<  Favoritos"):
-        level.group==Recent?tr("<  Recent","<  Recientes"):level.en&&level.es?tr(level.en,level.es):tr("Toolbox","Herramientas");
+        level.group==Recent?tr("<  Recent","<  Recientes"):level.en&&level.es?tr(level.en,level.es):s->receiver.selected?tr("Output unit","Unidad de salida"):tr("Toolbox","Herramientas");
     lv_label_set_text(s->title,heading);
     char counter[24];std::snprintf(counter,sizeof(counter),"%u / %u",unsigned(s->options?s->option+1:total?level.selection+1:0),unsigned(s->options?4:total));
     lv_label_set_text(s->counter,s->help?"":counter);
-    const char* en[]={"Functions","Favorites","Recent","Search"};
-    const char* es[]={"Funciones","Favoritos","Recientes","Buscar"};
+    const char* en[]={s->receiver.selected?"Units":"Functions","Favorites","Recent","Search"};
+    const char* es[]={s->receiver.selected?"Unidades":"Funciones","Favoritos","Recientes","Buscar"};
     for(unsigned i=0;i<s->tabs.size();++i) {
         auto* tab=s->tabs[i];lv_label_set_text_static(tab,tr(en[i],es[i]));
         const bool focused=s->tabsFocus && s->tabCursor==i;
@@ -351,7 +370,7 @@ void refresh() {
         lv_obj_set_pos(s->canvases[i].obj(),1,0);lv_obj_set_size(s->canvases[i].obj(),previewWidth,height);
         char mark[16]{};
         if(item.entry)std::snprintf(mark,sizeof(mark),"%s",Store::instance().contains(item.entry->identity)?"*":"");
-        else std::snprintf(mark,sizeof(mark),"%u",unsigned(provider.count(provider.context,item.children)));
+        else std::snprintf(mark,sizeof(mark),"%u",unsigned(s->receiver.filter?providerCount(item.children):provider.count(provider.context,item.children)));
         lv_obj_set_user_data(s->marks[i],reinterpret_cast<void*>(uintptr_t(item.children?1:0)));
         lv_label_set_text(s->marks[i],mark);lv_obj_set_pos(s->marks[i],PopupWidth-44,(height-18)/2);
         y+=height+1;++s->visible;
@@ -363,7 +382,9 @@ void refresh() {
     }
     if(s->tabsFocus)lv_label_set_text(s->hint,tr("LEFT/RIGHT Tabs   EXE Open","IZQ/DER Pestañas   EXE Abrir"));
     else if(s->queryFocus)lv_label_set_text(s->hint,tr("ALPHA Type   DOWN Results","ALPHA Texto   ABAJO Lista"));
-    else if(selected.entry)lv_label_set_text(s->hint,selected.children?tr("EXE Insert   RIGHT More   FORMAT","EXE Insertar   DER Más   FORMAT"):tr("EXE Insert   FORMAT Options","EXE Insertar   FORMAT Opciones"));
+    else if(selected.entry)lv_label_set_text(s->hint,s->receiver.selected?
+        (selected.children?tr("EXE Apply   RIGHT More   FORMAT","EXE Aplicar   DER Más   FORMAT"):tr("EXE Apply   FORMAT Options","EXE Aplicar   FORMAT Opciones")):
+        (selected.children?tr("EXE Insert   RIGHT More   FORMAT","EXE Insertar   DER Más   FORMAT"):tr("EXE Insert   FORMAT Options","EXE Insertar   FORMAT Opciones")));
     else lv_label_set_text(s->hint,tr("EXE Open   BACK Return","EXE Abrir   BACK Volver"));
 }
 
@@ -400,6 +421,7 @@ bool open(lv_obj_t* parent,Receiver receiver) {
     try {
 #endif
         s=std::make_unique<Session>();s->receiver=receiver;s->root=receiver.cursor->rootRow();s->cursor=receiver.cursor->cursor();s->epoch=receiver.cursor->epoch();
+        s->levels[0].group=receiver.initialGroup;
         auto& km=vpam::KeyboardManager::instance();s->shift=km.shiftPhase();s->alpha=km.alphaPhase();km.reset();
         Store::instance().load();
         // The subdued backdrop consumes outside clicks. The live expression

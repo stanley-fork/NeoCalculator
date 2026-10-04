@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Expanded catalogue through the real native modal/editor keyboard harness.
 
-No unit factors are evaluated here: expected interim status is units_unavailable.
+Exact multiplicative units compute; contextual, measured and affine entries stay deferred.
 Screenshots are actual 320x240 native renders, suitable for the delivery gallery.
 """
 import argparse
@@ -34,7 +34,7 @@ def unit(uid, prefix=0, count=1): return f'assert_calc_input unit {uid} {prefix}
 def pick(query, item, prefix=0): return search(query) + selected(item, prefix) + keys('ENTER') + 'assert_calc_input toolbox closed\n'
 def shot(name): return 'wait 2\nscreenshot ' + Path(os.path.relpath(a.out / (name + '.ppm'), root)).as_posix() + '\n'
 def ordinary(): return keys('AC','2','ADD','2','ENTER') + 'assert_calc_exact 4\n'
-def guarded(): return keys('ENTER') + 'assert_calc_status units_unavailable\n'
+def guarded(pending=False): return keys('ENTER') + ('assert_calc_status units_unavailable\n' if pending else 'assert_calc_status ok\n')
 def locale(index):
     return keys('HOME') + 'wait 20\nopen_app Settings\nwait 20\n' + keys(*(['DOWN']*4), *(['RIGHT']*index), 'HOME') + 'wait 20\nopen_app Calculation\nwait 20\n'
 
@@ -89,10 +89,10 @@ run('count-components', pick('Sa/s',1292) + unit(1292) + unit(3) + 'assert_calc_
     keys('AC') + pick('FLOPS',1295) + unit(1295) + unit(3) + shot('count-components-flops') +
     keys('AC') + pick('bpm',1294) + unit(1294) + unit(47) + guarded() + ordinary())
 run('historical', search('Vara de Burgos') + selected(1302) + shot('historical-vara') + keys('ENTER') +
-    unit(1302) + guarded() + ordinary())
+    unit(1302) + guarded(True) + ordinary())
 run('typed-physical-reference', search('Speed of light in vacuum') + selected_reference(1) +
     shot('typed-physical-reference') + keys('ENTER') + 'assert_calc_input dump\nassert_calc_input structure\n' +
-    guarded() + ordinary(), verify=lambda log:'QuantityReference[1:0]' in log)
+    guarded(True) + ordinary(), verify=lambda log:'QuantityReference[1:0]' in log)
 
 for index,tag in enumerate(['en-US','en-GB','es-ES','es-419']):
     q = 'Caloría termoquímica' if index >= 2 else 'Thermochemical calorie'
@@ -113,7 +113,7 @@ run('favorites-read', keys('TOOLBOX','UP','RIGHT','ENTER') + selected(1156,10) +
 for name,q,item,prefix in [('thermochemical','cal_th',1156,0),('it-calorie','cal_IT',1157,0),('dalton','Dalton',1103,0),
     ('hongkong','Hong Kong catty',1307,0),('rai','Thai rai',1310,0),('imperial-pint','ptImp',1046,0),
     ('us-pint','ptUS',1045,0),('metric-hp','CV',1169,0),('darcy','Darcy',1221,0)]:
-    run('search-'+name, search(q)+selected(item,prefix)+keys('ENTER')+unit(item,prefix)+guarded())
+    run('search-'+name, search(q)+selected(item,prefix)+keys('ENTER')+unit(item,prefix)+guarded(item==1103))
 
 # Context and uncertainty are visible through the same real FORMAT > Help flow.
 for spanish in (False,True):
@@ -132,10 +132,10 @@ for spanish in (False,True):
             ambiguity = selected(uid, prefix) + shot(tag+'-ambiguity-'+name) + keys('DOWN')
         run(case,pre+search(q)+ambiguity+selected_reference(rid)+keys('FORMAT','DOWN','DOWN','DOWN','ENTER')+
             'assert_calc_input toolbox geometry\n'+shot(case)+keys('BACK')+selected_reference(rid)+
-            keys('ENTER')+'assert_calc_input dump\nassert_calc_input structure\n'+guarded()+ordinary(),
+            keys('ENTER')+'assert_calc_input dump\nassert_calc_input structure\n'+guarded(True)+ordinary(),
             verify=lambda log,rid=rid: f'QuantityReference[{rid}:0]' in log)
     case=tag+'-dalton-help'
     run(case,pre+search('Dalton')+selected(1103)+keys('FORMAT','DOWN','DOWN','DOWN','ENTER')+
-        'assert_calc_input toolbox geometry\n'+shot(case)+keys('BACK','ENTER')+unit(1103)+guarded()+ordinary())
+        'assert_calc_input toolbox geometry\n'+shot(case)+keys('BACK','ENTER')+unit(1103)+guarded(True)+ordinary())
 
 raise SystemExit(0 if results and all(r['passed'] for r in results.values()) else 1)

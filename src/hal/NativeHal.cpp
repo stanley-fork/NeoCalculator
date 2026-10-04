@@ -2396,7 +2396,7 @@ static bool loadScript(const char* path)
             if (!(iss >> st)) return scriptErr(path, lineNo, "assert_calc_status requiere un estado");
             if (iss >> extra) return scriptErr(path, lineNo, "assert_calc_status: demasiados argumentos");
             if (st != "ok" && st != "undefined" && st != "parse_error" &&
-                st != "evaluation_error" && st != "unsupported" && st != "out_of_memory" && st != "units_unavailable")
+                st != "evaluation_error" && st != "unsupported" && st != "out_of_memory" && st != "units_unavailable" && st != "quantity_error")
                 return scriptErr(path, lineNo,
                     "assert_calc_status: valor desconocido (ok|undefined|parse_error|evaluation_error|unsupported|out_of_memory)");
             sc.type   = ScriptCmdType::AssertCalcStatus;

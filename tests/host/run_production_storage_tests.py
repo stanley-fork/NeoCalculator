@@ -25,6 +25,7 @@ def function(text, signature):
 pinned = function(source, 'bool LittleFSFS::begin(')
 assert 'formatOnFail' in pinned and '.format_if_mount_failed = false' in pinned
 (out/'pinned_begin.inc').write_text(pinned, encoding='utf-8')
+(out/'exact_error.inc').write_text(function((ROOT/'src/math/MathEvaluator.cpp').read_text(encoding='utf8'),'ExactVal ExactVal::makeError('),encoding='utf8')
 (out/'LittleFS.h').write_text('#include "FS.h"\n')
 system = (ROOT/'src/SystemApp.cpp').read_text(encoding='utf-8')
 begin = function(system, 'void SystemApp::begin()')
@@ -49,7 +50,7 @@ cmd = ['g++', '-std=c++17', '-Wall', '-Wextra', '-Wno-unused-parameter',
        'src/math/VariableManager.cpp', '-o', relative(out/'storage-test.exe')]
 subprocess.run(cmd, cwd=ROOT, check=True)
 cases = ['valid', 'mount-fail', 'other-mount-error', 'unavailable-downstream',
-         'empty-mounted', 'invalid-records', 'uninitialized-error', 'corrupt-error']
+         'empty-mounted', 'invalid-records', 'uninitialized-error', 'corrupt-error','session-clear']
 results = []
 for case in cases:
     result = subprocess.run([str(out/'storage-test.exe'), case], cwd=ROOT, check=True, text=True, capture_output=True)

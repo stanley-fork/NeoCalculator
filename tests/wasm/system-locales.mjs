@@ -17,11 +17,14 @@ const records = [], trace = [];
 try {
   for (const [name, type] of Object.entries({chromium, firefox, webkit})) {
     if (process.env.NUMOS_BROWSER && process.env.NUMOS_BROWSER !== name) continue;
+    let accumulatedBrowser=null;
+    try {
+    if(process.env.NUMOS_ACCUMULATED==='1')accumulatedBrowser=await type.launch({headless:true});
     for (const surface of ['shell', 'component']) {
       if (process.env.NUMOS_SURFACE && process.env.NUMOS_SURFACE !== surface) continue;
       // Each application fixture gets a fresh browser process; all four locale
       // replacements/reloads still share one context and genuine IDBFS storage.
-      const browser = await type.launch({headless: true});
+      const browser = accumulatedBrowser || await type.launch({headless: true});
       let closing = false, bootCount = 0;
       const lifecycle = (event, detail = '') => trace.push({source: 'lifecycle',
         browser: name, surface, event, detail, intentionalClose: closing, bootCount, at: Date.now()});
@@ -136,8 +139,9 @@ try {
         assert.deepEqual(errors, []);
         closing = true;
         await context.close();
-      } finally { closing = true; await browser.close(); }
+      } finally { closing = true; if(!accumulatedBrowser)await browser.close(); }
     }
+    } finally {if(accumulatedBrowser)await accumulatedBrowser.close();}
   }
 } finally {
   await mkdir(out, {recursive: true});

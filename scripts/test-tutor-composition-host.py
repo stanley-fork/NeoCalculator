@@ -52,6 +52,8 @@ for name in a.tests:
     testObjects=objects
     if name in ('toolbox_visual_checks','math_brackets_checks'):
         testObjects=[*objects,build/'src/ui/MathRenderer.o']
+    if name=='math_spacing_checks':
+        testObjects=[*objects,build/'src/ui/MathRenderer.o']
     if name in ('calculation_input_checks', 'toolbox_checks'):
         # Exercise the existing node allocator boundary as well as C++ vectors;
         # this instrumented object is never linked into a product image.

@@ -47,7 +47,7 @@ for env in a.env:
             sizes = {}
             for cu in elf.get_dwarf_info().iter_CUs():
                 name = cu.get_top_DIE().attributes.get('DW_AT_name')
-                if not name or not any(part in name.value.decode(errors='replace') for part in ('Toolbox', 'CursorController', 'MathAST.cpp')):
+                if not name or not any(part in name.value.decode(errors='replace') for part in ('Toolbox', 'CursorController', 'MathAST.cpp','Quantity.cpp','CalculationApp.cpp','CalculationEngine.cpp')):
                     continue
                 for die in cu.iter_DIEs():
                     attrs = die.attributes
@@ -56,7 +56,7 @@ for env in a.env:
                     if 'DW_AT_name' not in attrs or 'DW_AT_byte_size' not in attrs:
                         continue
                     name = attrs['DW_AT_name'].value.decode(errors='replace')
-                    if name in ('Session', 'Store', 'Identity', 'Entry', 'Prepared', 'Provider', 'Level', 'NodeRow', 'NodeParen', 'NodeSpecialValue', 'NodeUnit', 'NodeQuantityReference', 'Atom', 'ReferenceAtom', 'Definition', 'Reference', 'Prefix', 'Item'):
+                    if name in ('Session', 'Store', 'Identity', 'Entry', 'Prepared', 'Provider', 'Level', 'NodeRow', 'NodeParen', 'NodeSpecialValue', 'NodeUnit', 'NodeQuantityReference', 'Atom', 'ReferenceAtom', 'Definition', 'Reference', 'Prefix', 'Item','Value','Dimension','Descriptor','Display','Walker','Sink','CalculationEvaluation','HistoryEntry','SessionExact','CalculationApp'):
                         sizes[name] = attrs['DW_AT_byte_size'].value
             record['types'] = sizes
     if env == 'numos-esp32-s3-wroom-1u-n16r8':
@@ -64,7 +64,7 @@ for env in a.env:
         for line in tool('nm', '--defined-only', elf_path).splitlines():
             fields = line.split()
             if len(fields) == 3 and fields[1] in ('t', 'T', 'w', 'W') and (
-                    'toolbox' in fields[2].lower() or 'QuantityReference' in fields[2] or 'NodeUnit' in fields[2] or 'scanUnits' in fields[2] or 'makeUnit' in fields[2] or 'insertPrepared' in fields[2] or 'insertPower' in fields[2] or 'measureMathAtom' in fields[2] or 'layoutTextAtom' in fields[2] or ('calculateLayout' in fields[2] and ('NodeRow' in fields[2] or 'NodeParen' in fields[2]))):
+                    'toolbox' in fields[2].lower() or 'quantity' in fields[2] or 'commitResultAns' in fields[2] or 'publishOutput' in fields[2] or 'loadHistoryEntry' in fields[2] or 'QuantityReference' in fields[2] or 'NodeUnit' in fields[2] or 'scanUnits' in fields[2] or 'makeUnit' in fields[2] or 'insertPrepared' in fields[2] or 'insertPower' in fields[2] or 'measureMathAtom' in fields[2] or 'layoutTextAtom' in fields[2] or ('calculateLayout' in fields[2] and ('NodeRow' in fields[2] or 'NodeParen' in fields[2]))):
                 names.append(fields[2])
         frames = []
         for name in names:

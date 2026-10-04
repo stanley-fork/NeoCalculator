@@ -191,58 +191,69 @@ bool VariableManager::validatePersistentValue(const ExactVal& value) {
 // saveToFlash — Guarda todas las variables en LittleFS
 // ════════════════════════════════════════════════════════════════════════════
 
-bool VariableManager::saveToFlash() {
-#if NUMOS_PRODUCTION_DEMO_PROFILE
-    LittleFS.remove(TEMP_PATH);
-    File f = LittleFS.open(TEMP_PATH, "w");
-    if (!f) return false;
+bool VariableManager::saveToFlash() { return writeSnapshot(); }
 
-    bool complete = true;
-    uint32_t magic = MAGIC;
-    const uint8_t header[8] = {
-        static_cast<uint8_t>(magic),
-        static_cast<uint8_t>(magic >> 8U),
-        static_cast<uint8_t>(magic >> 16U),
-        static_cast<uint8_t>(magic >> 24U),
-        FORMAT_VERSION,
-        static_cast<uint8_t>(NUM_VARS),
-        0,
-        0,
-    };
-    complete = f.write(header, sizeof(header)) == sizeof(header);
-
-    uint8_t buf[SLOT_RECORD_SIZE];
-    for (int i = 0; i < NUM_VARS && complete; ++i) {
-        serializeExactVal(buf, _vars[i]);
-        const uint32_t crc = checksum(buf, EXACTVAL_SIZE);
-        std::memcpy(buf + EXACTVAL_SIZE, &crc, sizeof(crc));
-        complete = f.write(buf, sizeof(buf)) == sizeof(buf);
-    }
-
-    f.close();
-    if (!complete) {
-        LittleFS.remove(TEMP_PATH);
-        return false;
-    }
-    LittleFS.remove(FLASH_PATH);
-    return LittleFS.rename(TEMP_PATH, FLASH_PATH);
-#else
-    File f = LittleFS.open(FLASH_PATH, "w");
-    if (!f) return false;
-    uint32_t magic = MAGIC;
-    f.write(reinterpret_cast<const uint8_t*>(&magic), 4);
-    uint8_t count = NUM_VARS;
-    f.write(&count, 1);
-    uint8_t buf[EXACTVAL_SIZE];
-    for (int i = 0; i < NUM_VARS; ++i) {
-        serializeExactVal(buf, _vars[i]);
-        f.write(buf, EXACTVAL_SIZE);
-    }
-    f.close();
-    return true;
-#endif
+bool VariableManager::clearForSession(char name) {
+    const int index=nameToIndex(name);if(index<0 || index>=6)return false;
+    // Prepare the error value before touching the file; moving it cannot fail.
+    ExactVal empty=ExactVal::makeError("Session only");
+    if(!writeSnapshot(index))return false;
+    _vars[index]=std::move(empty);++_revisions[index];return true;
 }
 
+bool VariableManager::writeSnapshot(int clearedSlot) {
+    File f=LittleFS.open(TEMP_PATH,"w");if(!f)return false;
+    uint32_t magic=MAGIC;
+#if NUMOS_PRODUCTION_DEMO_PROFILE
+    const uint8_t header[8]={uint8_t(magic),uint8_t(magic>>8),uint8_t(magic>>16),uint8_t(magic>>24),FORMAT_VERSION,NUM_VARS,0,0};
+#else
+    const uint8_t header[5]={uint8_t(magic),uint8_t(magic>>8),uint8_t(magic>>16),uint8_t(magic>>24),NUM_VARS};
+#endif
+    bool complete=f.write(header,sizeof(header))==sizeof(header);
+    uint8_t buf[SLOT_RECORD_SIZE]{};
+    const ExactVal zero=ExactVal::fromInt(0);
+    for(int i=0;i<NUM_VARS && complete;++i) {
+        // WHY: unsupported/session-only values cannot serialize stale numeric
+        // fields. Their explicitly documented durable state is an empty slot.
+        serializeExactVal(buf,i==clearedSlot || !_vars[i].ok?zero:_vars[i]);
+#if NUMOS_PRODUCTION_DEMO_PROFILE
+        const uint32_t crc=checksum(buf,EXACTVAL_SIZE);std::memcpy(buf+EXACTVAL_SIZE,&crc,sizeof(crc));
+        constexpr size_t recordSize=SLOT_RECORD_SIZE;
+#else
+        constexpr size_t recordSize=EXACTVAL_SIZE;
+#endif
+        complete=f.write(buf,recordSize)==recordSize;
+    }
+    f.close();
+    if(!complete){LittleFS.remove(TEMP_PATH);return false;}
+    // WHY: File::close has no status on the Arduino-compatible boundary. A
+    // buffered short write can surface only at close, so validate the complete
+    // temporary record before replacing the last durable scalar snapshot.
+    File verified=LittleFS.open(TEMP_PATH,"r");
+#if NUMOS_PRODUCTION_DEMO_PROFILE
+    constexpr size_t verifiedRecordSize=SLOT_RECORD_SIZE;
+#else
+    constexpr size_t verifiedRecordSize=EXACTVAL_SIZE;
+#endif
+    uint8_t actual[SLOT_RECORD_SIZE]{};
+    complete=verified && verified.size()==sizeof(header)+NUM_VARS*verifiedRecordSize &&
+        verified.read(actual,sizeof(header))==sizeof(header) && !std::memcmp(actual,header,sizeof(header));
+    for(int i=0;i<NUM_VARS && complete;++i) {
+        serializeExactVal(buf,i==clearedSlot || !_vars[i].ok?zero:_vars[i]);
+#if NUMOS_PRODUCTION_DEMO_PROFILE
+        const uint32_t crc=checksum(buf,EXACTVAL_SIZE);std::memcpy(buf+EXACTVAL_SIZE,&crc,sizeof(crc));
+#endif
+        complete=verified.read(actual,verifiedRecordSize)==verifiedRecordSize &&
+            !std::memcmp(actual,buf,verifiedRecordSize);
+    }
+    verified.close();
+    if(!complete){LittleFS.remove(TEMP_PATH);return false;}
+    // The native adapter and LittleFS rename replace atomically. Never remove
+    // the active record to make room: on a lock/I/O error it stays recoverable.
+    return LittleFS.rename(TEMP_PATH,FLASH_PATH);
+}
+
+// ============================================================================
 // ════════════════════════════════════════════════════════════════════════════
 // loadFromFlash — Carga variables desde LittleFS
 // ════════════════════════════════════════════════════════════════════════════

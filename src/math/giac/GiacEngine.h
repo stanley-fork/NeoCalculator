@@ -58,7 +58,8 @@ enum class MathEngineStatus : uint8_t {
     EvaluationError,  // Giac raised/diagnosed an error during eval
     Unsupported,      // rejected by the engine contract (e.g. reentrancy)
     OutOfMemory,
-    UnitsUnavailable // Authored quantity retained; CALC-UNITS-01 owns evaluation.
+    UnitsUnavailable, // A catalogued capability remains explicitly deferred.
+    QuantityError    // Dimensional/domain failure, never a syntax error.
 };
 
 struct MathEngineResult {

@@ -57,6 +57,7 @@
 // only for the presentation helpers used by ExactVal/S<=>D rendering.
 #include "../math/CalculationEngine.h"
 #include "../math/CalculationFormat.h"
+#include "../math/ToolboxCatalog.h"
 #include "../math/cas/CASStepLogger.h"
 #include "../math/cas/SymExpr.h"
 #include "../math/cas/SymExprArena.h"
@@ -156,6 +157,7 @@ private:
     uint8_t _formatChoiceCount = 0;
     uint8_t _formatChoice = 0;
     bool _formatPickingDigits = false;
+    bool _formatPickingUnit = false;
     uint8_t _fixedPlaces = 2;
     bool _angleResult = false;
     bool _resultInDegrees = false;
@@ -163,6 +165,12 @@ private:
     vpam::ExactVal         _lastResult;      ///< Último resultado evaluado
     vpam::NodePtr          _resultNode;      ///< AST del resultado (owned)
     vpam::NodeRow*         _resultRow;       ///< Puntero directo al NodeRow del resultado
+    numos::quantity::Owned _quantity;
+    std::unique_ptr<numos::quantity::Display> _quantityView;
+    numos::quantity::Descriptor _outputUnit;
+    numos::quantity::Error _quantityError = numos::quantity::Error::None;
+    uint32_t _resultGeneration=0, _unitSelectionGeneration=0;
+    int _unitTargetComponent=-1;
 
     // ── GIAC-B01: estado de presentación del motor Giac ──────────────────
     // _lastResult sigue siendo el espejo ExactVal (tier 1 exacto, o numérico
@@ -196,6 +204,8 @@ private:
         std::string             approxText;
         bool angleResult = false;
         bool resultInDegrees = false;
+        numos::quantity::Owned quantity;
+        numos::quantity::Error quantityError = numos::quantity::Error::None;
     };
     std::vector<HistoryEntry> _history;      ///< Entradas de historial
     int  _historyIndex;                      ///< -1 = nueva expresión, 0..N-1 = historial
@@ -224,7 +234,7 @@ private:
     void refreshExpression();
     void resetExpression();
     void evaluateExpression();
-    void showResult();
+    void showResult(vpam::NodePtr prepared = {});
     void clearResult();
 
     /// Dynamically repositions the separator and result canvas after
@@ -237,7 +247,7 @@ private:
     void showTextResult(const std::string& text);
     void hideTextResult();
     void toggleSD();
-    void openFormatMenu(bool pickDigits = false);
+    void openFormatMenu(bool pickDigits = false,bool pickUnits = false);
     void closeFormatMenu();
     void updateFormatMenu();
     bool formatAvailable(numos::CalculationFormat format) const;
@@ -247,6 +257,11 @@ private:
     const std::string& numericResultText() const;
     bool complexResult() const;
     void applyFormatChoice();
+    void openOutputSelector(int component);
+    bool outputAllowed(const numos::toolbox::Entry&) const;
+    bool selectOutput(numos::toolbox::Identity);
+    bool publishOutput(const numos::quantity::Descriptor&);
+    bool publishQuantityFormat(numos::CalculationFormat,int shift,unsigned places);
     void navigateHistory(int direction);  ///< -1 = arriba (atrás), +1 = abajo (reciente)
     void loadHistoryEntry(int index);     ///< Carga una entrada del historial en el canvas
 

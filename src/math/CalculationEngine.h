@@ -61,6 +61,7 @@
 #include "GeneratedMathNotation.h"
 #include "ExactVal.h"
 #include "giac/GiacEngine.h"
+#include "Quantity.h"
 
 namespace numos {
 
@@ -104,6 +105,8 @@ struct CalculationEvaluation {
     ResultReusePolicy reusePolicy = ResultReusePolicy::NonReusable;
     ResultSToDPolicy sToDPolicy = ResultSToDPolicy::Unavailable;
     ResultPresentation presentation = ResultPresentation::Canonical;
+    quantity::Owned quantity;
+    quantity::Error quantityError = quantity::Error::None;
 
     bool ok() const { return status == MathEngineStatus::Ok; }
     bool displayable() const {
@@ -123,7 +126,8 @@ public:
     /// Ans text (Ans -> PreAns) so exact chains (sqrt(2), 2^100) survive
     /// the int64 ExactVal store.
     void noteAnsRotated(const std::string& exactGiacText, bool mirrorRotated = true,
-                       ResultPresentation presentation = ResultPresentation::Canonical);
+                       ResultPresentation presentation = ResultPresentation::Canonical,
+                       quantity::Owned quantity = {});
 
     /// Call AFTER an STO wrote VariableManager: keeps the stored variable's
     /// session-exact text coherent (STO copies Ans).
@@ -131,6 +135,9 @@ public:
     /// Store the canonical Ans. Non-scalar values are session-only: this does
     /// not encode a stale scalar into the persistent ExactVal file.
     bool storeAns(char varName);
+    bool commitQuantityAns(quantity::Owned);
+    bool commitResultAns(const CalculationEvaluation&,const vpam::ExactVal* mirror);
+    bool ansIsQuantity() const;
 
     // ── Pure helpers, exposed for the host harness ───────────────────────
     /// VPAM tree -> Giac input text. False + error on unsupported shapes.
@@ -161,12 +168,14 @@ private:
         uint32_t revision = 0;
         vpam::ExactVal snapshot;   // VariableManager value the text mirrors
         std::string text;          // exact Giac expression for that value
+        quantity::Owned quantity; // immutable canonical value, session only
     };
 
     static int sessionIndex(char varName);           // A-F,'#','$' -> 0..7
     static const char* giacNameFor(char varName);    // 'A'..'F', numos_Ans...
     void syncVariablesToGiac(std::string& diagnostic);
     ResultPresentation inputPresentation(const vpam::MathNode* root) const;
+    static bool resolveQuantity(const void*,char,quantity::Value&);
 
     SessionExact _session[8];
 };

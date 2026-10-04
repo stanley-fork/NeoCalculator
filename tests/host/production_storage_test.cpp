@@ -6,6 +6,7 @@
 #include "pinned_begin.inc"
 
 namespace vpam {
+#include "exact_error.inc"
 ExactVal ExactVal::fromInt(int64_t n) { ExactVal v; v.num = n; return v; }
 enum class AngleMode { DEG, RAD };
 }
@@ -42,6 +43,21 @@ int main(int argc, char** argv) {
     if (scenario == "invalid-records") {
         testFiles["/vars.dat"] = {0x33, 0x44};
         testFiles["/settings.dat"] = {0x55, 0x66};
+    }
+    if(scenario=="session-clear") {
+        const auto before=testFiles["/vars.dat"];const auto prefs=testFiles["/settings.dat"];
+        testUnavailable=true;assert(!vars.clearForSession('A'));testUnavailable=false;
+        assert(vars.getVariable('A').num==17 && testFiles["/vars.dat"]==before);
+        testShortWrite=true;assert(!vars.clearForSession('A'));testShortWrite=false;
+        assert(vars.getVariable('A').num==17 && testFiles["/vars.dat"]==before);
+        testReadbackFailure=true;assert(!vars.clearForSession('A'));testReadbackFailure=false;
+        assert(vars.getVariable('A').num==17 && testFiles["/vars.dat"]==before);
+        testRenameFailure=true;assert(!vars.clearForSession('A'));testRenameFailure=false;
+        assert(vars.getVariable('A').num==17 && testFiles["/vars.dat"]==before);
+        assert(vars.clearForSession('A') && !vars.getVariable('A').ok);
+        vars.resetAll();assert(vars.loadFromFlash() && vars.getVariable('A').num==0);
+        assert(testFiles["/settings.dat"]==prefs && testFormats==0);
+        std::puts("PASS session-clear: open, short-write, readback, rename faults retain durable scalar; successful clear prevents resurrection");return 0;
     }
     const auto saved = testFiles;
     vars.resetAll();

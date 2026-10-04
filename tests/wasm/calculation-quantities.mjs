@@ -5,8 +5,8 @@ import {resolve} from 'node:path';
 import {chromium,firefox,webkit} from 'playwright';
 import {startStaticServer} from './test-server.mjs';
 import {calculationDriver} from './calculation-driver.mjs';
-const out=resolve(process.env.NUMOS_UNIT_OUT||'out/unit-catalog-01/web');
-const server=await startStaticServer(resolve(process.env.NUMOS_WEB_ROOT),8899);
+const out=resolve(process.env.NUMOS_QUANTITY_OUT||'out/calc-units-01/web/quantities');
+const server=await startStaticServer(resolve(process.env.NUMOS_WEB_ROOT),8902);
 const records=[],trace=[];
 try {for(const [name,type] of Object.entries({chromium,firefox,webkit})) {
  if(process.env.NUMOS_BROWSER&&process.env.NUMOS_BROWSER!==name)continue;
@@ -109,6 +109,37 @@ try {for(const [name,type] of Object.entries({chromium,firefox,webkit})) {
   // New presses immediately after closing must survive; shortcuts retain
   // their existing meaning outside the modal.
   await keys('2 + 3 ENTER FORMAT');assert.equal((await driver.state()).calculation.status,'ok');
+  // Same modal in target mode: coefficient and display unit publish together.
+  const quantityPick=async(query,id,variant=0)=>{
+   await keys('TOOLBOX');await el.locator('canvas').focus();await page.keyboard.type(query);
+   await expect({queryBytes:new TextEncoder().encode(query).length});await keys('DOWN');
+   await expect({id,variant});await keys('ENTER');await expect({open:false});
+  };
+  const output=async()=>{await keys('SHIFT ALPHA FORMAT DOWN DOWN DOWN DOWN DOWN ENTER');};
+  const target=async(query,id,variant=0,component=-1)=>{
+   await output();await keys('DOWN '.repeat(component<0?1:component+2)+'ENTER');
+   await expect({open:true,group:200});await el.locator('canvas').focus();await page.keyboard.type(query);
+   await expect({queryBytes:new TextEncoder().encode(query).length});await keys('DOWN');await expect({id,variant});
+   await keys('ENTER');await expect({open:false});
+  };
+  const answer=async()=>{const before=(await driver.state()).render.published;await el.locator('canvas').focus();await page.keyboard.press('a');await page.waitForFunction(n=>document.querySelector('numos-emulator').diagnosticState().render.published>n,before);await driver.settled('SDL-Ans');};
+  const exact=async(value)=>{const c=(await driver.state()).calculation;assert.equal(c.status,'ok');assert.equal(c.exact,value);};
+  await keys('AC 2');await quantityPick('metre',32769);await keys('+ 3 0');await quantityPick('cm',32769,14);
+  await keys('ENTER');await exact('23/10');await shot('quantity-sum');
+  await target('cm',32769,14);await exact('230');await shot('quantity-sum-cm');
+  await keys('FORMAT FORMAT');await exact('230');
+  await output();await keys('DOWN ENTER');await el.locator('canvas').focus();await page.keyboard.type('km');
+  await keys('DOWN RIGHT DOWN BACK BACK BACK');await expect({open:false});await exact('230');
+  await keys('AC');await answer();await keys('/ 2');await quantityPick('Second',32771);await keys('ENTER');await exact('23/20');await shot('quantity-ans');
+  await keys('AC 6');await quantityPick('km',32769,10);await keys('/ 3 0 0');await quantityPick('Second',32771);
+  await keys('RIGHT ENTER');await exact('20');await target('km',32769,10,0);await exact('1/50');
+  await target('hour',32816,0,1);await exact('72');await shot('quantity-components-kmh');
+  await keys('AC 2');await quantityPick('metre',32769);await keys('+ 3');await quantityPick('Second',32771);
+  await keys('ENTER');assert.equal((await driver.state()).calculation.status,'quantity_error');await shot('quantity-error');
+  await keys('AC');await answer();await keys('ENTER');await exact('20');await shot('quantity-recovery');
+  await keys('AC TOOLBOX');await el.locator('canvas').focus();await page.keyboard.type('Mach number');await keys('DOWN');await expect({id:16497});
+  await keys('ENTER ENTER');assert.equal((await driver.state()).calculation.status,'units_unavailable');await shot('quantity-context');
+  await keys('AC 2 + 2 ENTER');await exact('4');
   assert.deepEqual(errors,[]);records.push({browser:name,surface,passed:true});
   await context.close();
  }}finally{await browser.close();}

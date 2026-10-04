@@ -38,7 +38,7 @@ export function calculationDriver(page,el,trace,{timeout=10000}={}) {
   const id=/^\d$/.test(token)?'NUM_'+token:aliases[token]||token;
   assert.ok(Number.isInteger(codes[id]),`unknown key ${token}`);
   // The keypad has two POW legends; this is the generic exponent template.
-  const physical=token==='BACK'?'r0c4':token==='AC'?'r6c4':id==='POW'?'r2c4':null;
+  const physical=token==='BACK'?'r0c4':token==='AC'?'r6c4':id==='POW'?'r2c4':id==='STO'?'r4c0':null;
   return {code:codes[id],locator:physical?el.locator(`[data-physical-id=${physical}]`):
    el.locator(`[data-key-id="${id}"]`).first()};
  };

@@ -12,6 +12,11 @@ struct Receiver {
     // Called only after publication; lifetime ends with closeOwner in app end().
     void (*committed)(void*)=nullptr;
     vpam::MathStyle style=vpam::MathStyle::DISPLAY_STYLE;
+    // Output-target mode reuses navigation/search/previews without insertion or
+    // MRU updates. Both callbacks must validate the immutable identity.
+    bool (*filter)(void*,const numos::toolbox::Entry&)=nullptr;
+    bool (*selected)(void*,numos::toolbox::Identity)=nullptr;
+    uint16_t initialGroup=0;
 };
 bool open(lv_obj_t* parent, Receiver receiver);
 bool active();

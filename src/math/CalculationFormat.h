@@ -12,7 +12,7 @@ namespace numos {
 enum class CalculationFormat : uint8_t {
     Standard, Decimal, Periodic, Extended, Scientific, Engineering,
     MixedFraction, PrimeFactors, Polar, Exponential, Fixed,
-    Radians, Degrees, Gradians, Count
+    Radians, Degrees, Gradians, OutputUnit, Count
 };
 
 inline const char* calculationFormatLabel(CalculationFormat format, bool spanish) {
@@ -25,7 +25,8 @@ inline const char* calculationFormatLabel(CalculationFormat format, bool spanish
         {"Polar / phasor", "Polar / fasor"}, {"Exponential form", "Forma exponencial"},
         {"Fixed decimals (FIX)", "Decimales fijos (FIX)"},
         {"Radians (RAD)", "Radianes (RAD)"}, {"Degrees (DEG)", "Grados (DEG)"},
-        {"Gradians (GRA)", "Centesimales (GRA)"}
+        {"Gradians (GRA)", "Centesimales (GRA)"},
+        {"Output unit", "Unidad de salida"}
     };
     const unsigned i = static_cast<unsigned>(format);
     return i < static_cast<unsigned>(CalculationFormat::Count) ? labels[i][spanish ? 1 : 0] : "";
