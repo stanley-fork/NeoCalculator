@@ -616,3 +616,15 @@ Checklist pendiente de hardware, sin atribuir revisión humana del LCD:
 
 Asunto sugerido para un commit futuro, no creado:
 `feat(toolbox): add searchable contextual catalog and favorites`.
+
+## Seguimiento de cierre (2026-10-04)
+
+La aceptación en PCB de TOOLBOX-UNITS-CLOSEOUT-01 reprodujo que ALPHA físico
+era consumido antes de abrir Buscar desde la lista. Se corrige la entrega de
+modificadores al modal y se conserva una regresión por contactos físicos
+simulados. La evidencia original de este informe no se reetiqueta como física.
+Véase [el informe de cierre](TOOLBOX_UNITS_CLOSEOUT_01.md).
+
+Cierre posterior completado y commit local de código `7a21767` creado;
+la aceptación, las identidades instaladas y los límites quedan en el informe
+de cierre enlazado arriba. Las secciones previas conservan su fecha y alcance.

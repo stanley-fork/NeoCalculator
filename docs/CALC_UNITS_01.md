@@ -397,3 +397,17 @@ permaneció accesible durante las compilaciones aisladas.
 
 Asunto orientativo para un futuro commit, **no creado**:
 `feat(calculation): evaluate quantities and convert output units`.
+
+## Seguimiento de cierre (2026-10-04)
+
+TOOLBOX-UNITS-CLOSEOUT-01 reproduce y corrige el conteo de operadores de fila
+en el límite de nodos de cantidades. No cambia la precedencia ni amplía los
+límites 192/16. El test de almacenamiento de sesión crea ahora su directorio
+completo para ejecutarse en un árbol limpio. Las identidades compiladas y
+pruebas físicas posteriores se registran aparte en
+[el informe de cierre](TOOLBOX_UNITS_CLOSEOUT_01.md); las cifras anteriores
+siguen describiendo la entrega original, no el firmware instalado después.
+
+Cierre posterior completado y commit local de código `05fe60d` creado;
+la aceptación, las identidades instaladas y los límites quedan en el informe
+de cierre enlazado arriba. Las secciones previas conservan su fecha y alcance.
