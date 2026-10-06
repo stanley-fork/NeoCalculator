@@ -44,6 +44,7 @@
 #include "../math/cas/SymExprToAST.h"
 #include "../ui/MathTypography.h"
 #include "../ui/TutorFonts.h"
+#include "../ui/UnitQuickChoices.h"
 #include "../utils/HwUxProbe.h"
 #ifdef NATIVE_SIM
   #include <cstdio>
@@ -69,6 +70,16 @@ static constexpr int BAND_MIN_H    = 8;   // Absolute minimum height for each re
 // ════════════════════════════════════════════════════════════════════════════
 // Constructor / Destructor
 // ════════════════════════════════════════════════════════════════════════════
+
+struct UnitOutputMenu {
+    ui::UnitQuickChoices choices;
+    uint32_t generation=0;
+    std::array<vpam::MathCanvas,3> canvases;
+    std::array<vpam::NodePtr,3> previews;
+    std::array<uint8_t,3> previewModes{}; // compact, stacked, name-only
+    std::array<int,3> rows{{-1,-1,-1}};
+    ~UnitOutputMenu(){for(auto& canvas:canvases)canvas.destroy();}
+};
 
 CalculationApp::CalculationApp()
     : _screen(nullptr)
@@ -239,6 +250,11 @@ void CalculationApp::refreshExpression() {
 
 void CalculationApp::handleKey(const KeyEvent& ev) {
     if (ui::toolbox::handle(ev)) return;
+    if(_formatSuppressed!=KeyCode::NONE) {
+        if(ev.code==_formatSuppressed && ev.action==KeyAction::RELEASE){_formatSuppressed=KeyCode::NONE;return;}
+        if(ev.code==_formatSuppressed && ev.action==KeyAction::REPEAT)return;
+        if(ev.action==KeyAction::PRESS)_formatSuppressed=KeyCode::NONE;
+    }
 #ifdef NATIVE_SIM
     std::printf("[CALCAPP] handleKey: code=%d action=%d\n",
                 static_cast<int>(ev.code), static_cast<int>(ev.action));
@@ -282,7 +298,8 @@ void CalculationApp::handleKey(const KeyEvent& ev) {
     if (_formatMenu) {
         if (ev.code == KeyCode::UP && _formatChoice) --_formatChoice;
         else if (ev.code == KeyCode::DOWN && _formatChoice + 1 < _formatChoiceCount) ++_formatChoice;
-        else if (ev.code == KeyCode::ENTER) {
+        else if ((ev.code == KeyCode::ENTER || ev.code==KeyCode::EXE) && ev.action==KeyAction::PRESS) {
+            _formatSuppressed=ev.code;
             applyFormatChoice();
             return;
         } else if (ev.code == KeyCode::AC || ev.code == KeyCode::DEL ||
@@ -758,7 +775,11 @@ void CalculationApp::evaluateExpression() {
 
 bool CalculationApp::navigateBack() {
     if (ui::toolbox::back()) return true;
-    if (_formatMenu) { closeFormatMenu(); return true; }
+    if (_formatMenu) {
+        const bool components=_formatPickingComponents;closeFormatMenu();
+        if(components){openFormatMenu(false,true);if(_unitMenu){_formatChoice=_unitMenu->choices.count+2;updateFormatMenu();}}
+        return true;
+    }
     if (!_stepViewerActive) return false;
     closeStepViewer();
     return true;
@@ -1473,6 +1494,25 @@ bool CalculationApp::debugInput(const std::string& expected) const {
     const bool complete = numos::CalculationEngine::serializeForGiac(_rootRow, serialized, diagnostic);
     const auto& cursor = _cursor.cursor();
     if (expected.compare(0,8,"toolbox ") == 0) return ui::toolbox::debug(expected.c_str()+8);
+    if(expected=="unit_menu closed")return !_unitMenu;
+    if(expected=="unit_menu all")return _unitMenu && !_formatPickingComponents && _formatChoice==_unitMenu->choices.count+1;
+    if(expected=="unit_menu components")return _unitMenu && _formatPickingComponents;
+    if(expected=="unit_menu geometry") {
+        if(!_unitMenu)return false;
+        lv_obj_update_layout(_formatMenu);
+        for(unsigned i=0;i<_unitMenu->canvases.size();++i) {
+            const auto& canvas=_unitMenu->canvases[i];
+            if(lv_obj_has_flag(_formatMenuRows[i],LV_OBJ_FLAG_HIDDEN) || lv_obj_has_flag(canvas.obj(),LV_OBJ_FLAG_HIDDEN))continue;
+            const auto* node=_unitMenu->previews[i].get();
+            if(!node || node->layout().width+16>lv_obj_get_width(canvas.obj()) || node->layout().height()+2>lv_obj_get_height(canvas.obj()))return false;
+        }return true;
+    }
+    if(expected=="unit_menu dump") {
+        if(!_unitMenu)return false;
+        std::printf("[UNIT-MENU] choice=%u count=%u quick=%u favorites=%u components=%u generation=%u ids=",unsigned(_formatChoice),unsigned(_formatChoiceCount),_unitMenu->choices.count,_unitMenu->choices.favorites,_formatPickingComponents,_unitMenu->generation);
+        for(unsigned i=0;i<_unitMenu->choices.count;++i)std::printf("%u:%u,",_unitMenu->choices.ids[i].id,_unitMenu->choices.ids[i].variant);
+        std::puts("");return true;
+    }
     if(expected=="quantity dump") {
         std::printf("[QUANTITY] canonical=%s error=%s mode=%u shift=%d places=%u generation=%u terms=",
             _quantity?_quantity->coefficient.c_str():"none",numos::quantity::errorName(_quantityError),unsigned(_resultMode),_engineeringShift,unsigned(_fixedPlaces),unsigned(_resultGeneration));
@@ -1727,17 +1767,40 @@ void CalculationApp::engineeringFormat(int direction) {
     showResult();
 }
 
-void CalculationApp::openFormatMenu(bool pickDigits,bool pickUnits) {
+void CalculationApp::openFormatMenu(bool pickDigits,bool pickUnits,bool pickComponents) {
     if (_formatMenu || !_hasResult || _lastStatus != numos::MathEngineStatus::Ok) return;
-    _formatPickingDigits = pickDigits;_formatPickingUnit=pickUnits;
+#if LV_USE_STDLIB_MALLOC == LV_STDLIB_BUILTIN
+    if(pickUnits) {
+        lv_mem_monitor_t memory{};lv_mem_monitor(&memory);
+        if(memory.free_size<15500 || memory.free_biggest_size<5000) {
+            ui::StatusBar::showActiveNotice(numos::i18n::isSpanish(numos::i18n::productLocale)?"Sin memoria":"Low memory");return;
+        }
+    }
+#endif
+    _formatPickingDigits = pickDigits;_formatPickingUnit=pickUnits;_formatPickingComponents=pickComponents;
     _formatChoiceCount = _formatChoice = 0;
-    if(pickUnits) {if(!_quantity)return;_formatChoiceCount=2+_outputUnit.count;}
+    if(pickUnits) {
+        if(!_quantity)return;
+#if defined(__cpp_exceptions)
+        try {
+#endif
+            _unitMenu=std::make_unique<UnitOutputMenu>();_unitMenu->generation=_resultGeneration;
+            if(pickComponents)_formatChoiceCount=_outputUnit.count;
+            else {_unitMenu->choices.prepare(*_quantity,_outputUnit);_formatChoiceCount=4+_unitMenu->choices.count;}
+#if defined(__cpp_exceptions)
+        }catch(const std::bad_alloc&){_unitMenu.reset();ui::StatusBar::showActiveNotice(numos::i18n::isSpanish(numos::i18n::productLocale)?"Sin memoria":"Low memory");return;}
+#endif
+    }
     else if (pickDigits) { _formatChoiceCount = 10; _formatChoice = _fixedPlaces; }
-    else for (unsigned i = 0; i < static_cast<unsigned>(numos::CalculationFormat::Count); ++i) {
+    else {
+      if(_quantity)_formatChoices[_formatChoiceCount++]=numos::CalculationFormat::OutputUnit;
+      for (unsigned i = 0; i < static_cast<unsigned>(numos::CalculationFormat::Count); ++i) {
         const auto format = static_cast<numos::CalculationFormat>(i);
+        if(_quantity && format==numos::CalculationFormat::OutputUnit)continue;
         if (!formatAvailable(format)) continue;
-        if (format == _resultMode) _formatChoice = _formatChoiceCount;
+        if (!_quantity && format == _resultMode) _formatChoice = _formatChoiceCount;
         _formatChoices[_formatChoiceCount++] = format;
+      }
     }
     if (!_formatChoiceCount) return;
     const bool spanish = numos::i18n::isSpanish(numos::i18n::productLocale);
@@ -1751,8 +1814,9 @@ void CalculationApp::openFormatMenu(bool pickDigits,bool pickUnits) {
 
     auto* panel = lv_obj_create(_formatMenu);
     lv_obj_remove_style_all(panel);
-    const int visibleRows = std::min<int>(5, _formatChoiceCount);
-    const int panelHeight = 82 + visibleRows * 24;
+    const int rowHeight=pickUnits?40:24;
+    const int visibleRows = std::min<int>(pickUnits?3:5, _formatChoiceCount);
+    const int panelHeight = 82 + visibleRows * rowHeight;
     lv_obj_set_pos(panel, 8, (216 - panelHeight) / 2);
     lv_obj_set_size(panel, 304, panelHeight);
     lv_obj_remove_flag(panel, LV_OBJ_FLAG_SCROLLABLE);
@@ -1772,16 +1836,17 @@ void CalculationApp::openFormatMenu(bool pickDigits,bool pickUnits) {
     };
     label(panel, spanish ? "MOSTRAR COMO" : "DISPLAY AS", 14, 9,
           &lv_font_montserrat_12, 0x526D91);
-    label(panel, pickUnits ? (spanish?"Unidad de salida":"Output unit") : pickDigits ? (spanish ? "Decimales fijos" : "Decimal places") :
+    label(panel, pickComponents ? (spanish?"Por componentes":"By components") : pickUnits ? (spanish?"Unidad de salida":"Output unit") : pickDigits ? (spanish ? "Decimales fijos" : "Decimal places") :
           (spanish ? "Formato del resultado" : "Result format"), 14, 25,
           &lv_font_montserrat_14, 0x18283F);
     _formatMenuCounter = label(panel, "", 256, 26, &lv_font_montserrat_12, 0x758399);
 
     for (unsigned i = 0; i < 5; ++i) {
         auto* row = _formatMenuRows[i] = lv_obj_create(panel);
+        if(!row){closeFormatMenu();ui::StatusBar::showActiveNotice(spanish?"Sin memoria":"Low memory");return;}
         lv_obj_remove_style_all(row);
-        lv_obj_set_pos(row, 8, 51 + i * 24);
-        lv_obj_set_size(row, 278, 24);
+        lv_obj_set_pos(row, 8, 51 + i * rowHeight);
+        lv_obj_set_size(row, 278, rowHeight);
         lv_obj_set_style_radius(row, 5, 0);
         lv_obj_remove_flag(row, LV_OBJ_FLAG_SCROLLABLE);
         lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
@@ -1790,12 +1855,20 @@ void CalculationApp::openFormatMenu(bool pickDigits,bool pickUnits) {
         _formatMenuLabels[i] = label(row, "", 9, 4, ui::tutorFont14(), 0x344155);
         lv_obj_set_width(_formatMenuLabels[i],240);lv_label_set_long_mode(_formatMenuLabels[i],LV_LABEL_LONG_DOT);
         _formatMenuMarks[i] = label(row, "", 254, 5, &lv_font_montserrat_12, 0x526D91);
+        if(_unitMenu && i<3) {
+            auto& canvas=_unitMenu->canvases[i];canvas.create(row);canvas.setAutoHeightEnabled(false);canvas.stopCursorBlink();
+            canvas.setMathStyle(vpam::MathStyle::SCRIPT);canvas.setEmptyRootPlaceholderVisible(false);
+            lv_obj_set_pos(canvas.obj(),0,0);lv_obj_set_size(canvas.obj(),88,rowHeight);
+            lv_obj_remove_flag(canvas.obj(),LV_OBJ_FLAG_CLICKABLE);lv_obj_set_style_bg_opa(canvas.obj(),LV_OPA_TRANSP,0);
+        }
         lv_obj_add_event_cb(row, [](lv_event_t* event) {
             auto* self = static_cast<CalculationApp*>(lv_event_get_user_data(event));
             auto* target = lv_event_get_target_obj(event);
             for (unsigned slot = 0; slot < 5; ++slot) {
                 if (self->_formatMenuRows[slot] != target) continue;
-                const unsigned first = self->_formatChoice < 5 ? 0 : self->_formatChoice - 4;
+                const unsigned visible=self->_unitMenu?3:5;
+                const unsigned first = self->_formatChoice < visible ? 0 : self->_formatChoice - visible+1;
+                if(slot>=visible)return;
                 if (first + slot >= self->_formatChoiceCount) return;
                 self->_formatChoice = first + slot;
                 self->applyFormatChoice(); return;
@@ -1807,7 +1880,7 @@ void CalculationApp::openFormatMenu(bool pickDigits,bool pickUnits) {
     lv_obj_set_pos(track, 292, 55); lv_obj_set_size(track, 2, 112);
     lv_obj_set_style_bg_color(track, lv_color_hex(0xE6ECF4), 0);
     lv_obj_set_style_bg_opa(track, LV_OPA_COVER, 0);
-    if (_formatChoiceCount <= 5) lv_obj_add_flag(track, LV_OBJ_FLAG_HIDDEN);
+    if (_formatChoiceCount <= unsigned(visibleRows)) lv_obj_add_flag(track, LV_OBJ_FLAG_HIDDEN);
     _formatMenuThumb = lv_obj_create(track);
     lv_obj_remove_style_all(_formatMenuThumb);
     lv_obj_set_style_bg_color(_formatMenuThumb, lv_color_hex(0x9BACBF), 0);
@@ -1823,24 +1896,74 @@ void CalculationApp::openFormatMenu(bool pickDigits,bool pickUnits) {
 
 void CalculationApp::updateFormatMenu() {
     if (!_formatMenu) return;
+#if defined(__cpp_exceptions)
+    try {
+#endif
     const bool spanish = numos::i18n::isSpanish(numos::i18n::productLocale);
     lv_label_set_text_fmt(_formatMenuCounter, "%u / %u", _formatChoice + 1, _formatChoiceCount);
-    const unsigned first = _formatChoice < 5 ? 0 : _formatChoice - 4;
+    const unsigned visible = std::min<unsigned>(_unitMenu?3:5, _formatChoiceCount);
+    const unsigned first = _formatChoice < visible ? 0 : _formatChoice - visible+1;
     for (unsigned slot = 0; slot < 5; ++slot) {
         auto* row = _formatMenuRows[slot];
         const unsigned i = first + slot;
-        if (i >= _formatChoiceCount) { lv_obj_add_flag(row, LV_OBJ_FLAG_HIDDEN); continue; }
+        if (slot>=visible || i >= _formatChoiceCount) { lv_obj_add_flag(row, LV_OBJ_FLAG_HIDDEN); continue; }
         lv_obj_remove_flag(row, LV_OBJ_FLAG_HIDDEN);
         const bool focused = i == _formatChoice;
         lv_obj_set_style_bg_color(row, lv_color_hex(0x245DB2), 0);
         lv_obj_set_style_bg_opa(row, focused ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
         if(_formatPickingUnit) {
-            if(i<2)lv_label_set_text(_formatMenuLabels[slot],i==0?(spanish?"SI predeterminado":"Default SI"):(spanish?"Elegir unidad":"Choose unit"));
-            else {
-                const auto& term=_outputUnit.terms[i-2];const auto* d=numos::units::definition(term.atom.unit);
-                const auto* entry=numos::toolbox::find({uint16_t(0x8000|uint16_t(term.atom.unit)),uint8_t(term.atom.prefix)});
-                const char* name=entry?numos::toolbox::displayName(*entry):spanish?d->es:d->en;
-                lv_label_set_text_fmt(_formatMenuLabels[slot],"%s (%d)",name,int(term.power));
+            auto& menu=*_unitMenu;auto& canvas=menu.canvases[slot];
+            const unsigned n=menu.choices.count;
+            const bool preview=_formatPickingComponents || i<=n;
+            lv_obj_set_style_bg_color(row,lv_color_hex(0xFFF0D3),0);
+            if(preview) {
+                const numos::toolbox::Entry* entry=nullptr;
+                numos::quantity::Descriptor descriptor=_outputUnit;
+                if(_formatPickingComponents) {
+                    descriptor={};descriptor.count=1;descriptor.terms[0]=_outputUnit.terms[i];
+                } else if(i) {
+                    const auto id=menu.choices.ids[i-1];entry=numos::toolbox::find(id);
+                    if(!entry || !numos::quantity::descriptor(uint16_t(entry->argument),uint8_t(id.variant),descriptor))return;
+                }
+                if(menu.rows[slot]!=int(i)) {
+                    // Common compose/layout machinery, only for the three
+                    // visible rows. Remove the illustrative coefficient to
+                    // preview the exact unit structure without manual spacing.
+                    auto composed=numos::quantity::compose(vpam::makeNumber("1"),descriptor);
+                    auto node=static_cast<vpam::NodeRow*>(composed.get())->removeChild(2);
+                    auto root=vpam::makeRow();static_cast<vpam::NodeRow*>(root.get())->appendChild(std::move(node));
+                    canvas.setExpression(nullptr,nullptr);canvas.setMathStyle(vpam::MathStyle::SCRIPT);
+                    menu.previews[slot]=std::move(root);menu.rows[slot]=int(i);menu.previewModes[slot]=0;
+                    canvas.setExpression(static_cast<vpam::NodeRow*>(menu.previews[slot].get()),nullptr);
+                    const auto& box=menu.previews[slot]->layout();
+                    if(box.width+16>88 || box.height()+2>40) {
+                        // WHY: a long compound must not lose components at the
+                        // preview edge. Reuse the row's full width and the MATH
+                        // script style; extremely long forms retain their name.
+                        menu.previewModes[slot]=1;canvas.setMathStyle(vpam::MathStyle::SCRIPTSCRIPT);
+                        const auto& small=menu.previews[slot]->layout();
+                        if(small.width+16>278 || small.height()+2>28)menu.previewModes[slot]=2;
+                    }
+                }
+                const auto previewMode=menu.previewModes[slot];
+                if(previewMode==2)lv_obj_add_flag(canvas.obj(),LV_OBJ_FLAG_HIDDEN);
+                else lv_obj_remove_flag(canvas.obj(),LV_OBJ_FLAG_HIDDEN);
+                lv_obj_set_pos(canvas.obj(),0,previewMode==1?12:0);
+                lv_obj_set_size(canvas.obj(),previewMode==1?278:88,previewMode==1?28:40);
+                lv_obj_set_style_text_font(_formatMenuLabels[slot],previewMode==1?ui::tutorFont12():ui::tutorFont14(),0);
+                lv_obj_set_pos(_formatMenuLabels[slot],previewMode?9:88,previewMode==1?0:12);
+                lv_obj_set_width(_formatMenuLabels[slot],previewMode?240:157);
+                if(_formatPickingComponents) {
+                    const auto* d=numos::units::definition(descriptor.terms[0].atom.unit);
+                    lv_label_set_text(_formatMenuLabels[slot],spanish?d->es:d->en);
+                } else lv_label_set_text(_formatMenuLabels[slot],entry?numos::toolbox::displayName(*entry):(spanish?"Unidad actual":"Current unit"));
+            } else {
+                lv_obj_add_flag(canvas.obj(),LV_OBJ_FLAG_HIDDEN);
+                lv_obj_set_style_text_font(_formatMenuLabels[slot],ui::tutorFont14(),0);
+                lv_obj_set_pos(_formatMenuLabels[slot],9,12);lv_obj_set_width(_formatMenuLabels[slot],240);
+                const char* en[]={"All units","By components","Default SI"};
+                const char* es[]={"Todas las unidades","Por componentes","SI predeterminado"};
+                lv_label_set_text(_formatMenuLabels[slot],spanish?es[i-n-1]:en[i-n-1]);
             }
         } else if (_formatPickingDigits) {
             const char* precisionLabel = spanish
@@ -1853,18 +1976,22 @@ void CalculationApp::updateFormatMenu() {
                 name = spanish ? "Cartesiana (a + bi)" : "Cartesian (a + bi)";
             lv_label_set_text(_formatMenuLabels[slot], name);
         }
-        lv_obj_set_style_text_color(_formatMenuLabels[slot], lv_color_hex(focused ? 0xFFFFFF : 0x344155), 0);
-        lv_label_set_text(_formatMenuMarks[slot], !_formatPickingUnit && (_formatPickingDigits ? i == _fixedPlaces : _formatChoices[i] == _resultMode) ? LV_SYMBOL_OK : "");
-        lv_obj_set_style_text_color(_formatMenuMarks[slot], lv_color_hex(focused ? 0xFFFFFF : 0x245DB2), 0);
+        lv_obj_set_style_text_color(_formatMenuLabels[slot], lv_color_hex(focused && !_formatPickingUnit ? 0xFFFFFF : 0x344155), 0);
+        lv_label_set_text(_formatMenuMarks[slot], _formatPickingUnit?(!_formatPickingComponents && i>0 && i<=_unitMenu->choices.favorites?"*":""):
+            (_formatPickingDigits ? i == _fixedPlaces : _formatChoices[i] == _resultMode) ? LV_SYMBOL_OK : "");
+        lv_obj_set_style_text_color(_formatMenuMarks[slot], lv_color_hex(focused && !_formatPickingUnit ? 0xFFFFFF : 0x245DB2), 0);
     }
-    const unsigned visible = std::min<unsigned>(5, _formatChoiceCount);
     const unsigned height = 112 * visible / _formatChoiceCount;
     lv_obj_set_height(_formatMenuThumb, height);
-    lv_obj_set_y(_formatMenuThumb, _formatChoiceCount > 5 ?
-                 (112-height)*first/(_formatChoiceCount-5) : 0);
+    lv_obj_set_y(_formatMenuThumb, _formatChoiceCount > visible ?
+                 (112-height)*first/(_formatChoiceCount-visible) : 0);
+#if defined(__cpp_exceptions)
+    }catch(const std::bad_alloc&){closeFormatMenu();ui::StatusBar::showActiveNotice(numos::i18n::isSpanish(numos::i18n::productLocale)?"Sin memoria":"Low memory");}
+#endif
 }
 
 void CalculationApp::closeFormatMenu() {
+    _unitMenu.reset();
     if (_formatMenu) lv_obj_delete(_formatMenu);
     _formatMenu = _formatMenuCounter = _formatMenuThumb = nullptr;
     for (unsigned i = 0; i < 5; ++i)
@@ -1873,9 +2000,18 @@ void CalculationApp::closeFormatMenu() {
 
 void CalculationApp::applyFormatChoice() {
     if(_formatPickingUnit) {
-        const unsigned choice=_formatChoice;closeFormatMenu();
-        if(choice==0)publishOutput(numos::quantity::coherent(*_quantity));
-        else openOutputSelector(choice==1?-1:int(choice)-2);
+        if(!_unitMenu || !_quantity || _unitMenu->generation!=_resultGeneration){closeFormatMenu();return;}
+        const unsigned choice=_formatChoice,n=_unitMenu->choices.count;
+        if(_formatPickingComponents){closeFormatMenu();openOutputSelector(int(choice));return;}
+        const auto id=choice && choice<=n?_unitMenu->choices.ids[choice-1]:numos::toolbox::Identity{};
+        if(!choice){closeFormatMenu();return;}
+        if(choice<=n) {
+            _unitTargetComponent=-1;_unitSelectionGeneration=_resultGeneration;
+            if(selectOutput(id))closeFormatMenu();
+            else ui::StatusBar::showActiveNotice(numos::i18n::isSpanish(numos::i18n::productLocale)?"Resultado conservado":"Result retained");
+        } else if(choice==n+1){closeFormatMenu();openOutputSelector(-1);}
+        else if(choice==n+2){closeFormatMenu();openFormatMenu(false,true,true);}
+        else if(publishOutput(numos::quantity::coherent(*_quantity)))closeFormatMenu();
     } else if (_formatPickingDigits) {
         if(_quantity){const unsigned places=_formatChoice;closeFormatMenu();publishQuantityFormat(numos::CalculationFormat::Fixed,0,places);return;}
         _fixedPlaces = _formatChoice;
@@ -1907,6 +2043,7 @@ void CalculationApp::openOutputSelector(int component) {
     receiver.filter=[](void* owner,const numos::toolbox::Entry& entry){return static_cast<CalculationApp*>(owner)->outputAllowed(entry);};
     receiver.selected=[](void* owner,numos::toolbox::Identity id){return static_cast<CalculationApp*>(owner)->selectOutput(id);};
     receiver.initialGroup=200;
+    receiver.filterUnitFamilies=true;
     ui::toolbox::open(_screen,receiver);
 }
 

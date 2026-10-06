@@ -17,9 +17,9 @@ for scope in ('analysis','convert','compose','ans','memory','selector','publish'
   elif scope=='memory':
    body=q+keys('STO 1 AC ALPHA 1 ENTER')+check('0') # failed STO keeps original empty A
   elif scope=='selector':
-   body=q+output()+keys('DOWN ENTER')+'assert_calc_input toolbox closed\n'+check(long,long,'1:0:1')
+   body=q+output()+all_units()+'assert_calc_input toolbox closed\n'+check(long,long,'1:0:1')
   elif scope=='publish':
-   body=q+output()+keys('DOWN ENTER')+search('cm')+selected(1,14)+keys('ENTER')+'assert_calc_input toolbox open\n'+check(long,long,'1:0:1')+keys('BACK BACK')
+   body=q+output()+all_units()+search('cm')+selected(1,14)+keys('ENTER')+'assert_calc_input toolbox open\n'+check(long,long,'1:0:1')+keys('BACK BACK')
   elif scope=='format':
    body=q+keys('FORMAT')+check(long,long,'1:0:1')
   else:

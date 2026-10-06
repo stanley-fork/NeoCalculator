@@ -16,6 +16,12 @@ const Entry* unitEntry(uint16_t item,uint16_t prefix) {
 constexpr Entry referenceEntries[] = {
 #include "ReferenceToolboxEntries.inc"
 };
+#include "UnitNavigationIndex.inc"
+const UnitGroupIndex* unitGroup(uint16_t group) {
+    size_t lo=0,hi=std::size(unitGroups);
+    while(lo<hi){const size_t mid=(lo+hi)/2;if(unitGroups[mid].id<group)lo=mid+1;else hi=mid;}
+    return lo<std::size(unitGroups) && unitGroups[lo].id==group?&unitGroups[lo]:nullptr;
+}
 #include "UnitVariantMetadata.inc"
 const UnitVariantMetadata* variantMetadata(Identity id) {
     size_t lo=0,hi=std::size(unitVariantMetadata);const uint32_t key=uint32_t(id.id)<<16|id.variant;
@@ -73,9 +79,7 @@ size_t unitCount(const void*,uint16_t group) {
     } else if(group&0x4000) {
         for(const auto p:units::kPrefixOrder)if(referenceEntry(group&0x3fff,uint8_t(p)))++n;
     } else {
-        for(const auto& c:units::kCategories)if(c.parent==group)++n;
-        for(const auto& i:units::kItems)if(i.category==group)++n;
-        for(const auto& r:units::kReferences)if(r.category==group)++n;
+        const auto* g=unitGroup(group);return g?g->count:0;
     }
     return n;
 }
@@ -86,13 +90,18 @@ Row unitAt(const void*,uint16_t group,size_t index) {
             if(e && index--==0)return {e,0,e->en,e->es,Calculation};
         }
     } else {
-        for(const auto& c:units::kCategories)if(c.parent==group && index--==0)return {nullptr,c.id,c.en,c.es,Calculation};
-        for(const auto& i:units::kItems)if(i.category==group && index--==0) {
-            const auto* e=unitEntry(i.id,uint8_t(i.defaultPrefix));return e?Row{e,e->options,e->en,e->es,Calculation}:Row{};
+        const auto* g=unitGroup(group);if(!g || index>=g->count)return {};
+        const auto id=unitGroupRows[g->first+index];
+        if(id&0x8000) {
+            const auto* i=units::item(id&0x3fff);
+            const auto* e=i?unitEntry(i->id,uint8_t(i->defaultPrefix)):nullptr;
+            return e?Row{e,e->options,e->en,e->es,Calculation}:Row{};
         }
-        for(const auto& r:units::kReferences)if(r.category==group && index--==0) {
-            const auto* e=referenceEntry(uint16_t(r.id),0);return e?Row{e,e->options,e->en,e->es,Calculation}:Row{};
+        if(id&0x4000) {
+            const auto* e=referenceEntry(id&0x3fff,0);
+            return e?Row{e,e->options,e->en,e->es,Calculation}:Row{};
         }
+        const auto* c=units::category(id);return c?Row{nullptr,c->id,c->en,c->es,Calculation}:Row{};
     }
     return {};
 }

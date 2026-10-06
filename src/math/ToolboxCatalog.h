@@ -48,6 +48,8 @@ const Entry* find(Identity identity);
 const Entry* entries();
 size_t entryCount();
 const Entry* entryAt(size_t index);
+// Transient catalogue position for session indexes; never persisted as identity.
+size_t entryIndex(const Entry&);
 bool available(const Entry& entry, uint8_t capabilities);
 // Stable ranking, with accent folding only in search text, never in identities.
 unsigned searchRank(const Entry&, const char* query);

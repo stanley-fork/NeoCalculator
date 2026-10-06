@@ -177,6 +177,20 @@ def outputs(data):
     metadata=['// Sparse regional names and exact symbol aliases.','struct UnitVariantMetadata {Identity identity;const char *enUS,*es419,*symbols;};','constexpr UnitVariantMetadata unitVariantMetadata[] = {']
     for uid,pid,en,es,symbols in sorted(meta):metadata.append('{{%d,%d},%s,%s,%s},'%(uid,pid,q(en),q(es),q(symbols)))
     metadata+=['};']
+    # Navigation adjacency, not a second definition/factor table. Preserve the
+    # provider's category -> item -> reference order exactly.
+    navigation=['// Generated navigation positions; identities remain stable.',
+                'struct UnitGroupIndex {uint16_t id, first, count;};']
+    rows=[];groups=[]
+    for group in sorted({0, *cats}):
+        children=[c['id'] for c in data['categories'] if c['parent']==group]
+        children += [0x8000|i['id'] for i in sorted(data['items'],key=lambda i:i['id']) if i['category']==group]
+        children += [0x4000|r['id'] for r in sorted(refs,key=lambda r:r['id']) if r['category']==group]
+        groups.append((group,len(rows),len(children)));rows+=children
+    assert len(rows)<65536
+    navigation+=['constexpr uint16_t unitGroupRows[] = {'+','.join(map(str,rows))+'};',
+                 'constexpr UnitGroupIndex unitGroups[] = {']
+    navigation+=['{%d,%d,%d},'%g for g in groups]+['};']
     inventory+=['',f"Definitions: {len(units)}. Catalogue items: {len(data['items'])}. Insertable offered variants: {len(entries)-1}. Official prefixes: 24 + neutral. Typed references: {len(refs)}.",'','## Sources','']
     if refs:
         reference_inventory=['','## Typed physical references and contextual scales','',
@@ -190,7 +204,7 @@ def outputs(data):
         inventory[-2:-2]=reference_inventory
     for key,source in data['sources'].items():inventory.append(f"- {key}: [{source['version']}]({source['url']}). {source.get('location','')}".rstrip())
     inventory+=['','## Deferred','']+[f'- {k}: {v}.' for k,v in data.get('deferred',{}).items()]
-    return {ROOT/'src/math/units/UnitRegistryData.inc':'\n'.join(lines)+'\n',ROOT/'src/math/units/UnitToolboxEntries.inc':'\n'.join(entries)+'\n',ROOT/'src/math/units/ReferenceRegistryData.inc':'\n'.join(ref_lines)+'\n',ROOT/'src/math/units/ReferenceToolboxEntries.inc':'\n'.join(ref_entries)+'\n',ROOT/'src/math/units/UnitVariantMetadata.inc':'\n'.join(metadata)+'\n',ROOT/'docs/UNIT_CATALOG_02_INVENTORY.md':'\n'.join(inventory)+'\n'}
+    return {ROOT/'src/math/units/UnitRegistryData.inc':'\n'.join(lines)+'\n',ROOT/'src/math/units/UnitToolboxEntries.inc':'\n'.join(entries)+'\n',ROOT/'src/math/units/ReferenceRegistryData.inc':'\n'.join(ref_lines)+'\n',ROOT/'src/math/units/ReferenceToolboxEntries.inc':'\n'.join(ref_entries)+'\n',ROOT/'src/math/units/UnitVariantMetadata.inc':'\n'.join(metadata)+'\n',ROOT/'src/math/units/UnitNavigationIndex.inc':'\n'.join(navigation)+'\n',ROOT/'docs/UNIT_CATALOG_02_INVENTORY.md':'\n'.join(inventory)+'\n'}
 
 def main():
     p=argparse.ArgumentParser();p.add_argument('--check',action='store_true');args=p.parse_args()

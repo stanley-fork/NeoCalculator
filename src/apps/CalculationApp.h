@@ -56,6 +56,7 @@
 // Giac is the sole Calculation answer engine. MathEvaluator remains included
 // only for the presentation helpers used by ExactVal/S<=>D rendering.
 #include "../math/CalculationEngine.h"
+struct UnitOutputMenu;
 #include "../math/CalculationFormat.h"
 #include "../math/ToolboxCatalog.h"
 #include "../math/cas/CASStepLogger.h"
@@ -158,6 +159,9 @@ private:
     uint8_t _formatChoice = 0;
     bool _formatPickingDigits = false;
     bool _formatPickingUnit = false;
+    bool _formatPickingComponents = false;
+    std::unique_ptr<UnitOutputMenu> _unitMenu;
+    KeyCode _formatSuppressed=KeyCode::NONE;
     uint8_t _fixedPlaces = 2;
     bool _angleResult = false;
     bool _resultInDegrees = false;
@@ -247,7 +251,7 @@ private:
     void showTextResult(const std::string& text);
     void hideTextResult();
     void toggleSD();
-    void openFormatMenu(bool pickDigits = false,bool pickUnits = false);
+    void openFormatMenu(bool pickDigits = false,bool pickUnits = false,bool pickComponents = false);
     void closeFormatMenu();
     void updateFormatMenu();
     bool formatAvailable(numos::CalculationFormat format) const;

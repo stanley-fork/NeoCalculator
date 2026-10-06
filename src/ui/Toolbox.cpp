@@ -4,6 +4,7 @@
 #include "ToolboxFonts.h"
 #include "StatusBar.h"
 #include "math/ToolboxStore.h"
+#include "math/ToolboxView.h"
 #include "math/tutor/Locale.h"
 #include "input/KeyboardManager.h"
 #include "input/KeySemanticResolver.h"
@@ -40,6 +41,7 @@ const char* tr(const char* en,const char* es) {return spanish()?es:en;}
 struct Level {uint16_t group=0;size_t selection=0,top=0;const char* en=nullptr;const char* es=nullptr;};
 struct Session {
     Receiver receiver;
+    View view;
     vpam::NodeRow* root=nullptr;
     vpam::Cursor cursor{};
     uint32_t epoch=0;
@@ -80,28 +82,16 @@ lv_obj_t* label(lv_obj_t* parent,int x,int y,int width,const lv_font_t* font) {
     lv_label_set_long_mode(obj,LV_LABEL_LONG_DOT);return obj;
 }
 bool visibleEntry(const Entry& e) {
-    return ((e.recipe!=Recipe::Unit && e.recipe!=Recipe::QuantityReference) || available(e,s->receiver.capabilities)) &&
-        (!s->receiver.filter || s->receiver.filter(s->receiver.owner,e));
+    return s->view.visible(e);
 }
 bool visibleRow(const Row& row,unsigned depth=0) {
-    if(!(row.capabilities&s->receiver.capabilities))return false;
-    if(!s->receiver.filter)return true;
-    if(row.entry && visibleEntry(*row.entry))return true;
-    if(!row.children || depth>=kDepth)return false;
-    for(size_t i=0;i<provider.count(provider.context,row.children);++i)
-        if(visibleRow(provider.at(provider.context,row.children,i),depth+1))return true;
-    return false;
+    return s->view.visible(row,depth);
 }
 size_t providerCount(uint16_t group) {
-    size_t total=0;for(size_t i=0;i<provider.count(provider.context,group);++i)
-        if(visibleRow(provider.at(provider.context,group,i)))++total;
-    return total;
+    return s->view.count(group);
 }
 Row providerAt(uint16_t group,size_t index) {
-    for(size_t i=0;i<provider.count(provider.context,group);++i) {
-        auto row=provider.at(provider.context,group,i);
-        if(visibleRow(row) && index--==0)return row;
-    }return {};
+    return s->view.at(group,index);
 }
 size_t storedCount(bool recent) {
     auto& store=Store::instance();size_t total=0;
@@ -127,13 +117,7 @@ Row at(size_t index) {
         }return {};
     }
     if(group==Search) {
-        // WHY: no fixed result buffer can hide a match. Rank buckets + stable
-        // catalogue order enumerate every identity, including variants.
-        for(unsigned rank=0;rank<4;++rank) for(size_t i=0;i<entryCount();++i) {
-            const auto& e=*entryAt(i);
-            if(visibleEntry(e) && discoverable(e) && searchRank(e,s->query)==rank && index--==0) return {&e,e.options,e.en,e.es};
-        }
-        return {};
+        return s->view.searchAt(index);
     }
     return providerAt(group,index);
 }
@@ -400,7 +384,7 @@ void drawChevron(lv_event_t* ev) {
 }
 
 void changedQuery() {
-    s->matches=0;for(size_t i=0;i<entryCount();++i)if(visibleEntry(*entryAt(i)) && discoverable(*entryAt(i)) && searchRank(*entryAt(i),s->query)<4)++s->matches;
+    s->view.search(s->query);s->matches=s->view.matches();
     s->level().selection=s->level().top=0;refresh();
 }
 size_t previous(size_t pos) {if(!pos)return 0;--pos;while(pos && (uint8_t(s->query[pos])&0xc0)==0x80)--pos;return pos;}
@@ -423,6 +407,7 @@ bool open(lv_obj_t* parent,Receiver receiver) {
         s=std::make_unique<Session>();s->receiver=receiver;s->root=receiver.cursor->rootRow();s->cursor=receiver.cursor->cursor();s->epoch=receiver.cursor->epoch();
         s->levels[0].group=receiver.initialGroup;
         auto& km=vpam::KeyboardManager::instance();s->shift=km.shiftPhase();s->alpha=km.alphaPhase();km.reset();
+        s->view.prepare(receiver.capabilities,receiver.owner,receiver.filter,receiver.filterUnitFamilies);
         Store::instance().load();
         // The subdued backdrop consumes outside clicks. The live expression
         // is shown above the popup, with no duplicate fragments at its edges.

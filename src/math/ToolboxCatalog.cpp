@@ -57,6 +57,8 @@ bool inGroup(const Entry& e,uint16_t group) {
     return !e.keyboardShortcut && e.category==group && !e.identity.variant;
 }
 size_t count(const void*, uint16_t group) {
+    // Disjoint built-in namespaces: no math rows in unit categories/prefixes.
+    if((group>=200 && group<1000) || (group&0xc000))return 0;
     if(group==18)return std::size(kAlphabets);
     size_t n=group?0:std::size(kCategories);
     for(const auto& e:kEntries)
@@ -107,6 +109,15 @@ const Entry* flatAt(const void*,size_t index) {
 const Entry* entries() { return kEntries; }
 size_t entryCount() { return flatCount(nullptr); }
 const Entry* entryAt(size_t index) {return flatAt(nullptr,index);}
+size_t entryIndex(const Entry& entry) {
+    if(entry.recipe==Recipe::Unit && unitEntry(uint16_t(entry.argument),entry.identity.variant)==&entry)
+        return std::size(kEntries)+size_t(&entry-unitEntries);
+    if(entry.recipe==Recipe::QuantityReference && referenceEntry(uint16_t(entry.argument),entry.identity.variant)==&entry)
+        return std::size(kEntries)+std::size(unitEntries)+size_t(&entry-referenceEntries);
+    for(size_t i=0;i<std::size(kEntries);++i)if(&kEntries[i]==&entry)return i;
+    for(size_t i=std::size(kEntries)+unitEntryCount(nullptr);i<entryCount();++i)if(entryAt(i)==&entry)return i;
+    return entryCount();
+}
 const Entry* find(Identity id) {
     if((id.id&0xc000)==0xc000)return nullptr;
     if(id.id&0x8000)return unitEntry(id.id&0x3fff,id.variant);

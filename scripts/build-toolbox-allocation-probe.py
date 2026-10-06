@@ -81,6 +81,7 @@ if a.quantities:
       'CalculationEngine':{'bool CalculationEngine::commitResultAns(const CalculationEvaluation& result,const vpam::ExactVal* mirror) {':'ans',
        'bool CalculationEngine::storeAns(char varName) {':'memory'},
       'CalculationApp':{'void CalculationApp::openOutputSelector(int component) {':'selector',
+       'void CalculationApp::openFormatMenu(bool pickDigits,bool pickUnits,bool pickComponents) {':'quick',
        'bool CalculationApp::publishOutput(const numos::quantity::Descriptor& descriptor) {':'publish',
        'bool CalculationApp::publishQuantityFormat(numos::CalculationFormat mode,int shift,unsigned places) {':'format',
        'void CalculationApp::loadHistoryEntry(int index) {':'history'}
@@ -91,6 +92,11 @@ if a.quantities:
         for anchor,scope in anchors.items():
             assert text.count(anchor)==1,anchor
             text=text.replace(anchor,anchor+'\n tbprobe::Scope quantityFault("'+scope+'");')
+        if name=='CalculationApp':
+            text=text.replace('auto* row = _formatMenuRows[i] = lv_obj_create(panel);',
+                'auto* row = _formatMenuRows[i] = (_formatPickingUnit && std::getenv("NUMOS_UNIT_QUICK_FAIL_ROW") && std::strtoul(std::getenv("NUMOS_UNIT_QUICK_FAIL_ROW"),nullptr,10)==i+1)?nullptr:lv_obj_create(panel);')
+            text=text.replace('if(!_unitMenu || !_quantity || _unitMenu->generation!=_resultGeneration)',
+                'if(std::getenv("NUMOS_UNIT_QUICK_STALE") && _unitMenu)_unitMenu->generation^=1;\n        if(!_unitMenu || !_quantity || _unitMenu->generation!=_resultGeneration)')
         if name=='Quantity':
             # The injected failures target NumOS ownership/AST, not Giac's
             # independent allocator/error machinery. Measure those separately.

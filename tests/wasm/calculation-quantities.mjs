@@ -115,9 +115,12 @@ try {for(const [name,type] of Object.entries({chromium,firefox,webkit})) {
    await expect({queryBytes:new TextEncoder().encode(query).length});await keys('DOWN');
    await expect({id,variant});await keys('ENTER');await expect({open:false});
   };
-  const output=async()=>{await keys('SHIFT ALPHA FORMAT DOWN DOWN DOWN DOWN DOWN ENTER');};
+  const output=async()=>{await keys('SHIFT ALPHA FORMAT ENTER');};
+  const allUnits=async()=>keys('DOWN '.repeat(10)+'UP UP ENTER');
   const target=async(query,id,variant=0,component=-1)=>{
-   await output();await keys('DOWN '.repeat(component<0?1:component+2)+'ENTER');
+   await output();
+   if(component<0)await allUnits();
+   else {await keys('DOWN '.repeat(10)+'UP ENTER');await keys('DOWN '.repeat(component)+'ENTER');}
    await expect({open:true,group:200});await el.locator('canvas').focus();await page.keyboard.type(query);
    await expect({queryBytes:new TextEncoder().encode(query).length});await keys('DOWN');await expect({id,variant});
    await keys('ENTER');await expect({open:false});
@@ -128,17 +131,29 @@ try {for(const [name,type] of Object.entries({chromium,firefox,webkit})) {
   await keys('ENTER');await exact('23/10');await shot('quantity-sum');
   await target('cm',32769,14);await exact('230');await shot('quantity-sum-cm');
   await keys('FORMAT FORMAT');await exact('230');
-  await output();await keys('DOWN ENTER');await el.locator('canvas').focus();await page.keyboard.type('km');
+  await output();await allUnits();await el.locator('canvas').focus();await page.keyboard.type('km');
   await keys('DOWN RIGHT DOWN BACK BACK BACK');await expect({open:false});await exact('230');
   await keys('AC');await answer();await keys('/ 2');await quantityPick('Second',32771);await keys('ENTER');await exact('23/20');await shot('quantity-ans');
   await keys('AC 6');await quantityPick('km',32769,10);await keys('/ 3 0 0');await quantityPick('Second',32771);
-  await keys('RIGHT ENTER');await exact('20');await target('km',32769,10,0);await exact('1/50');
+  await keys('RIGHT ENTER');await exact('20');
+  const beforeQuick=(await driver.state()).giac;
+  await output();await shot('quick-speed');
+  assert.deepEqual((await driver.state()).giac,beforeQuick,'quick choices evaluated mathematics');
+  await driver.clickCanvas(152,142,'quick-kmh');await exact('72');await shot('quick-speed-kmh');
+  await output();await keys('DOWN ENTER');await exact('20');
+  await target('km',32769,10,0);await exact('1/50');
   await target('hour',32816,0,1);await exact('72');await shot('quantity-components-kmh');
   await keys('AC 2');await quantityPick('metre',32769);await keys('+ 3');await quantityPick('Second',32771);
   await keys('ENTER');assert.equal((await driver.state()).calculation.status,'quantity_error');await shot('quantity-error');
   await keys('AC');await answer();await keys('ENTER');await exact('20');await shot('quantity-recovery');
   await keys('AC TOOLBOX');await el.locator('canvas').focus();await page.keyboard.type('Mach number');await keys('DOWN');await expect({id:16497});
   await keys('ENTER ENTER');assert.equal((await driver.state()).calculation.status,'units_unavailable');await shot('quantity-context');
+  await keys('AC 1');await quantityPick('metre',32769);
+  for(const [query,id,prefix] of [['Second',32771,0],['kg',32770,10],['Ampere',32772,0],['Kelvin',32773,0],['mole',32774,0],['candela',32775,0]]) {
+   await keys('* 1');await quantityPick(query,id,prefix);
+  }
+  await keys('ENTER');await exact('1');await output();await shot('quick-wide-current');
+  await keys('BACK');await exact('1');
   await keys('AC 2 + 2 ENTER');await exact('4');
   assert.deepEqual(errors,[]);records.push({browser:name,surface,passed:true});
   await context.close();

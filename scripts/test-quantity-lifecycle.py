@@ -6,7 +6,10 @@ body=''
 for i in range(104):
  body+=keys('AC 2 ADD 3 ENTER')*60
  body+=keys('AC')+amount('2','metre',1)+keys('ENTER')+check('2','2','1:0:1')
- body+=target('mm',1,15)+check('2000','2','1:15:1')+output()+keys('DOWN ENTER')+search('km')+selected(1,10)+'assert_calc_input toolbox dump\n'+keys('RIGHT DOWN BACK BACK BACK')+check('2000','2','1:15:1')
+ body+=target('mm',1,15)+check('2000','2','1:15:1')+output()+all_units()+search('km')+selected(1,10)+'assert_calc_input toolbox dump\n'+keys('RIGHT DOWN BACK BACK BACK')+check('2000','2','1:15:1')
+ # Confirm contextual destinations too; neither operation replaces canonical Ans.
+ body+=output()+keys('DOWN ENTER')+check('200','2','1:14:1')
+ body+=output()+keys('DOWN ENTER')+check('2000','2','1:15:1')
  body+=keys('AC TOOLBOX')+search('mm')+selected(1,15)+keys('FORMAT ENTER BACK BACK')+keys('TOOLBOX UP RIGHT ENTER')+selected(1,15)+keys('ENTER ENTER')+check('1/1000','1/1000','1:0:1')
  body+=keys('UP')+check('1/1000','1/1000','1:0:1')
  body+=keys('AC')+amount('2','metre',1)+keys('ADD')+amount('3','Second',3)+keys('ENTER')+'assert_calc_status quantity_error\n'

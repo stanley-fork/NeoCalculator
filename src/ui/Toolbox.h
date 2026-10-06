@@ -17,6 +17,8 @@ struct Receiver {
     bool (*filter)(void*,const numos::toolbox::Entry&)=nullptr;
     bool (*selected)(void*,numos::toolbox::Identity)=nullptr;
     uint16_t initialGroup=0;
+    // Only for filters invariant across every offered prefix of a unit item.
+    bool filterUnitFamilies=false;
 };
 bool open(lv_obj_t* parent, Receiver receiver);
 bool active();
